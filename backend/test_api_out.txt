@@ -1,0 +1,23 @@
+1. Register ambulance user
+HTTP Error 400: {"detail":"Email already registered"}
+
+2. Register hospital user
+HTTP Error 400: {"detail":"Email already registered"}
+
+3. Login as ambulance
+{'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbWIxQHRlc3QuY29tIiwicm9sZSI6ImFtYnVsYW5jZSIsImV4cCI6MTc3MzgxNTgzN30.eoPX0Cfj2brDVeLMZqNG-tuWzAPwHVtFJLfh1WAwhDI', 'token_type': 'bearer'}
+
+4. Get hospitals
+[{'id': 1, 'name': 'City Hospital', 'address': 'New Delhi', 'lat': 28.6139, 'lng': 77.209, 'availability': {'id': 1, 'beds': 8, 'icu': 2, 'doctors': 4, 'equipment': ['ecg', 'ventilator'], 'accepting': True, 'updated_at': '2026-03-18T11:06:54.559187+05:30'}}]
+
+5. Login as hospital
+{'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJob3NwMUB0ZXN0LmNvbSIsInJvbGUiOiJob3NwaXRhbCIsImV4cCI6MTc3MzgxNTg0M30.QsaBALSLCxRvTswQ9lEgpgodSj-6dQGcuowx3vCp5MA', 'token_type': 'bearer'}
+
+6. Update hospital availability
+{'message': 'Availability updated successfully'}
+
+7. Get hospitals again
+[{'id': 1, 'name': 'City Hospital', 'address': 'New Delhi', 'lat': 28.6139, 'lng': 77.209, 'availability': {'id': 1, 'beds': 8, 'icu': 2, 'doctors': 4, 'equipment': ['ecg', 'ventilator'], 'accepting': True, 'updated_at': '2026-03-18T11:07:25.671763+05:30'}}]
+
+8. Dispatch
+HTTP Error 307: 

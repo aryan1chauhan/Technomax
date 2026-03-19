@@ -9,6 +9,7 @@ class DispatchRequest(BaseModel):
     ambulance_lng: float
 
 class DispatchResponse(BaseModel):
+    case_id: int
     hospital_id: int
     hospital_name: str
     address: str

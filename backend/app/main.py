@@ -7,6 +7,7 @@ from app.api.endpoints.auth import router as auth_router
 from app.api.endpoints.hospitals import router as hospitals_router
 from app.api.endpoints.dispatch import router as dispatch_router
 from app.api.endpoints.cases import router as cases_router
+from app.api.endpoints import tracking
 
 app = FastAPI(title="MediRoute API")
 
@@ -24,6 +25,7 @@ app.include_router(auth_router)
 app.include_router(hospitals_router)
 app.include_router(dispatch_router)
 app.include_router(cases_router)
+app.include_router(tracking.router)
 
 @app.get("/")
 def read_root():

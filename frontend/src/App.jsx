@@ -4,6 +4,8 @@ import Login from './pages/Login'
 import Dispatch from './pages/Dispatch'
 import Result from './pages/Result'
 import MapPage from './pages/Map'
+import HospitalTrack from './pages/HospitalTrack'
+import HospitalDashboard from './pages/HospitalDashboard'
 
 export default function App() {
   return (
@@ -15,6 +17,8 @@ export default function App() {
           <Route path="/dispatch" element={<Dispatch />} />
           <Route path="/result" element={<Result />} />
           <Route path="/map" element={<MapPage />} />
+          <Route path="/hospital/track/:case_id" element={<HospitalTrack />} />
+          <Route path="/hospital/dashboard" element={<HospitalDashboard />} />
         </Route>
       </Routes>
     </BrowserRouter>

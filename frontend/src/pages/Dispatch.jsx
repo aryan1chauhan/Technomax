@@ -53,7 +53,12 @@ export default function Dispatch() {
         ambulance_lat: 29.8543,
         ambulance_lng: 77.8880,
       })
-      navigate('/result', { state: res.data })
+      navigate('/result', { 
+        state: { 
+          ...res.data, 
+          case_id: res.data.case_id  
+        } 
+      })
     } catch (err) {
       setError(
         err.response?.data?.detail || 'Dispatch failed. Please try again.'

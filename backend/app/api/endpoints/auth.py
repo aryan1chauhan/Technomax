@@ -42,7 +42,7 @@ def login(user_in: UserLogin, db: Session = Depends(get_db)):
         )
         
     access_token = create_access_token(
-        data={"sub": user.email, "role": user.role}
+        data={"sub": user.email, "role": user.role, "hospital_id": user.hospital_id}
     )
     
     return {

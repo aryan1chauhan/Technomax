@@ -73,8 +73,10 @@ def dispatch_ambulance(
     
     db.add(new_case)
     db.commit()
+    db.refresh(new_case)
     
     return DispatchResponse(
+        case_id=new_case.id,
         hospital_id=result["id"],
         hospital_name=result["name"],
         address=result["address"],

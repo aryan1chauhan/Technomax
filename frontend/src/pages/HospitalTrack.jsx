@@ -25,7 +25,7 @@ export default function HospitalTrack() {
   useEffect(() => {
     const fetchCase = async () => {
       try {
-        const res = await api.get('/api/cases')
+        const res = await api.get('/api/cases/')
         const currentCase = res.data.find((c) => c.id === parseInt(case_id))
         if (currentCase) {
           setCaseData(currentCase)

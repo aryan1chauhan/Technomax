@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 
@@ -24,7 +24,34 @@ export default function Dispatch() {
   const [equipment, setEquipment] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [ambulanceLat, setAmbulanceLat] = useState(null)
+  const [ambulanceLng, setAmbulanceLng] = useState(null)
+  const [locationError, setLocationError] = useState('')
+  const [locationLoading, setLocationLoading] = useState(false)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    setLocationLoading(true)
+    if (!navigator.geolocation) {
+      setLocationError('GPS not supported on this device')
+      setLocationLoading(false)
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setAmbulanceLat(position.coords.latitude)
+        setAmbulanceLng(position.coords.longitude)
+        setLocationLoading(false)
+      },
+      (error) => {
+        setLocationError('Location access denied — using default Roorkee location')
+        setAmbulanceLat(29.8543)
+        setAmbulanceLng(77.8880)
+        setLocationLoading(false)
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }, [])
 
   const handleLogout = () => {
     localStorage.removeItem('token')
@@ -50,13 +77,15 @@ export default function Dispatch() {
       const res = await api.post('/api/dispatch/', {
         condition,
         equipment_needed: equipment,
-        ambulance_lat: 29.8543,
-        ambulance_lng: 77.8880,
+        ambulance_lat: ambulanceLat,
+        ambulance_lng: ambulanceLng,
       })
       navigate('/result', { 
         state: { 
           ...res.data, 
-          case_id: res.data.case_id  
+          case_id: res.data.case_id,
+          ambulance_lat: ambulanceLat,
+          ambulance_lng: ambulanceLng
         } 
       })
     } catch (err) {
@@ -94,9 +123,29 @@ export default function Dispatch() {
       <main className="max-w-2xl mx-auto px-4 py-10">
         <div className="bg-white rounded-2xl shadow-lg p-8">
           <h2 className="text-xl font-bold text-gray-900 mb-1">New Dispatch</h2>
-          <p className="text-sm text-gray-500 mb-6">
+          <p className="text-sm text-gray-500 mb-4">
             Select the patient condition and required equipment to find the best hospital.
           </p>
+
+          {/* GPS Status Indicator */}
+          <div className="mb-6 flex items-center gap-2 text-sm font-medium">
+            {locationLoading ? (
+              <>
+                <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse"></span>
+                <span className="text-gray-600">Getting your location...</span>
+              </>
+            ) : locationError ? (
+              <>
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-400"></span>
+                <span className="text-orange-700">{locationError}</span>
+              </>
+            ) : ambulanceLat ? (
+              <>
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                <span className="text-green-700">Live location active</span>
+              </>
+            ) : null}
+          </div>
 
           {/* Error Message */}
           {error && (
@@ -158,7 +207,7 @@ export default function Dispatch() {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || locationLoading || !ambulanceLat}
               className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (

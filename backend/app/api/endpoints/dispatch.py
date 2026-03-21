@@ -4,7 +4,7 @@ from app.db.database import get_db
 from app.db.models import Hospital, Availability, Case, User
 from app.schemas.dispatch import DispatchRequest, DispatchResponse
 from app.core.security import get_current_user
-from app.engine.scorer import find_best_hospital
+from app.engine.ml_scorer import predict_best_hospital
 
 router = APIRouter(prefix="/api/dispatch")
 
@@ -46,11 +46,12 @@ def dispatch_ambulance(
         }
         hospital_dicts.append(hospital_dict)
         
-    result = find_best_hospital(
+    result = predict_best_hospital(
         hospitals=hospital_dicts,
         equipment_needed=request.equipment_needed,
         ambulance_lat=request.ambulance_lat,
-        ambulance_lng=request.ambulance_lng
+        ambulance_lng=request.ambulance_lng,
+        condition=request.condition
     )
     
     if not result:

@@ -5,19 +5,19 @@ HTTP Error 400: {"detail":"Email already registered"}
 HTTP Error 400: {"detail":"Email already registered"}
 
 3. Login as ambulance
-{'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbWIxQHRlc3QuY29tIiwicm9sZSI6ImFtYnVsYW5jZSIsImV4cCI6MTc3MzgxNTgzN30.eoPX0Cfj2brDVeLMZqNG-tuWzAPwHVtFJLfh1WAwhDI', 'token_type': 'bearer'}
+{'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbWIxQHRlc3QuY29tIiwicm9sZSI6ImFtYnVsYW5jZSIsImhvc3BpdGFsX2lkIjpudWxsLCJleHAiOjE3NzM5OTI2ODh9.LX6VOTl0yazQNgpkZXW0DDx8KV1XZ6AJrisQUw285vI', 'token_type': 'bearer'}
 
 4. Get hospitals
-[{'id': 1, 'name': 'City Hospital', 'address': 'New Delhi', 'lat': 28.6139, 'lng': 77.209, 'availability': {'id': 1, 'beds': 8, 'icu': 2, 'doctors': 4, 'equipment': ['ecg', 'ventilator'], 'accepting': True, 'updated_at': '2026-03-18T11:06:54.559187+05:30'}}]
+[{'id': 1, 'name': 'City General Hospital', 'address': 'Civil Lines, Roorkee, Uttarakhand', 'lat': 29.8543, 'lng': 77.888, 'availability': {'id': 1, 'beds': 8, 'icu': 2, 'doctors': 4, 'equipment': ['ecg', 'ventilator'], 'accepting': True, 'updated_at': '2026-03-20T12:13:59.540581+05:30'}}, {'id': 2, 'name': 'Roorkee Government Hospital', 'address': 'Hospital Road, Roorkee', 'lat': 29.86, 'lng': 77.895, 'availability': {'id': 2, 'beds': 3, 'icu': 1, 'doctors': 2, 'equipment': ['ecg'], 'accepting': True, 'updated_at': '2026-03-19T22:56:34.045013+05:30'}}, {'id': 3, 'name': 'IIT Roorkee Medical Centre', 'address': 'IIT Campus, Roorkee', 'lat': 29.8659, 'lng': 77.8963, 'availability': {'id': 3, 'beds': 12, 'icu': 4, 'doctors': 6, 'equipment': ['ecg', 'ventilator', 'xray', 'defibrillator'], 'accepting': True, 'updated_at': '2026-03-19T22:56:34.045013+05:30'}}, {'id': 4, 'name': 'Haridwar District Hospital', 'address': 'Station Road, Haridwar', 'lat': 29.9457, 'lng': 78.1642, 'availability': {'id': 4, 'beds': 5, 'icu': 2, 'doctors': 3, 'equipment': ['ecg', 'xray'], 'accepting': True, 'updated_at': '2026-03-19T22:56:34.045013+05:30'}}]
 
 5. Login as hospital
-{'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJob3NwMUB0ZXN0LmNvbSIsInJvbGUiOiJob3NwaXRhbCIsImV4cCI6MTc3MzgxNTg0M30.QsaBALSLCxRvTswQ9lEgpgodSj-6dQGcuowx3vCp5MA', 'token_type': 'bearer'}
+{'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJob3NwMUB0ZXN0LmNvbSIsInJvbGUiOiJob3NwaXRhbCIsImhvc3BpdGFsX2lkIjoxLCJleHAiOjE3NzM5OTI2OTR9.5qDdmDNS3ot6Dme6y4Kwg1AOMzoe_Bdw_O_gs54ccIE', 'token_type': 'bearer'}
 
 6. Update hospital availability
 {'message': 'Availability updated successfully'}
 
 7. Get hospitals again
-[{'id': 1, 'name': 'City Hospital', 'address': 'New Delhi', 'lat': 28.6139, 'lng': 77.209, 'availability': {'id': 1, 'beds': 8, 'icu': 2, 'doctors': 4, 'equipment': ['ecg', 'ventilator'], 'accepting': True, 'updated_at': '2026-03-18T11:07:25.671763+05:30'}}]
+[{'id': 1, 'name': 'City General Hospital', 'address': 'Civil Lines, Roorkee, Uttarakhand', 'lat': 29.8543, 'lng': 77.888, 'availability': {'id': 1, 'beds': 8, 'icu': 2, 'doctors': 4, 'equipment': ['ecg', 'ventilator'], 'accepting': True, 'updated_at': '2026-03-20T12:14:56.699158+05:30'}}, {'id': 2, 'name': 'Roorkee Government Hospital', 'address': 'Hospital Road, Roorkee', 'lat': 29.86, 'lng': 77.895, 'availability': {'id': 2, 'beds': 3, 'icu': 1, 'doctors': 2, 'equipment': ['ecg'], 'accepting': True, 'updated_at': '2026-03-19T22:56:34.045013+05:30'}}, {'id': 3, 'name': 'IIT Roorkee Medical Centre', 'address': 'IIT Campus, Roorkee', 'lat': 29.8659, 'lng': 77.8963, 'availability': {'id': 3, 'beds': 12, 'icu': 4, 'doctors': 6, 'equipment': ['ecg', 'ventilator', 'xray', 'defibrillator'], 'accepting': True, 'updated_at': '2026-03-19T22:56:34.045013+05:30'}}, {'id': 4, 'name': 'Haridwar District Hospital', 'address': 'Station Road, Haridwar', 'lat': 29.9457, 'lng': 78.1642, 'availability': {'id': 4, 'beds': 5, 'icu': 2, 'doctors': 3, 'equipment': ['ecg', 'xray'], 'accepting': True, 'updated_at': '2026-03-19T22:56:34.045013+05:30'}}]
 
 8. Dispatch
-HTTP Error 307: 
+{'case_id': 57, 'hospital_id': 3, 'hospital_name': 'IIT Roorkee Medical Centre', 'address': 'IIT Campus, Roorkee', 'final_score': 0.6523, 'distance_km': 154.36, 'eta_minutes': 232, 'beds_available': 12, 'equipment_matched': ['ecg'], 'equipment_missing': [], 'lat': 29.8659, 'lng': 77.8963}

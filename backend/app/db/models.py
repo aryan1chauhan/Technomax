@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime
-from sqlalchemy.orm import relationship
+
+
+from sqlalchemy import Column, Integer, String, Float, Boolean, ARRAY, DateTime, ForeignKey
 from sqlalchemy.sql import func
-from sqlalchemy.dialects.postgresql import ARRAY
 from app.db.database import Base
 
 class User(Base):

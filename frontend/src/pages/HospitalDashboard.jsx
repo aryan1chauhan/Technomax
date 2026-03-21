@@ -18,7 +18,7 @@ export default function HospitalDashboard() {
       const decoded = jwtDecode(token)
       const hospitalId = decoded.hospital_id
 
-      const res = await api.get('/api/cases')
+      const res = await api.get('/api/cases/')
       let data = res.data
       if (!Array.isArray(data)) {
         data = data.items || []

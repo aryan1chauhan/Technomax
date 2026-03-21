@@ -9,7 +9,6 @@ import {
   Polyline,
 } from '@react-google-maps/api'
 
-const AMBULANCE_POS = { lat: 29.8543, lng: 77.8880 }
 const LIBRARIES = ['places', 'geometry']
 
 const mapContainerStyle = {
@@ -35,8 +34,14 @@ export default function MapPage() {
   const data = location.state
   const case_id = data?.case_id
 
+  const [AMBULANCE_POS] = useState({
+    lat: data?.ambulance_lat || 29.8543,
+    lng: data?.ambulance_lng || 77.8880
+  })
+
   const [directions, setDirections] = useState(null)
   const [requestSent, setRequestSent] = useState(false)
+  const [mapReady, setMapReady] = useState(false)
 
   // Simulation states
   const [routeSteps, setRouteSteps] = useState([])
@@ -52,6 +57,8 @@ export default function MapPage() {
   const wsRef = useRef(null)
   const mapRef = useRef(null)
   const animationRef = useRef(null)
+  const ambulanceIconRef = useRef(null)
+  const hospitalIconRef = useRef(null)
   const etaRef = useRef(data?.eta_minutes ? data.eta_minutes * 60 : 0)
 
   if (!data) {
@@ -67,15 +74,30 @@ export default function MapPage() {
 
   const onMapLoad = (map) => {
     mapRef.current = map
-    map.setTilt(60)
+    map.setTilt(45)
     map.setHeading(0)
     map.setZoom(17)
     map.setCenter(AMBULANCE_POS)
-    map.setMapTypeId('roadmap')
+    map.setMapTypeId('satellite')
+
+    // Create icons here after google is ready
+    ambulanceIconRef.current = {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(ambulanceSVG),
+      scaledSize: new window.google.maps.Size(48, 48),
+      anchor: new window.google.maps.Point(24, 24),
+    }
+    hospitalIconRef.current = {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(hospitalSVG),
+      scaledSize: new window.google.maps.Size(48, 48),
+      anchor: new window.google.maps.Point(24, 48),
+    }
+    setMapReady(true)
   }
 
   const directionsCallback = useCallback(
     (result, status) => {
+      console.log('Directions status:', status)
+      console.log('Directions result:', result)
       if (status === 'OK' && !directions) {
         setDirections(result)
 
@@ -86,6 +108,7 @@ export default function MapPage() {
             allPoints.push({ lat: point.lat(), lng: point.lng() })
           })
         })
+        console.log('Directions OK — total path points:', allPoints.length)
         setRouteSteps(allPoints)
         setSimStatus(`En Route → ${data.hospital_name}`)
       }
@@ -95,6 +118,7 @@ export default function MapPage() {
 
   // --- Phase 1: Animate route drawing ---
   useEffect(() => {
+    console.log('Phase 1 started — routeSteps:', routeSteps.length)
     if (routeSteps.length === 0 || routeDrawn) return
 
     let idx = 0
@@ -117,6 +141,7 @@ export default function MapPage() {
 
   // --- Phase 2: Smooth ambulance movement with requestAnimationFrame ---
   useEffect(() => {
+    console.log('Phase 2 started — routeDrawn:', routeDrawn, 'steps:', routeSteps.length)
     if (!routeDrawn || arrived || routeSteps.length === 0) return
 
     // Open WebSocket
@@ -136,6 +161,7 @@ export default function MapPage() {
     const animate = (now) => {
       const elapsed = now - startTime
       const progress = Math.min(elapsed / totalDuration, 1)
+      console.log('animate frame — progress:', progress.toFixed(3))
 
       // Find which segment we're on
       const totalSegments = routeSteps.length - 1
@@ -251,18 +277,6 @@ export default function MapPage() {
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
-  const ambulanceIcon = typeof window !== 'undefined' && window.google ? {
-    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(ambulanceSVG),
-    scaledSize: new window.google.maps.Size(48, 48),
-    anchor: new window.google.maps.Point(24, 24),
-  } : undefined
-
-  const hospitalIcon = typeof window !== 'undefined' && window.google ? {
-    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(hospitalSVG),
-    scaledSize: new window.google.maps.Size(48, 48),
-    anchor: new window.google.maps.Point(24, 48),
-  } : undefined
-
   return (
     <>
       <style>{`
@@ -337,8 +351,8 @@ export default function MapPage() {
               zoom={17}
               onLoad={onMapLoad}
               options={{
-                mapTypeId: 'roadmap',
-                tilt: 60,
+                mapTypeId: 'satellite',
+                tilt: 45,
                 heading: 0,
                 rotateControl: true,
                 streetViewControl: false,
@@ -359,21 +373,25 @@ export default function MapPage() {
               )}
 
               {/* Moving Ambulance Marker */}
-              <Marker
-                position={ambulancePos}
-                icon={ambulanceIcon}
-                zIndex={1000}
-              />
+              {mapReady && (
+                <Marker
+                  position={ambulancePos}
+                  icon={ambulanceIconRef.current}
+                  zIndex={1000}
+                />
+              )}
 
               {/* Hospital Marker */}
-              <Marker
-                position={hospitalPos}
-                icon={hospitalIcon}
-                zIndex={999}
-              />
+              {mapReady && (
+                <Marker
+                  position={hospitalPos}
+                  icon={hospitalIconRef.current}
+                  zIndex={999}
+                />
+              )}
 
-              {/* Directions Service — fire once */}
-              {!requestSent && (
+              {/* Directions Service — fire once after map is ready */}
+              {mapReady && !requestSent && (
                 <DirectionsService
                   options={{
                     destination: hospitalPos,

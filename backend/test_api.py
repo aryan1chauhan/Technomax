@@ -52,4 +52,4 @@ print("\n7. Get hospitals again")
 print(request("GET", "/api/hospitals"))
 
 print("\n8. Dispatch")
-print(request("POST", "/api/dispatch", {"condition": "cardiac arrest", "equipment_needed": ["ecg"], "ambulance_lat": 28.6139, "ambulance_lng": 77.2090}, amb_token))
+print(request("POST", "/api/dispatch/", {"condition": "cardiac arrest", "equipment_needed": ["ecg"], "ambulance_lat": 28.6139, "ambulance_lng": 77.2090}, amb_token))

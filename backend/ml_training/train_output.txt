@@ -1,0 +1,31 @@
+Class Balance:
+was_selected
+0    43416
+1      648
+
+Test Set Metrics:
+Accuracy: 0.9796
+Precision: 0.4408
+Recall: 0.9306
+F1 Score: 0.5982
+
+Cross-val F1: 0.5746 (+/- 0.0263)
+
+Feature Importances:
+beds: 0.667955
+equipment_match: 0.096128
+icu: 0.095457
+has_ventilator: 0.054779
+doctor_count: 0.034614
+distance_km: 0.026482
+severity_weight: 0.016009
+speciality_match: 0.003998
+has_defibrillator: 0.003985
+has_blood_bank: 0.000592
+has_ct_scan: 0.000000
+has_icu_equipment: 0.000000
+accepting: 0.000000
+hospital_load: 0.000000
+condition_severity: 0.000000
+
+Model saved to hospital_model.pkl

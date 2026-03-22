@@ -4,8 +4,8 @@ import Login from './pages/Login'
 import Dispatch from './pages/Dispatch'
 import Result from './pages/Result'
 import MapPage from './pages/Map'
-import HospitalTrack from './pages/HospitalTrack'
-import HospitalDashboard from './pages/HospitalDashboard'
+import HospitalTrack from './pages/hospital/HospitalTrack'
+import HospitalDashboard from './pages/hospital/HospitalDashboard'
 
 export default function App() {
   return (

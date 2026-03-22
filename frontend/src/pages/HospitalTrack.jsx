@@ -1,14 +1,35 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { LoadScript, GoogleMap, Marker } from '@react-google-maps/api'
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import api from '../api/axios'
 
-const mapContainerStyle = {
-  width: '100%',
-  height: '55vh',
-}
+// Fix Leaflet default icon bug
+delete L.Icon.Default.prototype._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+})
 
-const HOSPITAL_POS = { lat: 29.8700, lng: 77.8960 }
+const ambulanceIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+})
+
+const hospitalIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+})
+
+const HOSPITAL_POS = [29.8700, 77.8960]
 
 export default function HospitalTrack() {
   const { case_id } = useParams()
@@ -29,10 +50,10 @@ export default function HospitalTrack() {
         const currentCase = res.data.find((c) => c.id === parseInt(case_id))
         if (currentCase) {
           setCaseData(currentCase)
-          setAmbulancePos({
-            lat: currentCase.ambulance_lat,
-            lng: currentCase.ambulance_lng,
-          })
+          setAmbulancePos([
+            currentCase.ambulance_lat,
+            currentCase.ambulance_lng,
+          ])
           setEtaCountdown(currentCase.eta_minutes * 60)
         }
       } catch (err) {
@@ -51,7 +72,7 @@ export default function HospitalTrack() {
     
     wsRef.current.onmessage = (event) => {
       const data = JSON.parse(event.data)
-      setAmbulancePos({ lat: data.lat, lng: data.lng })
+      setAmbulancePos([data.lat, data.lng])
       setEtaCountdown(data.eta_minutes * 60)
       if (data.eta_minutes === 0) setArrived(true)
     }
@@ -99,10 +120,12 @@ export default function HospitalTrack() {
     )
   }
 
-  const center = ambulancePos ? {
-    lat: (ambulancePos.lat + HOSPITAL_POS.lat) / 2,
-    lng: (ambulancePos.lng + HOSPITAL_POS.lng) / 2,
-  } : HOSPITAL_POS
+  const center = ambulancePos
+    ? [
+        (ambulancePos[0] + HOSPITAL_POS[0]) / 2,
+        (ambulancePos[1] + HOSPITAL_POS[1]) / 2,
+      ]
+    : HOSPITAL_POS
 
   return (
     <>
@@ -151,37 +174,24 @@ export default function HospitalTrack() {
 
         {/* MAP SECTION */}
         <div style={{ height: '55vh' }} className="w-full relative">
-          <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_KEY}>
-            <GoogleMap
-              mapContainerStyle={mapContainerStyle}
-              center={center}
-              zoom={13}
-              options={{ disableDefaultUI: true, zoomControl: true }}
-            >
-              <Marker
-                position={HOSPITAL_POS}
-                label={{ text: 'H', color: 'white', fontWeight: 'bold' }}
-                icon={{
-                  path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
-                  fillColor: '#16A34A',
-                  fillOpacity: 1,
-                  strokeColor: '#15803D',
-                  strokeWeight: 1,
-                  scale: 2,
-                  anchor: { x: 12, y: 24 },
-                  labelOrigin: { x: 12, y: 10 },
-                }}
-              />
-              {ambulancePos && (
-                <Marker
-                  position={ambulancePos}
-                  label={{ text: '🚑', fontSize: '24px' }}
-                  icon={{ path: 'M0 0', scale: 0 }}
-                  zIndex={100}
-                />
-              )}
-            </GoogleMap>
-          </LoadScript>
+          <MapContainer
+            center={center}
+            zoom={13}
+            style={{ width: '100%', height: '100%' }}
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <Marker position={HOSPITAL_POS} icon={hospitalIcon}>
+              <Popup>🏥 {caseData?.hospital_name || 'Hospital'}</Popup>
+            </Marker>
+            {ambulancePos && (
+              <Marker position={ambulancePos} icon={ambulanceIcon}>
+                <Popup>🚑 Ambulance — En Route</Popup>
+              </Marker>
+            )}
+          </MapContainer>
         </div>
 
         {/* INFO PANEL */}

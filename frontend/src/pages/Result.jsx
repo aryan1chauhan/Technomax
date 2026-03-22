@@ -194,7 +194,9 @@ export default function Result() {
                         ...location.state,
                         case_id: location.state.case_id,
                         ambulance_lat: location.state.ambulance_lat,
-                        ambulance_lng: location.state.ambulance_lng
+                        ambulance_lng: location.state.ambulance_lng,
+                        lat: location.state.lat,
+                        lng: location.state.lng
                       },
                     })
                   }

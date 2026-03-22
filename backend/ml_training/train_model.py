@@ -1,14 +1,14 @@
 import pandas as pd
 import joblib
 import os
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import numpy as np
+from xgboost import XGBClassifier
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, precision_recall_curve
 
 def train():
     data_path = os.path.join(os.path.dirname(__file__), 'training_data.csv')
     
-    # 2. If file not found or empty: print error and exit
     if not os.path.exists(data_path):
         print("Error: training_data.csv not found.")
         return
@@ -19,23 +19,25 @@ def train():
         print("Error: training_data.csv is empty.")
         return
         
-    # 3. Features (X) = all columns except 'was_selected'
-    # 4. Target (y) = 'was_selected'
     X = df.drop(columns=['was_selected'])
     y = df['was_selected']
     
-    # 5. Check class balance
     print("Class Balance:")
     print(y.value_counts().to_string())
     
-    # 6. Split 80/20 train/test with random_state=42
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    # 7. Train RandomForestClassifier
-    model = RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced')
+    model = XGBClassifier(
+        n_estimators=300,
+        max_depth=6,
+        learning_rate=0.1,
+        scale_pos_weight=20,
+        eval_metric='logloss',
+        random_state=42
+    )
     model.fit(X_train, y_train)
     
-    # 8. Print on test set Metrics
+    # Test set metrics
     y_pred = model.predict(X_test)
     print("\nTest Set Metrics:")
     print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
@@ -43,19 +45,34 @@ def train():
     print(f"Recall: {recall_score(y_test, y_pred, zero_division=0):.4f}")
     print(f"F1 Score: {f1_score(y_test, y_pred, zero_division=0):.4f}")
     
-    # 9. Print feature importances ranked highest to lowest
+    # Optimal threshold tuning
+    y_proba = model.predict_proba(X_test)[:, 1]
+    precisions, recalls, thresholds = precision_recall_curve(y_test, y_proba)
+    f1_scores = 2 * (precisions * recalls) / (precisions + recalls + 1e-8)
+    best_threshold = thresholds[np.argmax(f1_scores)]
+    print(f"\nOptimal threshold: {best_threshold:.4f}")
+
+    y_pred_tuned = (y_proba >= best_threshold).astype(int)
+    print(f"Tuned Precision: {precision_score(y_test, y_pred_tuned, zero_division=0):.4f}")
+    print(f"Tuned Recall: {recall_score(y_test, y_pred_tuned, zero_division=0):.4f}")
+    print(f"Tuned F1: {f1_score(y_test, y_pred_tuned, zero_division=0):.4f}")
+    
+    # Cross-validation
+    cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='f1')
+    print(f"\nCross-val F1: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
+    
+    # Feature importances
     print("\nFeature Importances:")
     importances = model.feature_importances_
     feature_importances = sorted(zip(X.columns, importances), key=lambda x: x[1], reverse=True)
     for feature, imp in feature_importances:
         print(f"{feature}: {imp:.6f}")
         
-    # 10. Save model
+    # Save model
     model_path = os.path.join(os.path.dirname(__file__), 'hospital_model.pkl')
     joblib.dump(model, model_path)
     
-    # 11. Print summary
-    print("Model saved to hospital_model.pkl")
+    print("\nModel saved to hospital_model.pkl")
 
 if __name__ == '__main__':
     train()

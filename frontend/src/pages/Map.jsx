@@ -1,281 +1,275 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate, Navigate } from 'react-router-dom'
-import {
-  LoadScript,
-  GoogleMap,
-  Marker,
-  DirectionsService,
-  DirectionsRenderer,
-  Polyline,
-} from '@react-google-maps/api'
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, ZoomControl } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 
-const LIBRARIES = ['places', 'geometry']
+// Fix Leaflet default icon bug
+delete L.Icon.Default.prototype._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+})
 
-const mapContainerStyle = {
-  width: '100%',
-  height: '100%',
+const ambulanceIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+})
+
+const hospitalIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+})
+
+// Map ref stored globally so FlyToLocation can access it
+const mapInstanceRef = { current: null }
+
+function FlyToLocation({ position, heading }) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (!map) return
+    mapInstanceRef.current = map
+  }, [map])
+
+  useEffect(() => {
+    if (position) {
+      map.flyTo(position, 16, {
+        animate: true,
+        duration: 1.5,
+      })
+    }
+  }, [position, map])
+
+  return null
 }
 
-const ambulanceSVG = `
-<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-  <rect width="48" height="48" rx="24" fill="#EF4444"/>
-  <text x="24" y="32" text-anchor="middle" font-size="24">🚑</text>
-</svg>`
+const calculateETA = (currentPos, hospitalPos) => {
+  if (!currentPos || !hospitalPos) return null
+  const R = 6371
+  const lat1 = (currentPos[0] * Math.PI) / 180
+  const lat2 = (hospitalPos[0] * Math.PI) / 180
+  const dlat = ((hospitalPos[0] - currentPos[0]) * Math.PI) / 180
+  const dlng = ((hospitalPos[1] - currentPos[1]) * Math.PI) / 180
+  const a =
+    Math.sin(dlat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dlng / 2) ** 2
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  const distanceKm = R * c
+  const etaMinutes = Math.round((distanceKm / 40) * 60)
+  return { distanceKm: distanceKm.toFixed(2), etaMinutes }
+}
 
-const hospitalSVG = `
-<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-  <rect width="48" height="48" rx="8" fill="#16A34A"/>
-  <text x="24" y="32" text-anchor="middle" font-size="24">🏥</text>
-</svg>`
+const isOffRoute = (currentPos, routePoints, thresholdKm = 0.05) => {
+  if (!routePoints || routePoints.length === 0) return false
+  let minDistance = Infinity
+  for (const point of routePoints) {
+    const R = 6371
+    const lat1 = (currentPos[0] * Math.PI) / 180
+    const lat2 = (point[0] * Math.PI) / 180
+    const dlat = ((point[0] - currentPos[0]) * Math.PI) / 180
+    const dlng = ((point[1] - currentPos[1]) * Math.PI) / 180
+    const a =
+      Math.sin(dlat / 2) ** 2 +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dlng / 2) ** 2
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    const dist = R * c
+    if (dist < minDistance) minDistance = dist
+  }
+  return minDistance > thresholdKm
+}
+
+const fetchRoute = async (fromPos, toPos) => {
+  const key = import.meta.env.VITE_ORS_API_KEY
+  const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${key}&start=${fromPos[1]},${fromPos[0]}&end=${toPos[1]},${toPos[0]}`
+  try {
+    const res = await fetch(url)
+    const json = await res.json()
+    const coords = json.features[0].geometry.coordinates
+    const points = coords.map(([lng, lat]) => [lat, lng])
+    const segments = json.features[0].properties.segments
+    const steps = segments?.[0]?.steps || []
+    const instructions = steps.map((step) => ({
+      instruction: step.instruction,
+      distance: step.distance,
+      duration: step.duration,
+      type: step.type,
+    }))
+    return { points, instructions }
+  } catch (err) {
+    console.error('Route fetch failed:', err)
+    return { points: null, instructions: [] }
+  }
+}
+
+const getDirectionIcon = (type) => {
+  switch (type) {
+    case 0: return '↰'
+    case 1: return '↱'
+    case 2: return '↑'
+    case 3: return '↰'
+    case 4: return '↱'
+    case 5: return '↰'
+    case 6: return '↱'
+    case 7: return '↻'
+    default: return '↑'
+  }
+}
 
 export default function MapPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const data = location.state
-  const case_id = data?.case_id
 
-  const [AMBULANCE_POS] = useState({
-    lat: data?.ambulance_lat || 29.8543,
-    lng: data?.ambulance_lng || 77.8880
-  })
+  if (!data) return <Navigate to="/dispatch" replace />
 
-  const [directions, setDirections] = useState(null)
-  const [requestSent, setRequestSent] = useState(false)
-  const [mapReady, setMapReady] = useState(false)
+  const AMBULANCE_POS = [
+    data?.ambulance_lat || 29.8543,
+    data?.ambulance_lng || 77.888,
+  ]
+  const HOSPITAL_POS = [data?.lat, data?.lng]
+  const center = [
+    (AMBULANCE_POS[0] + HOSPITAL_POS[0]) / 2,
+    (AMBULANCE_POS[1] + HOSPITAL_POS[1]) / 2,
+  ]
 
-  // Simulation states
-  const [routeSteps, setRouteSteps] = useState([])
-  const [animatedPath, setAnimatedPath] = useState([])
-  const [routeDrawn, setRouteDrawn] = useState(false)
+  const [routePoints, setRoutePoints] = useState([])
   const [ambulancePos, setAmbulancePos] = useState(AMBULANCE_POS)
   const [arrived, setArrived] = useState(false)
-  const [etaCountdown, setEtaCountdown] = useState(null)
-  const [simStatus, setSimStatus] = useState('Calculating Route...')
+  const [gpsStatus, setGpsStatus] = useState('Acquiring GPS...')
+  const [liveDistance, setLiveDistance] = useState(data.distance_km || null)
+  const [liveETA, setLiveETA] = useState(data.eta_minutes || null)
+  const [instructions, setInstructions] = useState([])
+  const [currentStepIndex, setCurrentStepIndex] = useState(0)
+  const [showDirections, setShowDirections] = useState(false)
+  const [heading, setHeading] = useState(0)
 
-  const ambulanceMoveRef = useRef(null)
-  const etaIntervalRef = useRef(null)
   const wsRef = useRef(null)
-  const mapRef = useRef(null)
-  const animationRef = useRef(null)
-  const ambulanceIconRef = useRef(null)
-  const hospitalIconRef = useRef(null)
-  const etaRef = useRef(data?.eta_minutes ? data.eta_minutes * 60 : 0)
-
-  if (!data) {
-    return <Navigate to="/dispatch" replace />
-  }
-
-  const hospitalPos = { lat: data.lat, lng: data.lng }
+  const isReroutingRef = useRef(false)
+  const prevPosRef = useRef(null)
 
   const handleLogout = () => {
     localStorage.removeItem('token')
     navigate('/login')
   }
 
-  const onMapLoad = (map) => {
-    mapRef.current = map
-    map.setTilt(45)
-    map.setHeading(0)
-    map.setZoom(17)
-    map.setCenter(AMBULANCE_POS)
-    map.setMapTypeId('satellite')
-
-    // Create icons here after google is ready
-    ambulanceIconRef.current = {
-      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(ambulanceSVG),
-      scaledSize: new window.google.maps.Size(48, 48),
-      anchor: new window.google.maps.Point(24, 24),
-    }
-    hospitalIconRef.current = {
-      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(hospitalSVG),
-      scaledSize: new window.google.maps.Size(48, 48),
-      anchor: new window.google.maps.Point(24, 48),
-    }
-    setMapReady(true)
-  }
-
-  const directionsCallback = useCallback(
-    (result, status) => {
-      console.log('Directions status:', status)
-      console.log('Directions result:', result)
-      if (status === 'OK' && !directions) {
-        setDirections(result)
-
-        const route = result.routes[0]
-        const allPoints = []
-        route.legs[0].steps.forEach((step) => {
-          step.path.forEach((point) => {
-            allPoints.push({ lat: point.lat(), lng: point.lng() })
-          })
-        })
-        console.log('Directions OK — total path points:', allPoints.length)
-        setRouteSteps(allPoints)
-        setSimStatus(`En Route → ${data.hospital_name}`)
-      }
-    },
-    [directions, data?.hospital_name]
-  )
-
-  // --- Phase 1: Animate route drawing ---
+  // 1. Fetch initial route from ORS on mount
   useEffect(() => {
-    console.log('Phase 1 started — routeSteps:', routeSteps.length)
-    if (routeSteps.length === 0 || routeDrawn) return
+    fetchRoute(AMBULANCE_POS, HOSPITAL_POS).then(({ points, instructions: instr }) => {
+      if (points) setRoutePoints(points)
+      if (instr) setInstructions(instr)
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-    let idx = 0
-    const totalDuration = 2000
-    const interval = Math.max(totalDuration / routeSteps.length, 5)
-
-    const timer = setInterval(() => {
-      idx++
-      if (idx >= routeSteps.length) {
-        setAnimatedPath([...routeSteps])
-        setRouteDrawn(true)
-        clearInterval(timer)
-      } else {
-        setAnimatedPath(routeSteps.slice(0, idx + 1))
-      }
-    }, interval)
-
-    return () => clearInterval(timer)
-  }, [routeSteps, routeDrawn])
-
-  // --- Phase 2: Smooth ambulance movement with requestAnimationFrame ---
+  // 2. Real GPS tracking with heading calculation
   useEffect(() => {
-    console.log('Phase 2 started — routeDrawn:', routeDrawn, 'steps:', routeSteps.length)
-    if (!routeDrawn || arrived || routeSteps.length === 0) return
-
-    // Open WebSocket
-    if (case_id && !wsRef.current) {
-      wsRef.current = new WebSocket(`ws://localhost:8000/ws/ambulance/${case_id}`)
-      wsRef.current.onopen = () => {
-        console.log('WebSocket connected — ambulance tracking active')
-      }
-      wsRef.current.onerror = (err) => {
-        console.error('WebSocket error:', err)
-      }
+    if (!navigator.geolocation) {
+      setGpsStatus('GPS not available')
+      return
     }
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const newPos = [position.coords.latitude, position.coords.longitude]
 
-    const totalDuration = 20000 // 20 seconds
-    const startTime = performance.now()
-
-    const animate = (now) => {
-      const elapsed = now - startTime
-      const progress = Math.min(elapsed / totalDuration, 1)
-      console.log('animate frame — progress:', progress.toFixed(3))
-
-      // Find which segment we're on
-      const totalSegments = routeSteps.length - 1
-      const exactIdx = progress * totalSegments
-      const segIdx = Math.min(Math.floor(exactIdx), totalSegments - 1)
-      const segProgress = exactIdx - segIdx
-
-      const prev = routeSteps[segIdx]
-      const next = routeSteps[Math.min(segIdx + 1, totalSegments)]
-
-      // Interpolate smooth position
-      const currentPosition = {
-        lat: prev.lat + (next.lat - prev.lat) * segProgress,
-        lng: prev.lng + (next.lng - prev.lng) * segProgress,
-      }
-
-      setAmbulancePos(currentPosition)
-
-      // Camera tracking — pan map and rotate heading
-      if (mapRef.current && window.google) {
-        mapRef.current.panTo(currentPosition)
-        try {
-          const prevLatLng = new window.google.maps.LatLng(prev.lat, prev.lng)
-          const nextLatLng = new window.google.maps.LatLng(next.lat, next.lng)
-          const heading = window.google.maps.geometry.spherical.computeHeading(prevLatLng, nextLatLng)
-          mapRef.current.setHeading(heading)
-        } catch (e) {
-          // geometry lib may not be ready
+        // Calculate heading from previous position
+        if (prevPosRef.current) {
+          const prev = prevPosRef.current
+          const dLng = ((newPos[1] - prev[1]) * Math.PI) / 180
+          const lat1 = (prev[0] * Math.PI) / 180
+          const lat2 = (newPos[0] * Math.PI) / 180
+          const y = Math.sin(dLng) * Math.cos(lat2)
+          const x =
+            Math.cos(lat1) * Math.sin(lat2) -
+            Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng)
+          const bearing = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360
+          setHeading(bearing)
         }
-      }
 
-      // Send WebSocket update
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          lat: currentPosition.lat,
-          lng: currentPosition.lng,
-          eta_minutes: Math.ceil((etaRef.current || 0) / 60)
-        }))
-      }
+        prevPosRef.current = newPos
+        setAmbulancePos(newPos)
+        setGpsStatus('Following your live location')
+      },
+      (error) => {
+        console.error('GPS error:', error)
+        setGpsStatus('GPS error — using last known position')
+      },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+    )
+    return () => navigator.geolocation.clearWatch(watchId)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-      if (progress >= 1) {
-        // Arrived
-        setAmbulancePos(routeSteps[totalSegments])
+  // 3. Recalculate distance + ETA + check off-route
+  useEffect(() => {
+    if (!ambulancePos || !HOSPITAL_POS) return
+
+    const result = calculateETA(ambulancePos, HOSPITAL_POS)
+    if (result) {
+      setLiveDistance(result.distanceKm)
+      setLiveETA(result.etaMinutes)
+      if (parseFloat(result.distanceKm) < 0.1) {
         setArrived(true)
-        setSimStatus('ARRIVED')
-        // Final WS message
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({
-            lat: routeSteps[totalSegments].lat,
-            lng: routeSteps[totalSegments].lng,
-            eta_minutes: 0
-          }))
-        }
         return
       }
-
-      animationRef.current = requestAnimationFrame(animate)
     }
 
-    animationRef.current = requestAnimationFrame(animate)
+    if (
+      !isReroutingRef.current &&
+      routePoints.length > 0 &&
+      isOffRoute(ambulancePos, routePoints)
+    ) {
+      isReroutingRef.current = true
+      setGpsStatus('Re-routing...')
 
-    return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current)
-    }
-  }, [routeDrawn, arrived, routeSteps, case_id])
-
-  // Cleanup WebSocket on unmount
-  useEffect(() => {
-    return () => {
-      wsRef.current?.close()
-      if (animationRef.current) cancelAnimationFrame(animationRef.current)
-    }
-  }, [])
-
-  // --- ETA Countdown ---
-  useEffect(() => {
-    if (!routeDrawn || arrived) return
-
-    const startEta = data.eta_minutes
-    setEtaCountdown(startEta * 60)
-    etaRef.current = startEta * 60
-
-    etaIntervalRef.current = setInterval(() => {
-      setEtaCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(etaIntervalRef.current)
-          etaRef.current = 0
-          return 0
+      fetchRoute(ambulancePos, HOSPITAL_POS).then(({ points: newPoints, instructions: newInstr }) => {
+        if (newPoints && newPoints.length > 0) {
+          setRoutePoints(newPoints)
+          setInstructions(newInstr || [])
+          setCurrentStepIndex(0)
+          setGpsStatus('Following your live location')
         }
-        etaRef.current = prev - 1
-        return prev - 1
+        isReroutingRef.current = false
       })
-    }, 1000)
-
-    return () => {
-      if (etaIntervalRef.current) clearInterval(etaIntervalRef.current)
     }
-  }, [routeDrawn, arrived, data.eta_minutes])
+  }, [ambulancePos]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Stop countdown when arrived
+  // 4. WebSocket setup
   useEffect(() => {
-    if (arrived && etaIntervalRef.current) {
-      clearInterval(etaIntervalRef.current)
-      setEtaCountdown(0)
-    }
-  }, [arrived])
+    if (!data.case_id) return
+    wsRef.current = new WebSocket(
+      `ws://localhost:8000/ws/ambulance/${data.case_id}`
+    )
+    wsRef.current.onopen = () => console.log('WebSocket connected')
+    wsRef.current.onerror = (err) => console.error('WebSocket error:', err)
+    return () => wsRef.current?.close()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const formatCountdown = (totalSec) => {
-    if (totalSec === null) return '--:--'
-    if (totalSec <= 0) return '0:00'
-    const m = Math.floor(totalSec / 60)
-    const s = totalSec % 60
-    return `${m}:${s.toString().padStart(2, '0')}`
-  }
+  // 5. Send GPS position via WebSocket
+  useEffect(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          lat: ambulancePos[0],
+          lng: ambulancePos[1],
+          eta_minutes: liveETA || 0,
+        })
+      )
+    }
+  }, [ambulancePos, liveETA])
+
+  useEffect(() => {
+    if (arrived && wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({ lat: ambulancePos[0], lng: ambulancePos[1], eta_minutes: 0 })
+      )
+    }
+  }, [arrived]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -284,157 +278,125 @@ export default function MapPage() {
           0%, 100% { transform: scale(1); opacity: 1; }
           50% { transform: scale(1.6); opacity: 0.4; }
         }
-        .animate-live-dot {
-          animation: live-dot-pulse 1.5s ease-in-out infinite;
-        }
-        @keyframes arrived-pop {
-          0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-          60% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
-          100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-        }
-        .animate-arrived-pop {
-          animation: arrived-pop 0.6s ease-out forwards;
-        }
+        .animate-live-dot { animation: live-dot-pulse 1.5s ease-in-out infinite; }
+        .leaflet-container { height: 100%; width: 100%; }
       `}</style>
 
-      <div className="h-screen flex flex-col">
-        {/* Header */}
-        <header className="z-10 shadow-lg" style={{ backgroundColor: '#0A1628' }}>
-          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: '#0A1628' }}>
+        {/* HEADER */}
+        <header className="flex-shrink-0 shadow-lg z-[2000]" style={{ backgroundColor: '#0A1628', height: '56px' }}>
+          <div className="max-w-5xl mx-auto px-4 h-full flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => navigate(-1)}
-                className="text-gray-400 hover:text-white transition mr-2"
-              >
+              <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white transition mr-1">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#16A34A' }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#16A34A' }}>
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                 </svg>
               </div>
-              <div>
-                <span className="text-lg font-bold text-white">MediRoute</span>
-                <p className="text-xs text-gray-400 -mt-0.5">Live Dispatch</p>
-              </div>
+              <span className="text-lg font-bold text-white">MediRoute</span>
             </div>
             <div className="flex items-center gap-3">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full rounded-full animate-live-dot" style={{ backgroundColor: arrived ? '#4ADE80' : '#16A34A' }}></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ backgroundColor: '#16A34A' }}></span>
-              </span>
-              <span className="text-sm font-mono text-gray-300">
-                {arrived ? (
-                  <span style={{ color: '#4ADE80' }}>Arrived</span>
-                ) : (
-                  `ETA ${formatCountdown(etaCountdown)}`
-                )}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="text-sm text-gray-400 hover:text-white font-medium transition px-3 py-1.5 rounded-lg hover:bg-white/10 ml-2"
-              >
+              <button onClick={handleLogout} className="text-sm text-gray-400 hover:text-white font-medium transition px-3 py-1.5 rounded-lg hover:bg-white/10">
                 Logout
               </button>
             </div>
           </div>
         </header>
 
-        {/* Map */}
-        <div className="flex-1 relative">
-          <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_KEY} libraries={LIBRARIES}>
-            <GoogleMap
-              mapContainerStyle={mapContainerStyle}
-              center={AMBULANCE_POS}
-              zoom={17}
-              onLoad={onMapLoad}
-              options={{
-                mapTypeId: 'satellite',
-                tilt: 45,
-                heading: 0,
-                rotateControl: true,
-                streetViewControl: false,
-                fullscreenControl: false,
-                mapTypeControl: false,
-              }}
-            >
-              {/* Route Polyline */}
-              {animatedPath.length > 1 && (
-                <Polyline
-                  path={animatedPath}
-                  options={{
-                    strokeColor: '#3B82F6',
-                    strokeWeight: 6,
-                    strokeOpacity: 0.8,
-                  }}
-                />
+        {/* STATUS BAR */}
+        <div
+          className="flex-shrink-0 flex items-center justify-between px-6 py-2 z-[1999]"
+          style={{ backgroundColor: '#0F2238', height: '48px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              {!arrived && (
+                <span className="absolute inline-flex h-full w-full rounded-full animate-live-dot" style={{ backgroundColor: gpsStatus === 'Re-routing...' ? '#F59E0B' : '#4ADE80' }}></span>
               )}
+              <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: arrived ? '#16A34A' : gpsStatus === 'Re-routing...' ? '#F59E0B' : '#4ADE80' }}></span>
+            </span>
+            <span className="text-sm font-medium" style={{ color: arrived ? '#4ADE80' : gpsStatus === 'Re-routing...' ? '#F59E0B' : '#9CA3AF' }}>
+              {arrived ? 'ARRIVED' : `Distance: ${liveDistance ?? '--'} km | ETA: ${liveETA ?? '--'} min`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-400">
+            <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {arrived ? (
+              <span className="font-semibold" style={{ color: '#4ADE80' }}>Arrived</span>
+            ) : (
+              <span className="font-mono font-semibold text-white">{liveETA ?? '--'} min</span>
+            )}
+          </div>
+        </div>
 
-              {/* Moving Ambulance Marker */}
-              {mapReady && (
-                <Marker
-                  position={ambulancePos}
-                  icon={ambulanceIconRef.current}
-                  zIndex={1000}
-                />
-              )}
+        {/* MAP */}
+        <div className="relative flex-1" style={{ height: 'calc(100vh - 104px)' }}>
+          <MapContainer center={center} zoom={16} zoomControl={false} style={{ width: '100%', height: '100%' }}>
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>'
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            />
+            <ZoomControl position="bottomright" />
+            <FlyToLocation position={ambulancePos} heading={heading} />
+            <Marker position={ambulancePos} icon={ambulanceIcon}>
+              <Popup>🚑 Ambulance — Live GPS</Popup>
+            </Marker>
+            <Marker position={HOSPITAL_POS} icon={hospitalIcon}>
+              <Popup>{data?.hospital_name}</Popup>
+            </Marker>
+            {routePoints.length > 0 && (
+              <Polyline
+                positions={routePoints}
+                pathOptions={{
+                  color: '#3B82F6',
+                  weight: 6,
+                  opacity: 0.9,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
+              />
+            )}
+          </MapContainer>
 
-              {/* Hospital Marker */}
-              {mapReady && (
-                <Marker
-                  position={hospitalPos}
-                  icon={hospitalIconRef.current}
-                  zIndex={999}
-                />
-              )}
-
-              {/* Directions Service — fire once after map is ready */}
-              {mapReady && !requestSent && (
-                <DirectionsService
-                  options={{
-                    destination: hospitalPos,
-                    origin: AMBULANCE_POS,
-                    travelMode: 'DRIVING',
-                  }}
-                  callback={(result, status) => {
-                    setRequestSent(true)
-                    directionsCallback(result, status)
-                  }}
-                />
-              )}
-
-              {/* Hidden DirectionsRenderer */}
-              {directions && (
-                <DirectionsRenderer
-                  options={{
-                    directions,
-                    suppressMarkers: true,
-                    polylineOptions: { strokeOpacity: 0 },
-                  }}
-                />
-              )}
-            </GoogleMap>
-          </LoadScript>
-
-          {/* Arrived Overlay */}
-          {arrived && (
-            <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-              <div className="animate-arrived-pop px-8 py-4 rounded-2xl shadow-2xl" style={{ backgroundColor: 'rgba(22,163,74,0.95)' }}>
-                <div className="flex items-center gap-3">
-                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="text-3xl font-extrabold text-white tracking-wide">ARRIVED</span>
+          {/* NEXT TURN BANNER */}
+          {instructions.length > 0 && !arrived && (
+            <div className="absolute bottom-[220px] left-1/2 -translate-x-1/2 z-[1001] w-[380px]">
+              <div
+                className="rounded-xl px-4 py-3 flex items-center gap-3 shadow-xl border border-white/10"
+                style={{ backgroundColor: 'rgba(10,22,40,0.95)' }}
+              >
+                <div
+                  className="w-10 h-10 rounded-lg flex items-center justify-center text-xl text-white flex-shrink-0"
+                  style={{ backgroundColor: '#2563EB' }}
+                >
+                  {getDirectionIcon(instructions[currentStepIndex]?.type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-semibold text-sm truncate">
+                    {instructions[currentStepIndex]?.instruction || 'Follow the route'}
+                  </p>
+                  <p className="text-gray-400 text-xs mt-0.5">
+                    {instructions[currentStepIndex]?.distance
+                      ? `${(instructions[currentStepIndex].distance / 1000).toFixed(1)} km`
+                      : ''}
+                  </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Info Panel — floating at bottom center */}
-          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10 w-[380px]">
-            <div className="rounded-xl shadow-2xl p-5 backdrop-blur-sm" style={{ backgroundColor: 'rgba(10,22,40,0.92)' }}>
+          {/* FLOATING INFO BOX */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000] w-[380px] pointer-events-auto">
+            <div
+              className="rounded-xl shadow-2xl p-5 border border-white/10"
+              style={{ backgroundColor: 'rgba(10,22,40,0.92)', backdropFilter: 'blur(8px)' }}
+            >
               {arrived && (
                 <div
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold mb-3"
@@ -449,14 +411,14 @@ export default function MapPage() {
 
               <h3 className="text-lg font-bold text-white mb-3">{data.hospital_name}</h3>
 
-              <div className="flex items-center gap-5 mb-4">
+              <div className="flex items-center gap-6 mb-4">
                 <div className="flex items-center gap-1.5">
                   <svg className="w-4 h-4" style={{ color: '#16A34A' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                   <span className="text-sm text-gray-400">
-                    <span className="font-semibold text-white">{data.distance_km}</span> km
+                    <span className="font-semibold text-white font-mono">{liveDistance ?? '--'}</span> km
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -468,39 +430,92 @@ export default function MapPage() {
                       <span className="font-semibold" style={{ color: '#4ADE80' }}>Arrived</span>
                     ) : (
                       <>
-                        <span className="font-semibold text-white font-mono">{formatCountdown(etaCountdown)}</span> ETA
+                        <span className="font-semibold text-white font-mono">{liveETA ?? '--'}</span> min ETA
                       </>
                     )}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 ml-auto">
-                  {!arrived && (
-                    <>
-                      <span className="relative flex h-2 w-2">
-                        <span className="absolute inline-flex h-full w-full rounded-full animate-live-dot" style={{ backgroundColor: '#4ADE80' }}></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: '#16A34A' }}></span>
-                      </span>
-                      <span className="text-xs font-bold text-[#4ADE80]">LIVE</span>
-                    </>
-                  )}
-                </div>
+                {!arrived && (
+                  <div className="flex items-center gap-1 ml-auto">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full rounded-full animate-live-dot" style={{ backgroundColor: '#4ADE80' }}></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: '#16A34A' }}></span>
+                    </span>
+                    <span className="text-xs font-bold" style={{ color: '#4ADE80' }}>GPS</span>
+                  </div>
+                )}
               </div>
 
-              <button
-                onClick={() => navigate(-1)}
-                className="w-full py-2 font-semibold rounded-lg transition text-sm border"
-                style={{ borderColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'
-                  e.currentTarget.style.color = '#fff'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent'
-                  e.currentTarget.style.color = 'rgba(255,255,255,0.7)'
-                }}
-              >
-                Back to Result
-              </button>
+              {/* GPS status pill */}
+              {!arrived && (
+                <div
+                  className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg"
+                  style={{ backgroundColor: gpsStatus === 'Re-routing...' ? 'rgba(245,158,11,0.1)' : 'rgba(22,163,74,0.1)' }}
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full rounded-full animate-live-dot" style={{ backgroundColor: gpsStatus === 'Re-routing...' ? '#F59E0B' : '#4ADE80' }}></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: gpsStatus === 'Re-routing...' ? '#F59E0B' : '#16A34A' }}></span>
+                  </span>
+                  <span className="text-xs font-medium" style={{ color: gpsStatus === 'Re-routing...' ? '#F59E0B' : '#4ADE80' }}>
+                    {gpsStatus}
+                  </span>
+                </div>
+              )}
+
+              {/* Directions toggle */}
+              {instructions.length > 0 && !arrived && (
+                <>
+                  <button
+                    onClick={() => setShowDirections(!showDirections)}
+                    className="w-full py-2 text-xs font-semibold rounded-lg border mb-3 transition hover:bg-white/5"
+                    style={{ borderColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)' }}
+                  >
+                    {showDirections ? '▲ Hide Directions' : '▼ Show All Directions'}
+                  </button>
+
+                  {showDirections && (
+                    <div className="mb-3 max-h-48 overflow-y-auto space-y-1">
+                      {instructions.map((step, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-start gap-2 px-2 py-1.5 rounded-lg text-xs"
+                          style={{
+                            backgroundColor: idx === currentStepIndex ? 'rgba(37,99,235,0.2)' : 'transparent',
+                            color: idx === currentStepIndex ? 'white' : 'rgba(255,255,255,0.5)',
+                          }}
+                        >
+                          <span className="flex-shrink-0 w-5 text-center">
+                            {getDirectionIcon(step.type)}
+                          </span>
+                          <span className="flex-1">{step.instruction}</span>
+                          <span className="flex-shrink-0 text-gray-500">
+                            {(step.distance / 1000).toFixed(1)}km
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Mark as Arrived / Back to Result */}
+              {!arrived ? (
+                <button
+                  onClick={() => setArrived(true)}
+                  className="w-full py-2.5 font-bold rounded-lg text-sm text-white transition hover:opacity-90"
+                  style={{ backgroundColor: '#16A34A' }}
+                >
+                  ✓ Mark as Arrived
+                </button>
+              ) : (
+                <button
+                  onClick={() => navigate(-1)}
+                  className="w-full py-2 font-semibold rounded-lg text-sm border transition hover:bg-white/10"
+                  style={{ borderColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)' }}
+                >
+                  Back to Result
+                </button>
+              )}
             </div>
           </div>
         </div>

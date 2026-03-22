@@ -18,6 +18,56 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return R * c
 
+# Maps conditions to the equipment/capabilities a hospital needs
+CONDITION_SPECIALITY_MAP = {
+    'cardiac arrest':      ['defibrillator', 'ventilator', 'icu'],
+    'stroke':              ['ct_scan', 'icu'],
+    'trauma':              ['blood_bank', 'ventilator', 'icu'],
+    'severe trauma':       ['blood_bank', 'ventilator', 'icu'],
+    'respiratory failure': ['ventilator', 'icu'],
+    'head injury':         ['ct_scan', 'icu'],
+    'internal bleeding':   ['blood_bank', 'icu'],
+    'spinal injury':       ['ct_scan', 'icu'],
+    'chest injury':        ['ventilator', 'defibrillator'],
+    'burns':               ['blood_bank'],
+    'anaphylaxis':         ['ventilator'],
+    'kidney failure':      ['icu'],
+    'pelvic injury':       ['blood_bank', 'ct_scan'],
+    'hypoglycemic crisis': ['icu'],
+    'fractures':           [],
+    'soft tissue injury':  [],
+    'facial injury':       [],
+    'psychological trauma':[],
+    'severe bleeding':     ['blood_bank'],
+    'broken bone':         [],
+    'mild allergic reaction': [],
+}
+
+CONDITION_SEVERITY_MAP = {
+    'cardiac arrest': 3,
+    'stroke': 3,
+    'trauma': 3,
+    'severe trauma': 3,
+    'respiratory failure': 3,
+    'head injury': 3,
+    'internal bleeding': 3,
+    'spinal injury': 3,
+    'chest injury': 3,
+    'burns': 2,
+    'anaphylaxis': 2,
+    'kidney failure': 2,
+    'pelvic injury': 2,
+    'hypoglycemic crisis': 2,
+    'severe bleeding': 3,
+    'fractures': 1,
+    'soft tissue injury': 1,
+    'facial injury': 1,
+    'psychological trauma': 1,
+    'broken bone': 1,
+    'mild allergic reaction': 1,
+    'other': 1,
+}
+
 def generate_dataset():
     if not DATABASE_URL:
         print("Error: DATABASE_URL not found in .env")
@@ -41,18 +91,6 @@ def generate_dataset():
         
     training_data = []
     
-    severity_mapping = {
-        'cardiac arrest': 3,
-        'stroke': 3,
-        'trauma': 3,
-        'respiratory failure': 3,
-        'burns': 2,
-        'severe bleeding': 3,
-        'broken bone': 1,
-        'mild allergic reaction': 1,
-        'other': 1
-    }
-    
     for _, case in cases_df.iterrows():
         # Needed equipment (could be comma separated or array depending on DB)
         needed_eq = case.get('equipment_needed', [])
@@ -67,7 +105,9 @@ def generate_dataset():
             
         case_lat = float(case.get('ambulance_lat', 0.0) or 0.0)
         case_lng = float(case.get('ambulance_lng', 0.0) or 0.0)
-        severity_weight = severity_mapping.get(str(case.get('condition', '')).lower(), 1)
+        condition_str = str(case.get('condition', '')).lower()
+        condition_severity = CONDITION_SEVERITY_MAP.get(condition_str, 1)
+        speciality_needed = CONDITION_SPECIALITY_MAP.get(condition_str, [])
         assigned_hosp_id = case.get('assigned_hospital_id')
         
         for _, hospital in hospitals_df.iterrows():
@@ -96,12 +136,23 @@ def generate_dataset():
             
             was_selected = 1 if assigned_hosp_id == hospital.get('id') else 0
             
+            # Speciality match: does hospital have the equipment this condition needs?
+            if speciality_needed:
+                spec_match_count = sum(1 for item in speciality_needed if item in avail_items)
+                speciality_match = spec_match_count / len(speciality_needed)
+            else:
+                speciality_match = 1.0
+
+            # Hospital load proxy: beds / 30, clamped to [0, 1]
+            beds_val = hospital.get('beds', 0) or 0
+            hospital_load = min(beds_val / 30, 1.0)
+
             training_data.append({
                 'distance_km': distance_km,
-                'beds': hospital.get('beds', 0),
+                'beds': beds_val,
                 'icu': hospital.get('icu', 0),
                 'equipment_match': equipment_match,
-                'severity_weight': severity_weight,
+                'severity_weight': condition_severity,
                 'has_ventilator': 1 if 'ventilator' in avail_items else 0,
                 'has_defibrillator': 1 if 'defibrillator' in avail_items else 0,
                 'has_ct_scan': 1 if 'ct_scan' in avail_items else 0,
@@ -109,6 +160,9 @@ def generate_dataset():
                 'has_icu_equipment': 1 if 'icu' in avail_items else 0,
                 'doctor_count': hospital.get('doctors', 0),
                 'accepting': 1 if hospital.get('accepting', True) else 0,
+                'speciality_match': speciality_match,
+                'hospital_load': hospital_load,
+                'condition_severity': condition_severity,
                 'was_selected': was_selected
             })
             

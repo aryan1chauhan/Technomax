@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone, timedelta
 from app.db.database import get_db
 from app.db.models import Case, User
 from app.schemas.dispatch import CaseOut
@@ -27,9 +28,12 @@ def get_hospital_cases(
     if current_user.role != "hospital":
         raise HTTPException(status_code=403, detail="Not a hospital account")
     
-    # Get cases assigned to this user's hospital
+    # Only show cases from last 24 hours
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    
     cases = db.query(Case)\
         .filter(Case.assigned_hospital_id == current_user.hospital_id)\
+        .filter(Case.created_at >= since)\
         .order_by(Case.created_at.desc())\
         .all()
     

@@ -18,7 +18,7 @@ except Exception:
     ML_AVAILABLE = False
     print("ML model not found — using rule-based scoring")
 
-OPTIMAL_THRESHOLD = 0.9862
+OPTIMAL_THRESHOLD = 0.9778
 
 SEVERITY_MAP = {
     'cardiac arrest': 3,

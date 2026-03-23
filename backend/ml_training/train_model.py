@@ -25,13 +25,20 @@ def train():
     print("Class Balance:")
     print(y.value_counts().to_string())
     
+    # Calculate scale_pos_weight from actual class ratio
+    neg_count = (y == 0).sum()
+    pos_count = (y == 1).sum()
+    auto_weight = neg_count / pos_count if pos_count > 0 else 1
+    print(f"\nAuto scale_pos_weight: {auto_weight:.1f} ({neg_count} neg / {pos_count} pos)")
+    
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
     model = XGBClassifier(
         n_estimators=300,
         max_depth=6,
         learning_rate=0.1,
-        scale_pos_weight=20,
+        scale_pos_weight=auto_weight,
+        min_child_weight=3,
         eval_metric='logloss',
         random_state=42
     )
@@ -76,3 +83,4 @@ def train():
 
 if __name__ == '__main__':
     train()
+

@@ -7,33 +7,38 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-# All conditions with their required equipment
+# All 20 conditions — EQUAL distribution across all of them
 CONDITIONS = {
-    'cardiac arrest':       {'severity': 3, 'equipment': ['defibrillator', 'ventilator'], 'needs': ['icu']},
-    'stroke':               {'severity': 3, 'equipment': ['ct_scan'],                     'needs': ['icu']},
-    'trauma':               {'severity': 3, 'equipment': ['blood_bank', 'ventilator'],     'needs': ['icu']},
-    'severe trauma':        {'severity': 3, 'equipment': ['blood_bank', 'ventilator'],     'needs': ['icu']},
-    'respiratory failure':  {'severity': 3, 'equipment': ['ventilator'],                   'needs': ['icu']},
-    'head injury':          {'severity': 3, 'equipment': ['ct_scan'],                      'needs': ['icu']},
-    'internal bleeding':    {'severity': 3, 'equipment': ['blood_bank'],                   'needs': ['icu']},
-    'spinal injury':        {'severity': 3, 'equipment': ['ct_scan'],                      'needs': ['icu']},
-    'chest injury':         {'severity': 3, 'equipment': ['ventilator', 'defibrillator'],  'needs': []},
-    'severe bleeding':      {'severity': 3, 'equipment': ['blood_bank'],                   'needs': []},
-    'burns':                {'severity': 2, 'equipment': ['blood_bank'],                   'needs': []},
-    'anaphylaxis':          {'severity': 2, 'equipment': ['ventilator'],                   'needs': []},
-    'kidney failure':       {'severity': 2, 'equipment': [],                               'needs': ['icu']},
-    'pelvic injury':        {'severity': 2, 'equipment': ['blood_bank', 'ct_scan'],        'needs': []},
-    'hypoglycemic crisis':  {'severity': 2, 'equipment': [],                               'needs': ['icu']},
-    'fractures':            {'severity': 1, 'equipment': ['xray'],                         'needs': []},
-    'soft tissue injury':   {'severity': 1, 'equipment': [],                               'needs': []},
-    'facial injury':        {'severity': 1, 'equipment': [],                               'needs': []},
-    'psychological trauma': {'severity': 1, 'equipment': [],                               'needs': []},
-    'broken bone':          {'severity': 1, 'equipment': ['xray'],                         'needs': []},
+    'cardiac arrest':       {'severity': 3, 'equipment': ['defibrillator', 'ventilator']},
+    'stroke':               {'severity': 3, 'equipment': ['ct_scan']},
+    'trauma':               {'severity': 3, 'equipment': ['blood_bank', 'ventilator']},
+    'severe trauma':        {'severity': 3, 'equipment': ['blood_bank', 'ventilator']},
+    'respiratory failure':  {'severity': 3, 'equipment': ['ventilator']},
+    'head injury':          {'severity': 3, 'equipment': ['ct_scan']},
+    'internal bleeding':    {'severity': 3, 'equipment': ['blood_bank']},
+    'spinal injury':        {'severity': 3, 'equipment': ['ct_scan']},
+    'chest injury':         {'severity': 3, 'equipment': ['ventilator', 'defibrillator']},
+    'severe bleeding':      {'severity': 3, 'equipment': ['blood_bank']},
+    'burns':                {'severity': 2, 'equipment': ['blood_bank']},
+    'anaphylaxis':          {'severity': 2, 'equipment': ['ventilator']},
+    'kidney failure':       {'severity': 2, 'equipment': []},
+    'pelvic injury':        {'severity': 2, 'equipment': ['blood_bank', 'ct_scan']},
+    'hypoglycemic crisis':  {'severity': 2, 'equipment': []},
+    'fractures':            {'severity': 1, 'equipment': []},
+    'soft tissue injury':   {'severity': 1, 'equipment': []},
+    'facial injury':        {'severity': 1, 'equipment': []},
+    'psychological trauma': {'severity': 1, 'equipment': []},
+    'broken bone':          {'severity': 1, 'equipment': []},
 }
 
-# Roorkee area bounds
-LAT_MIN, LAT_MAX = 29.82, 29.90
-LNG_MIN, LNG_MAX = 77.85, 77.95
+# 5 districts for ambulance location diversity
+DISTRICTS = [
+    {'name': 'Roorkee',  'lat_min': 29.82, 'lat_max': 29.90, 'lng_min': 77.85, 'lng_max': 77.95},
+    {'name': 'Haridwar', 'lat_min': 29.88, 'lat_max': 29.98, 'lng_min': 78.10, 'lng_max': 78.20},
+    {'name': 'Dehradun', 'lat_min': 30.28, 'lat_max': 30.38, 'lng_min': 78.00, 'lng_max': 78.10},
+    {'name': 'Haldwani', 'lat_min': 29.18, 'lat_max': 29.25, 'lng_min': 79.48, 'lng_max': 79.55},
+    {'name': 'Nainital', 'lat_min': 29.36, 'lat_max': 29.42, 'lng_min': 79.43, 'lng_max': 79.48},
+]
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
@@ -49,10 +54,10 @@ def generate():
 
     engine = create_engine(DATABASE_URL)
 
-    # Load hospitals with their equipment
+    # Load ALL hospitals with their equipment
     with engine.connect() as conn:
         rows = conn.execute(text(
-            "SELECT h.id, h.name, h.lat, h.lng, a.beds, a.icu, a.equipment "
+            "SELECT h.id, h.name, h.lat, h.lng, a.beds, a.icu, a.equipment, a.accepting "
             "FROM hospitals h JOIN availabilities a ON a.hospital_id = h.id"
         )).fetchall()
 
@@ -67,59 +72,65 @@ def generate():
             eq = []
         hospitals.append({
             'id': r[0], 'name': r[1], 'lat': float(r[2]), 'lng': float(r[3]),
-            'beds': r[4], 'icu': r[5], 'equipment': eq
+            'beds': r[4], 'icu': r[5], 'equipment': eq,
+            'accepting': r[7] if r[7] is not None else True
         })
 
     if not hospitals:
         print("No hospitals found in database!")
         return
 
-    print(f"Found {len(hospitals)} hospitals:")
-    for h in hospitals:
-        print(f"  {h['id']}: {h['name']} — eq={h['equipment']}")
+    print(f"Found {len(hospitals)} hospitals")
+
+    # DELETE all existing synthetic cases first
+    with engine.connect() as conn:
+        result = conn.execute(text("DELETE FROM cases WHERE user_id = 4"))
+        conn.commit()
+        print(f"Deleted {result.rowcount} old synthetic cases")
 
     cases_to_insert = []
-    cases_per_condition = 25
+    cases_per_condition = 30  # 30 × 20 conditions = 600 total
 
     for condition, info in CONDITIONS.items():
         needed_eq = info['equipment']
+        count = 0
 
         for _ in range(cases_per_condition):
-            amb_lat = random.uniform(LAT_MIN, LAT_MAX)
-            amb_lng = random.uniform(LNG_MIN, LNG_MAX)
+            # Pick random district
+            district = random.choice(DISTRICTS)
+            amb_lat = random.uniform(district['lat_min'], district['lat_max'])
+            amb_lng = random.uniform(district['lng_min'], district['lng_max'])
 
-            # Score hospitals for this case
+            # Score each hospital using scorer.py formula
             best_hospital = None
             best_score = -1
 
             for h in hospitals:
+                # Filter: beds > 0 AND accepting = True
                 if h['beds'] <= 0:
                     continue
+                if not h['accepting']:
+                    continue
 
-                # Equipment match
+                # Equipment match (fraction of needed equipment the hospital has)
                 if needed_eq:
                     eq_match = sum(1 for e in needed_eq if e in h['equipment']) / len(needed_eq)
                 else:
                     eq_match = 1.0
 
-                # ICU check
-                icu_match = 1.0
-                if 'icu' in info['needs'] and h['icu'] <= 0:
-                    icu_match = 0.3
-
-                # Distance (closer = better)
+                # Distance
                 dist = haversine(amb_lat, amb_lng, h['lat'], h['lng'])
-                dist_score = max(0, 1 - dist / 50)  # normalize within 50km
+                distance_score = 1 / (1 + dist)
 
-                # Weighted score
-                score = (eq_match * 0.4) + (dist_score * 0.3) + (icu_match * 0.2) + (h['beds'] / 50 * 0.1)
+                # Base score — scorer.py formula
+                score = (h['beds'] / 50 * 0.3) + (eq_match * 0.4) + (distance_score * 0.3)
 
-                # Boost: conditions needing ct_scan → prefer hospitals with ct_scan
-                if 'ct_scan' in needed_eq and 'ct_scan' in h['equipment']:
-                    score += 0.3
-
-                # Boost: conditions needing defibrillator → prefer those
+                # Equipment-specific bonuses
                 if 'defibrillator' in needed_eq and 'defibrillator' in h['equipment']:
+                    score += 0.3
+                if 'ct_scan' in needed_eq and 'ct_scan' in h['equipment']:
+                    score += 0.2
+                if 'blood_bank' in needed_eq and 'blood_bank' in h['equipment']:
                     score += 0.2
 
                 if score > best_score:
@@ -145,8 +156,11 @@ def generate():
                 'distance_km': round(dist_km, 2),
                 'eta_minutes': max(eta_min, 1),
             })
+            count += 1
 
-    # Batch insert into cases table
+        print(f"  {condition}: {count} cases")
+
+    # Batch insert
     with engine.connect() as conn:
         for c in cases_to_insert:
             conn.execute(text(
@@ -167,7 +181,9 @@ def generate():
             })
         conn.commit()
 
-    print(f"\nInserted {len(cases_to_insert)} synthetic cases")
+    print(f"\nTotal inserted: {len(cases_to_insert)} synthetic cases")
+    print(f"({cases_per_condition} per condition × {len(CONDITIONS)} conditions)")
+    print(f"Districts: {', '.join(d['name'] for d in DISTRICTS)}")
 
 if __name__ == '__main__':
     generate()

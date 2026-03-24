@@ -122,8 +122,11 @@ def generate():
                 dist = haversine(amb_lat, amb_lng, h['lat'], h['lng'])
                 distance_score = 1 / (1 + dist)
 
-                # Base score — scorer.py formula
-                score = (h['beds'] / 50 * 0.3) + (eq_match * 0.4) + (distance_score * 0.3)
+                # Normalize beds to 0-1 range (cap at 100 beds)
+                availability = min(h['beds'] / 100, 1.0)
+                # Add small random noise to prevent always picking same hospital
+                noise = random.uniform(-0.05, 0.05)
+                score = (availability * 0.25) + (eq_match * 0.45) + (distance_score * 0.30) + noise
 
                 # Equipment-specific bonuses
                 if 'defibrillator' in needed_eq and 'defibrillator' in h['equipment']:

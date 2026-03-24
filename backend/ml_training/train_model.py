@@ -1,10 +1,9 @@
 import pandas as pd
 import joblib
 import os
-import numpy as np
-from xgboost import XGBClassifier
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, precision_recall_curve
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 def train():
     data_path = os.path.join(os.path.dirname(__file__), 'training_data.csv')
@@ -25,48 +24,24 @@ def train():
     print("Class Balance:")
     print(y.value_counts().to_string())
     
-    # Calculate scale_pos_weight from actual class ratio
-    neg_count = (y == 0).sum()
-    pos_count = (y == 1).sum()
-    auto_weight = neg_count / pos_count if pos_count > 0 else 1
-    print(f"\nAuto scale_pos_weight: {auto_weight:.1f} ({neg_count} neg / {pos_count} pos)")
-    
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    model = XGBClassifier(
-        n_estimators=300,
-        max_depth=6,
-        learning_rate=0.1,
-        scale_pos_weight=auto_weight,
-        min_child_weight=3,
-        eval_metric='logloss',
-        random_state=42
+    model = RandomForestClassifier(
+        n_estimators=200,
+        random_state=42,
+        class_weight='balanced',
+        max_depth=10,
+        min_samples_leaf=2
     )
+
     model.fit(X_train, y_train)
     
-    # Test set metrics
     y_pred = model.predict(X_test)
     print("\nTest Set Metrics:")
     print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
     print(f"Precision: {precision_score(y_test, y_pred, zero_division=0):.4f}")
     print(f"Recall: {recall_score(y_test, y_pred, zero_division=0):.4f}")
     print(f"F1 Score: {f1_score(y_test, y_pred, zero_division=0):.4f}")
-    
-    # Optimal threshold tuning
-    y_proba = model.predict_proba(X_test)[:, 1]
-    precisions, recalls, thresholds = precision_recall_curve(y_test, y_proba)
-    f1_scores = 2 * (precisions * recalls) / (precisions + recalls + 1e-8)
-    best_threshold = thresholds[np.argmax(f1_scores)]
-    print(f"\nOptimal threshold: {best_threshold:.4f}")
-
-    y_pred_tuned = (y_proba >= best_threshold).astype(int)
-    print(f"Tuned Precision: {precision_score(y_test, y_pred_tuned, zero_division=0):.4f}")
-    print(f"Tuned Recall: {recall_score(y_test, y_pred_tuned, zero_division=0):.4f}")
-    print(f"Tuned F1: {f1_score(y_test, y_pred_tuned, zero_division=0):.4f}")
-    
-    # Cross-validation
-    cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='f1')
-    print(f"\nCross-val F1: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
     
     # Feature importances
     print("\nFeature Importances:")
@@ -83,4 +58,3 @@ def train():
 
 if __name__ == '__main__':
     train()
-

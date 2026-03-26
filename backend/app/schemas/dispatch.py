@@ -14,6 +14,7 @@ class DispatchResponse(BaseModel):
     hospital_name: str
     address: str
     final_score: float
+    confidence: float = 0.0
     distance_km: float
     eta_minutes: int
     beds_available: int
@@ -21,6 +22,7 @@ class DispatchResponse(BaseModel):
     equipment_missing: list[str]
     lat: float
     lng: float
+    ml_reasoning: list[str] = []
 
 class CaseOut(BaseModel):
     id: int

@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/axios'
+import TerminalLayout from '../components/TerminalLayout'
+import TerminalBox from '../components/TerminalBox'
 
 const CONDITIONS = [
-  'cardiac arrest',
-  'stroke',
-  'trauma',
-  'respiratory failure',
-  'burns',
-]
+  'cardiac arrest', 'stroke', 'trauma', 'severe trauma',
+  'respiratory failure', 'head injury', 'internal bleeding',
+  'spinal injury', 'chest injury', 'severe bleeding', 'burns',
+  'anaphylaxis', 'kidney failure', 'pelvic injury',
+  'hypoglycemic crisis', 'fractures', 'soft tissue injury',
+  'facial injury', 'psychological trauma', 'broken bone'
+];
 
 const EQUIPMENT_OPTIONS = [
   'ecg',
@@ -17,7 +20,7 @@ const EQUIPMENT_OPTIONS = [
   'xray',
   'icu',
   'blood_bank',
-]
+];
 
 export default function Dispatch() {
   const [condition, setCondition] = useState('')
@@ -28,12 +31,15 @@ export default function Dispatch() {
   const [ambulanceLng, setAmbulanceLng] = useState(null)
   const [locationError, setLocationError] = useState('')
   const [locationLoading, setLocationLoading] = useState(false)
+  const [aiInput, setAiInput] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiReasoning, setAiReasoning] = useState('')
   const navigate = useNavigate()
 
   useEffect(() => {
     setLocationLoading(true)
     if (!navigator.geolocation) {
-      setLocationError('GPS not supported on this device')
+      setLocationError('GPS not supported')
       setLocationLoading(false)
       return
     }
@@ -44,7 +50,7 @@ export default function Dispatch() {
         setLocationLoading(false)
       },
       (error) => {
-        setLocationError('Location access denied — using default Roorkee location')
+        setLocationError('Using default loc (Roorkee)')
         setAmbulanceLat(29.8543)
         setAmbulanceLng(77.8880)
         setLocationLoading(false)
@@ -53,21 +59,49 @@ export default function Dispatch() {
     )
   }, [])
 
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    navigate('/login')
-  }
-
   const toggleEquipment = (item) => {
     setEquipment((prev) =>
       prev.includes(item) ? prev.filter((e) => e !== item) : [...prev, item]
     )
   }
 
+  const handleAiAnalyze = async () => {
+    if (!aiInput) return;
+    setAiLoading(true);
+    setError('');
+    try {
+      const res = await api.post('/api/ai/analyze', { input: aiInput });
+      if (res.data.error) {
+        setError(res.data.error + " (Manual fallback active)");
+      } else {
+        const parsed = res.data.result;
+        
+        // Match condition
+        const cond = (parsed.condition || '').toLowerCase();
+        const match = CONDITIONS.find(c => c.includes(cond) || cond.includes(c));
+        if (match) setCondition(match);
+        else if (CONDITIONS.includes(parsed.condition)) setCondition(parsed.condition);
+        
+        // Match equipment
+        if (Array.isArray(parsed.equipment)) {
+          const validEq = parsed.equipment.filter(e => EQUIPMENT_OPTIONS.includes(e));
+          setEquipment(validEq);
+        }
+        
+        if (parsed.reasoning) setAiReasoning(parsed.reasoning);
+      }
+    } catch (err) {
+      setError("⚠️ AI FAILED — MANUAL OVERRIDE ENGAGED");
+      setAiReasoning('');
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!condition) {
-      setError('Please select a patient condition')
+      setError('Select a condition')
       return
     }
     setError('')
@@ -90,141 +124,166 @@ export default function Dispatch() {
       })
     } catch (err) {
       setError(
-        err.response?.data?.detail || 'Dispatch failed. Please try again.'
+        err.response?.data?.detail || 'Dispatch failed'
       )
     } finally {
       setLoading(false)
     }
   }
 
+  const getPriority = (cond) => {
+    if (!cond) return { level: 'WAITING', label: 'Awaiting Assessment', icon: '⏱️', class: 'status-disconnected' };
+    const level3 = ['cardiac arrest', 'stroke', 'severe trauma', 'respiratory failure', 'head injury', 'internal bleeding', 'spinal injury', 'chest injury', 'severe bleeding', 'anaphylaxis'];
+    const level2 = ['trauma', 'burns', 'kidney failure', 'pelvic injury', 'hypoglycemic crisis', 'fractures'];
+    const level1 = ['soft tissue injury', 'facial injury', 'psychological trauma', 'broken bone'];
+    
+    if (level3.includes(cond)) return { level: 'CRITICAL', label: 'Critical Response', icon: '🚨', class: 'status-critical' };
+    if (level2.includes(cond)) return { level: 'WARNING', label: 'Urgent Response', icon: '⚠️', class: 'status-warning' };
+    if (level1.includes(cond)) return { level: 'STABLE', label: 'Standard Response', icon: '⚕️', class: 'status-stable' };
+    
+    return { level: 'UNKNOWN', label: 'Evaluating...', icon: '⏱️', class: 'status-disconnected' };
+  }
+
+  const priority = getPriority(condition);
+
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+    <TerminalLayout pageTitle="Ambulance Control Panel">
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem 1rem' }}>
+        <TerminalBox title="🚑 Dispatch Command Center" width="600px">
+          
+          <div className="glass-section" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ color: 'var(--term-text-muted)', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Location Status</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500 }}>
+                {locationLoading ? (
+                  <><span className="status-badge status-warning">Wait</span> Acquiring Satellites...</>
+                ) : ambulanceLat && !locationError ? (
+                  <><span className="status-badge status-stable">Live</span> Active Tracking</>
+                ) : (
+                  <><span className="status-badge status-warning">Static</span> {locationError || 'Signal Lost'}</>
+                )}
+              </div>
             </div>
-            <span className="text-lg font-bold text-gray-900">MediRoute</span>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="text-sm text-gray-500 hover:text-red-600 font-medium transition"
-          >
-            Logout
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-2xl mx-auto px-4 py-10">
-        <div className="bg-white rounded-2xl shadow-lg p-8">
-          <h2 className="text-xl font-bold text-gray-900 mb-1">New Dispatch</h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Select the patient condition and required equipment to find the best hospital.
-          </p>
-
-          {/* GPS Status Indicator */}
-          <div className="mb-6 flex items-center gap-2 text-sm font-medium">
-            {locationLoading ? (
-              <>
-                <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse"></span>
-                <span className="text-gray-600">Getting your location...</span>
-              </>
-            ) : locationError ? (
-              <>
-                <span className="w-2.5 h-2.5 rounded-full bg-orange-400"></span>
-                <span className="text-orange-700">{locationError}</span>
-              </>
-            ) : ambulanceLat ? (
-              <>
-                <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
-                <span className="text-green-700">Live location active</span>
-              </>
-            ) : null}
+            {ambulanceLat && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ color: 'var(--term-text-muted)', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Coordinates</div>
+                <div style={{ fontFamily: 'monospace', color: 'var(--term-primary)' }}>
+                  {ambulanceLat.toFixed(4)}° N, {ambulanceLng.toFixed(4)}° E
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Error Message */}
+          <div className="glass-section" style={{ border: '1px solid var(--term-primary)', background: 'rgba(59, 130, 246, 0.05)' }}>
+            <div style={{ marginBottom: '0.75rem', fontWeight: 600, color: 'var(--term-primary)' }}>🤖 AI Triage Assistant</div>
+            <textarea 
+              value={aiInput}
+              onChange={e => setAiInput(e.target.value)}
+              className="premium-input"
+              rows="2"
+              style={{ width: '100%', padding: '0.75rem', marginBottom: '0.75rem', background: 'rgba(0,0,0,0.3)', color: 'white', resize: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px' }}
+              placeholder="Describe emergency (e.g. 'Patient fell, unconscious, heavy head bleeding...')"
+              disabled={aiLoading}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+               <button 
+                 onClick={(e) => { e.preventDefault(); handleAiAnalyze(); }} 
+                 disabled={aiLoading || !aiInput}
+                 style={{ background: 'var(--term-primary)', color: 'black', padding: '0.5rem 1rem', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', transition: 'opacity 0.2s', opacity: (aiLoading || !aiInput) ? 0.5 : 1 }}
+               >
+                 {aiLoading ? 'ANALYZING...' : 'PARSE WITH CLAUDE'}
+               </button>
+               {aiReasoning && (
+                 <div style={{ flex: 1, marginLeft: '1rem', fontSize: '0.8rem', color: 'var(--term-primary)', fontStyle: 'italic', lineHeight: '1.2' }}>
+                   ↳ {aiReasoning}
+                 </div>
+               )}
+            </div>
+          </div>
+
+          <div className="glass-section mt-4">
+            <div style={{ marginBottom: '0.75rem', fontWeight: 600, color: 'var(--term-text)' }}>Patient Condition (Manual Override)</div>
+            <select
+              value={condition}
+              onChange={(e) => setCondition(e.target.value)}
+              className="premium-input"
+              style={{ padding: '1rem', appearance: 'menulist' }}
+            >
+              <option value="" disabled>Select primary patient condition...</option>
+              {CONDITIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="glass-section">
+            <div style={{ marginBottom: '0.75rem', fontWeight: 600, color: 'var(--term-text)' }}>Required Equipment</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
+              {EQUIPMENT_OPTIONS.map((item) => {
+                const isChecked = equipment.includes(item);
+                return (
+                  <label key={item} className={`custom-checkbox ${isChecked ? 'checked' : ''}`}>
+                    <div style={{ 
+                      width: '18px', height: '18px', borderRadius: '4px', 
+                      border: `1px solid ${isChecked ? 'var(--term-primary)' : 'rgba(255,255,255,0.2)'}`,
+                      background: isChecked ? 'var(--term-primary)' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      {isChecked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleEquipment(item)}
+                      style={{ display: 'none' }}
+                    />
+                    <span style={{ fontSize: '0.875rem', fontWeight: isChecked ? 600 : 400, color: isChecked ? '#fff' : 'var(--term-text-muted)', textTransform: 'capitalize' }}>
+                      {item.replace('_', ' ')}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="glass-section" style={{ background: 'rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ color: 'var(--term-text-muted)', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Assessed Priority</div>
+              <span className={`status-badge ${priority.class}`} style={{ fontSize: '1rem', padding: '0.4rem 1rem' }}>
+                {priority.icon} {priority.label}
+              </span>
+            </div>
+            
+            <button
+              onClick={handleSubmit}
+              disabled={loading || locationLoading || !ambulanceLat || !condition}
+              className="term-btn"
+              style={{ padding: '0.875rem 2rem' }}
+            >
+              {loading ? 'Dispatching...' : 'Dispatch Ambulance'}
+            </button>
+          </div>
+          
           {error && (
-            <div className="mb-5 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
+            <div style={{
+              padding: '1rem',
+              color: 'var(--term-red)',
+              fontSize: '0.875rem',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239,68,68,0.4)',
+              borderRadius: '6px',
+              fontWeight: error.includes('AI FAILED') ? 700 : 400,
+              letterSpacing: error.includes('AI FAILED') ? '0.05em' : 'normal',
+              textAlign: 'center'
+            }}>
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Condition Dropdown */}
-            <div>
-              <label htmlFor="condition" className="block text-sm font-medium text-gray-700 mb-1">
-                Patient Condition
-              </label>
-              <select
-                id="condition"
-                value={condition}
-                onChange={(e) => setCondition(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-              >
-                <option value="">Select condition...</option>
-                {CONDITIONS.map((c) => (
-                  <option key={c} value={c}>
-                    {c.charAt(0).toUpperCase() + c.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Equipment Checkboxes */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Equipment Needed
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {EQUIPMENT_OPTIONS.map((item) => (
-                  <label
-                    key={item}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition ${
-                      equipment.includes(item)
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={equipment.includes(item)}
-                      onChange={() => toggleEquipment(item)}
-                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700 uppercase">
-                      {item.replace('_', ' ')}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading || locationLoading || !ambulanceLat}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                  </svg>
-                  Finding hospital...
-                </>
-              ) : (
-                'Find Best Hospital'
-              )}
-            </button>
-          </form>
-        </div>
-      </main>
-    </div>
+        </TerminalBox>
+      </div>
+    </TerminalLayout>
   )
 }

@@ -1,0 +1,185 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --term-bg-dark: #0f172a;
+  --term-bg-gradient: radial-gradient(circle at top right, #1e293b, #0f172a);
+  --term-primary: #3b82f6; 
+  --term-primary-glow: rgba(59, 130, 246, 0.4);
+  --term-accent: #8b5cf6; 
+  --term-text: #f8fafc;
+  --term-text-muted: #94a3b8;
+  --term-red: #ef4444;
+  --term-yellow: #f59e0b;
+  --term-green: #10b981;
+}
+
+body.terminal-mode {
+  background: var(--term-bg-dark);
+  background-image: var(--term-bg-gradient);
+  color: var(--term-text);
+  font-family: 'Inter', system-ui, sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+.terminal-mode * {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.term-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.term-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 2rem;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.term-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.term-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(to right, #60a5fa, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.term-header-title {
+  color: var(--term-text-muted);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+}
+
+.term-btn {
+  background: linear-gradient(135deg, var(--term-primary), var(--term-accent));
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px var(--term-primary-glow);
+  text-align: center;
+}
+
+.term-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px var(--term-primary-glow);
+}
+
+.term-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.term-box-container {
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.term-box-top {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
+  font-weight: 600;
+  font-size: 1.125rem;
+  color: var(--term-text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.term-box-content {
+  padding: 0;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.status-critical { color: var(--term-red); background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); }
+.status-warning { color: var(--term-yellow); background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); }
+.status-stable { color: var(--term-green); background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); }
+.status-connected { color: var(--term-green); background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); }
+.status-disconnected { color: var(--term-red); background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); }
+
+.premium-input {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--term-text);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.premium-input:focus {
+  border-color: var(--term-primary);
+  box-shadow: 0 0 0 2px var(--term-primary-glow);
+}
+
+.glass-section {
+  padding: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-section:last-child {
+  border-bottom: none;
+}
+
+.custom-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.custom-checkbox:hover {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.custom-checkbox.checked {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.1);
+}

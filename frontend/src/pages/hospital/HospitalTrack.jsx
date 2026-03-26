@@ -100,24 +100,49 @@ export default function HospitalTrack() {
   // WebSocket — connect to hospital channel
   useEffect(() => {
     if (!case_id) return
-    const ws = new WebSocket(`ws://localhost:8000/ws/hospital/${case_id}`)
 
-    ws.onopen = () => setConnected(true)
+    let reconnectTimer = null
+    let destroyed = false
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      if (data.lat && data.lng) {
-        setAmbulancePos([data.lat, data.lng])
-        setEtaMinutes(data.eta_minutes)
-        if (data.eta_minutes === 0) setArrived(true)
+    const connectWS = () => {
+      if (destroyed) return
+      const ws = new WebSocket(`ws://localhost:8000/ws/hospital/${case_id}`)
+      wsRef.current = ws
+
+      ws.onopen = () => setConnected(true)
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+        if (data.lat && data.lng) {
+          setAmbulancePos([data.lat, data.lng])
+          setEtaMinutes(data.eta_minutes)
+          if (data.eta_minutes === 0) setArrived(true)
+        }
+      }
+
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err)
+      }
+
+      ws.onclose = () => {
+        setConnected(false)
+        if (!destroyed) {
+          console.log('WS closed — reconnecting in 2s...')
+          reconnectTimer = setTimeout(connectWS, 2000)
+        }
       }
     }
 
-    ws.onclose = () => setConnected(false)
-    ws.onerror = (err) => console.error('WebSocket error:', err)
-    wsRef.current = ws
+    connectWS()
 
-    return () => ws.close()
+    return () => {
+      destroyed = true
+      clearTimeout(reconnectTimer)
+      if (wsRef.current) {
+        wsRef.current.onclose = null
+        wsRef.current.close()
+      }
+    }
   }, [case_id])
 
   const handleLogout = () => {

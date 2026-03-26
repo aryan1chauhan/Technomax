@@ -1,24 +1,22 @@
 import os
+import random
 import pandas as pd
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 import math
 
-# Load environment variables
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 def haversine_distance(lat1, lon1, lat2, lon2):
-    R = 6371  # Earth radius in kilometers
+    R = 6371
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
     a = math.sin(dlat/2) * math.sin(dlat/2) + \
         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * \
         math.sin(dlon/2) * math.sin(dlon/2)
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    return R * c
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
-# Maps conditions to the equipment/capabilities a hospital needs
 CONDITION_SPECIALITY_MAP = {
     'cardiac arrest':      ['defibrillator', 'ventilator', 'icu'],
     'stroke':              ['ct_scan', 'icu'],
@@ -34,53 +32,84 @@ CONDITION_SPECIALITY_MAP = {
     'kidney failure':      ['icu'],
     'pelvic injury':       ['blood_bank', 'ct_scan'],
     'hypoglycemic crisis': ['icu'],
+    'severe bleeding':     ['blood_bank'],
     'fractures':           [],
     'soft tissue injury':  [],
     'facial injury':       [],
     'psychological trauma':[],
-    'severe bleeding':     ['blood_bank'],
     'broken bone':         [],
     'mild allergic reaction': [],
 }
 
 CONDITION_SEVERITY_MAP = {
-    'cardiac arrest': 3,
-    'stroke': 3,
-    'trauma': 3,
-    'severe trauma': 3,
-    'respiratory failure': 3,
-    'head injury': 3,
-    'internal bleeding': 3,
-    'spinal injury': 3,
-    'chest injury': 3,
-    'burns': 2,
-    'anaphylaxis': 2,
-    'kidney failure': 2,
-    'pelvic injury': 2,
-    'hypoglycemic crisis': 2,
-    'severe bleeding': 3,
-    'fractures': 1,
-    'soft tissue injury': 1,
-    'facial injury': 1,
-    'psychological trauma': 1,
-    'broken bone': 1,
-    'mild allergic reaction': 1,
+    'cardiac arrest': 3, 'stroke': 3, 'trauma': 3, 'severe trauma': 3,
+    'respiratory failure': 3, 'head injury': 3, 'internal bleeding': 3,
+    'spinal injury': 3, 'chest injury': 3, 'severe bleeding': 3,
+    'burns': 2, 'anaphylaxis': 2, 'kidney failure': 2,
+    'pelvic injury': 2, 'hypoglycemic crisis': 2,
+    'fractures': 1, 'soft tissue injury': 1, 'facial injury': 1,
+    'psychological trauma': 1, 'broken bone': 1, 'mild allergic reaction': 1,
     'other': 1,
 }
+
+# KEY FIX: how many negative hospitals to sample per case
+NEGATIVES_PER_CASE = 7
+
+def extract_equipment(raw):
+    if isinstance(raw, list):
+        return [e.lower() for e in raw if e]
+    elif isinstance(raw, str):
+        return [e.strip().lower() for e in raw.strip('{}').split(',') if e.strip()]
+    return []
+
+def build_features(hospital, needed_items, speciality_needed, case_lat, case_lng, condition_severity):
+    avail_items = extract_equipment(hospital.get('equipment', []))
+    beds_val = int(hospital.get('beds', 0) or 0)
+    distance_km = haversine_distance(
+        case_lat, case_lng,
+        float(hospital.get('lat', 0) or 0),
+        float(hospital.get('lng', 0) or 0)
+    )
+    equipment_match = (
+        sum(1 for item in needed_items if item in avail_items) / len(needed_items)
+        if needed_items else 1.0
+    )
+    speciality_match = (
+        sum(1 for item in speciality_needed if item in avail_items) / len(speciality_needed)
+        if speciality_needed else 1.0
+    )
+    hospital_load = min(beds_val / 30, 1.0)
+
+    return {
+        'distance_km': distance_km,
+        'beds': beds_val,
+        'icu': int(hospital.get('icu', 0) or 0),
+        'equipment_match': equipment_match,
+        'severity_weight': condition_severity,
+        'has_ventilator':    1 if 'ventilator'    in avail_items else 0,
+        'has_defibrillator': 1 if 'defibrillator' in avail_items else 0,
+        'has_ct_scan':       1 if 'ct_scan'       in avail_items else 0,
+        'has_blood_bank':    1 if 'blood_bank'    in avail_items else 0,
+        'has_icu_equipment': 1 if 'icu'           in avail_items else 0,
+        'doctor_count': int(hospital.get('doctors', 0) or 0),
+        'accepting': 1 if hospital.get('accepting', True) else 0,
+        'speciality_match': speciality_match,
+        'hospital_load': hospital_load,
+        'condition_severity': condition_severity,
+    }
 
 def generate_dataset():
     if not DATABASE_URL:
         print("Error: DATABASE_URL not found in .env")
         return
-        
+
     engine = create_engine(DATABASE_URL)
-    
-    # Read cases and hospitals
+
     try:
         cases_df = pd.read_sql("SELECT * FROM cases", engine)
         hospitals_df = pd.read_sql("""
             SELECT h.id, h.name, h.lat, h.lng,
-                   a.beds, a.icu, a.doctors, 
+                   a.beds, a.icu, a.doctors,
                    a.equipment, a.accepting
             FROM hospitals h
             JOIN availabilities a ON a.hospital_id = h.id
@@ -88,90 +117,74 @@ def generate_dataset():
     except Exception as e:
         print(f"Error reading from database: {e}")
         return
-        
+
+    hospitals_list = hospitals_df.to_dict('records')
+    hospitals_by_id = {h['id']: h for h in hospitals_list}
+
     training_data = []
-    
+    skipped = 0
+
     for _, case in cases_df.iterrows():
-        # Needed equipment (could be comma separated or array depending on DB)
-        needed_eq = case.get('equipment_needed', [])
-        if isinstance(needed_eq, list):
-            needed_items = [e.lower() for e in needed_eq if e]
-        elif isinstance(needed_eq, str):
-            needed_items = [e.strip().lower() 
-                           for e in needed_eq.strip('{}').split(',') 
-                           if e.strip()]
-        else:
-            needed_items = []
-            
+        assigned_hosp_id = case.get('assigned_hospital_id')
+        if not assigned_hosp_id or assigned_hosp_id not in hospitals_by_id:
+            skipped += 1
+            continue
+
+        needed_items = extract_equipment(case.get('equipment_needed', []))
         case_lat = float(case.get('ambulance_lat', 0.0) or 0.0)
         case_lng = float(case.get('ambulance_lng', 0.0) or 0.0)
         condition_str = str(case.get('condition', '')).lower()
         condition_severity = CONDITION_SEVERITY_MAP.get(condition_str, 1)
         speciality_needed = CONDITION_SPECIALITY_MAP.get(condition_str, [])
-        assigned_hosp_id = case.get('assigned_hospital_id')
-        
-        for _, hospital in hospitals_df.iterrows():
-            # Hospital availability and equipment
-            hosp_eq = hospital.get('equipment', [])
-            if isinstance(hosp_eq, list):
-                avail_items = [e.lower() for e in hosp_eq if e]
-            elif isinstance(hosp_eq, str):
-                avail_items = [e.strip().lower() 
-                              for e in hosp_eq.strip('{}').split(',') 
-                              if e.strip()]
-            else:
-                avail_items = []
-                
-            # Equipment match
-            if len(needed_items) > 0:
-                match_count = sum(1 for item in needed_items if item in avail_items)
-                equipment_match = match_count / len(needed_items)
-            else:
-                equipment_match = 1.0
-                
-            hosp_lat = float(hospital.get('lat', 0.0) or 0.0)
-            hosp_lng = float(hospital.get('lng', 0.0) or 0.0)
-                
-            distance_km = haversine_distance(case_lat, case_lng, hosp_lat, hosp_lng)
-            
-            was_selected = 1 if assigned_hosp_id == hospital.get('id') else 0
-            
-            # Speciality match: does hospital have the equipment this condition needs?
-            if speciality_needed:
-                spec_match_count = sum(1 for item in speciality_needed if item in avail_items)
-                speciality_match = spec_match_count / len(speciality_needed)
-            else:
-                speciality_match = 1.0
 
-            # Hospital load proxy: beds / 30, clamped to [0, 1]
-            beds_val = hospital.get('beds', 0) or 0
-            hospital_load = min(beds_val / 30, 1.0)
+        # --- POSITIVE: the hospital that was actually selected ---
+        selected_hospital = hospitals_by_id[assigned_hosp_id]
+        pos_features = build_features(
+            selected_hospital, needed_items, speciality_needed,
+            case_lat, case_lng, condition_severity
+        )
+        pos_features['was_selected'] = 1
+        training_data.append(pos_features)
 
-            training_data.append({
-                'distance_km': distance_km,
-                'beds': beds_val,
-                'icu': hospital.get('icu', 0),
-                'equipment_match': equipment_match,
-                'severity_weight': condition_severity,
-                'has_ventilator': 1 if 'ventilator' in avail_items else 0,
-                'has_defibrillator': 1 if 'defibrillator' in avail_items else 0,
-                'has_ct_scan': 1 if 'ct_scan' in avail_items else 0,
-                'has_blood_bank': 1 if 'blood_bank' in avail_items else 0,
-                'has_icu_equipment': 1 if 'icu' in avail_items else 0,
-                'doctor_count': hospital.get('doctors', 0),
-                'accepting': 1 if hospital.get('accepting', True) else 0,
-                'speciality_match': speciality_match,
-                'hospital_load': hospital_load,
-                'condition_severity': condition_severity,
-                'was_selected': was_selected
-            })
-            
+        # --- NEGATIVES: sample NEGATIVES_PER_CASE other hospitals ---
+        other_hospitals = [
+            h for h in hospitals_list
+            if h['id'] != assigned_hosp_id
+        ]
+        # Bias negatives toward geographically close hospitals —
+        # these are the hard negatives the model needs to learn to reject
+        other_hospitals.sort(
+            key=lambda h: haversine_distance(
+                case_lat, case_lng,
+                float(h.get('lat', 0) or 0),
+                float(h.get('lng', 0) or 0)
+            )
+        )
+        # Take 4 nearest + 3 random from the rest for variety
+        near_negatives = other_hospitals[:min(4, len(other_hospitals))]
+        far_pool = other_hospitals[min(4, len(other_hospitals)):]
+        rand_negatives = random.sample(far_pool, min(3, len(far_pool)))
+        selected_negatives = near_negatives + rand_negatives
+
+        for neg_hospital in selected_negatives:
+            neg_features = build_features(
+                neg_hospital, needed_items, speciality_needed,
+                case_lat, case_lng, condition_severity
+            )
+            neg_features['was_selected'] = 0
+            training_data.append(neg_features)
+
     df = pd.DataFrame(training_data)
-    
+
+    pos = (df['was_selected'] == 1).sum()
+    neg = (df['was_selected'] == 0).sum()
+    print(f"Generated {len(df)} training samples")
+    print(f"Positives: {pos} | Negatives: {neg} | Ratio: 1:{round(neg/pos, 1)}")
+    print(f"Skipped cases (no matching hospital): {skipped}")
+
     output_path = os.path.join(os.path.dirname(__file__), 'training_data.csv')
     df.to_csv(output_path, index=False)
-    
-    print(f"Generated {len(df)} training samples")
+    print(f"Saved to {output_path}")
 
 if __name__ == '__main__':
     generate_dataset()

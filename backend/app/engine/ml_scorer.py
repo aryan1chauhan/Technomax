@@ -134,7 +134,9 @@ def predict_best_hospital(
             condition_severity,
         ]
         
-        prob = float(ml_model.predict_proba([features])[0][1])
+        proba = ml_model.predict_proba([features])[0]
+        prob = float(proba[1])
+        confidence = float(max(proba))
         # Use optimal threshold instead of default 0.5
         is_selected = prob >= OPTIMAL_THRESHOLD
         
@@ -142,15 +144,40 @@ def predict_best_hospital(
         equipment_missing = list(needed - avail)
         eta_minutes = round((distance_km / 40) * 60)
         
+        # Data-driven ML insights
+        ml_reasoning = []
+        if hospital.get('icu', 0) > 0 and 'icu' in needed:
+            ml_reasoning.append(f"ICU available ({hospital['icu']} beds)")
+            
+        if needed:
+            if equipment_match > 0.7:
+                ml_reasoning.append(f"High equipment match ({int(round(equipment_match*100))}%)")
+        else:
+            ml_reasoning.append("No specialized equipment required")
+            
+        if hospital_load < 0.5:
+            ml_reasoning.append("Low facility load / high bed availability")
+            
+        if distance_km < 10:
+            ml_reasoning.append(f"Nearby location ({round(distance_km, 1)} km)")
+            
+        if speciality_match == 1.0 and speciality_needed:
+            ml_reasoning.append("Perfect speciality capability match")
+            
+        if hospital.get('accepting') is True:
+            ml_reasoning.append("Target accepting emergency cases")
+        
         scored.append({
             **hospital,
             'ml_score': float(round(prob, 4)),
             'final_score': float(round(prob, 4)),
+            'confidence': float(round(confidence, 4)),
             'is_selected': is_selected,
             'distance_km': float(round(distance_km, 2)),
             'eta_minutes': eta_minutes,
             'equipment_matched': equipment_matched,
-            'equipment_missing': equipment_missing
+            'equipment_missing': equipment_missing,
+            'ml_reasoning': ml_reasoning
         })
 
     if not scored:

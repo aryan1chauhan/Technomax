@@ -82,11 +82,13 @@ def dispatch_ambulance(
         hospital_name=result["name"],
         address=result["address"],
         final_score=result["final_score"],
+        confidence=result.get("confidence", 0.0),
         distance_km=result["distance_km"],
         eta_minutes=result["eta_minutes"],
         beds_available=result["beds"],
         equipment_matched=result["equipment_matched"],
         equipment_missing=result["equipment_missing"],
         lat=result["lat"],
-        lng=result["lng"]
+        lng=result["lng"],
+        ml_reasoning=result.get("ml_reasoning", [])
     )

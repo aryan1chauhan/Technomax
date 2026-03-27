@@ -1,195 +1,165 @@
-import os
-import joblib
-import numpy as np
-from app.engine.haversine import calculate_distance
-from app.engine.scorer import find_best_hospital
+# app/engine/ml_scorer.py
+import pickle, os, numpy as np
 
-MODEL_PATH = os.path.join(
-    os.path.dirname(__file__), 
-    '../../ml_training/hospital_model.pkl'
-)
+_BASE = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+_MODEL_PATH = os.path.join(_BASE, "ml_training", "hospital_model.pkl")
 
-try:
-    ml_model = joblib.load(MODEL_PATH)
-    ML_AVAILABLE = True
-    print("ML model loaded successfully")
-except Exception:
-    ml_model = None
-    ML_AVAILABLE = False
-    print("ML model not found — using rule-based scoring")
+_model = None
+_threshold = 0.5
+_features = None
 
-OPTIMAL_THRESHOLD = 0.5
+def _load():
+    global _model, _threshold, _features
+    if os.path.exists(_MODEL_PATH):
+        with open(_MODEL_PATH, "rb") as f:
+            data = pickle.load(f)
+        # Support both old (bare model) and new (dict) format
+        if isinstance(data, dict):
+            _model = data["model"]
+            _threshold = data.get("threshold", 0.5)
+            _features = data.get("features")
+        else:
+            _model = data
+            _threshold = 0.5
+        print(f"[ML] Model loaded. Threshold={_threshold:.2f}")
+    else:
+        print("[ML] No model file found — using rule-based fallback")
 
-SEVERITY_MAP = {
-    'cardiac arrest': 3,
-    'stroke': 3,
-    'trauma': 3,
-    'severe trauma': 3,
-    'respiratory failure': 3,
-    'head injury': 3,
-    'internal bleeding': 3,
-    'spinal injury': 3,
-    'chest injury': 3,
-    'burns': 2,
-    'anaphylaxis': 2,
-    'kidney failure': 2,
-    'pelvic injury': 2,
-    'hypoglycemic crisis': 2,
-    'severe bleeding': 3,
-    'fractures': 1,
-    'soft tissue injury': 1,
-    'facial injury': 1,
-    'psychological trauma': 1,
-    'broken bone': 1,
-    'mild allergic reaction': 1,
-}
+_load()
 
-CONDITION_SPECIALITY_MAP = {
-    'cardiac arrest':      ['defibrillator', 'ventilator', 'icu'],
-    'stroke':              ['ct_scan', 'icu'],
-    'trauma':              ['blood_bank', 'ventilator', 'icu'],
-    'severe trauma':       ['blood_bank', 'ventilator', 'icu'],
-    'respiratory failure': ['ventilator', 'icu'],
-    'head injury':         ['ct_scan', 'icu'],
-    'internal bleeding':   ['blood_bank', 'icu'],
-    'spinal injury':       ['ct_scan', 'icu'],
-    'chest injury':        ['ventilator', 'defibrillator'],
-    'burns':               ['blood_bank'],
-    'anaphylaxis':         ['ventilator'],
-    'kidney failure':      ['icu'],
-    'pelvic injury':       ['blood_bank', 'ct_scan'],
-    'hypoglycemic crisis': ['icu'],
-    'severe bleeding':     ['blood_bank'],
-    'fractures':           [],
-    'soft tissue injury':  [],
-    'facial injury':       [],
-    'psychological trauma':[],
-    'broken bone':         [],
-    'mild allergic reaction': [],
-}
+def ml_score(features: dict) -> float:
+    """
+    Returns a float score 0-1 for a hospital candidate.
+    Falls back to rule-based if model unavailable.
+    """
+    if _model is None:
+        return _rule_fallback(features)
+
+    COLS = _features or [
+        "distance_km","beds","icu","equipment_match",
+        "severity_weight","has_ventilator","has_defibrillator",
+        "has_ct_scan","has_blood_bank","has_icu_equipment",
+        "doctor_count","accepting","speciality_match",
+        "hospital_load","condition_severity"
+    ]
+
+    row = np.array([[features.get(c, 0) for c in COLS]])
+    prob = _model.predict_proba(row)[0][1]
+
+    # Scale: prob above threshold maps to 0.5-1.0,
+    # below threshold maps to 0.0-0.5
+    # This keeps score meaningful for ranking
+    if prob >= _threshold:
+        score = 0.5 + 0.5 * ((prob - _threshold) / (1 - _threshold + 1e-9))
+    else:
+        score = 0.5 * (prob / (_threshold + 1e-9))
+
+    return round(float(score), 4)
+
+
+def _rule_fallback(f: dict) -> float:
+    availability = min(f.get("beds", 0) / 10, 1.0)
+    distance_score = 1 / (1 + f.get("distance_km", 999))
+    equipment_score = f.get("equipment_match", 1.0)
+    return round(
+        availability * 0.40 +
+        distance_score * 0.35 +
+        equipment_score * 0.25, 4
+    )
+
 
 def predict_best_hospital(
-    hospitals: list[dict],
-    equipment_needed: list[str],
+    hospitals: list,
+    condition: str,
+    equipment_needed: list,
     ambulance_lat: float,
     ambulance_lng: float,
-    condition: str = ''
 ) -> dict | None:
+    """
+    Score every hospital using the ML model (or rule-based fallback)
+    and return the single best candidate as a dict, or None.
+    """
+    from app.engine.haversine import calculate_distance
 
-    if not ML_AVAILABLE:
-        return find_best_hospital(
-            hospitals, equipment_needed, 
-            ambulance_lat, ambulance_lng
-        )
+    SEVERITY_MAP = {
+        "cardiac_arrest": 3, "cardiac arrest": 3,
+        "stroke": 3, "respiratory": 3, "respiratory failure": 3,
+        "trauma": 3, "severe trauma": 3, "head injury": 3,
+        "internal bleeding": 3, "spinal injury": 3,
+        "chest injury": 3, "severe bleeding": 3,
+        "burns": 2, "anaphylaxis": 2, "kidney failure": 2,
+        "pelvic injury": 2, "hypoglycemic crisis": 2,
+        "obstetric": 2, "poisoning": 1,
+        "fracture": 1, "fractures": 1, "broken bone": 1,
+        "soft tissue injury": 1, "facial injury": 1,
+        "psychological trauma": 1, "general": 1,
+    }
 
-    if not hospitals:
-        return None
+    needed = equipment_needed or []
+    condition_severity = SEVERITY_MAP.get(condition.lower().replace("_", " "), 1)
+    results = []
+    reasoning_parts = []
 
-    scored = []
-    needed = set(equipment_needed)
-    condition_severity = SEVERITY_MAP.get(condition.lower(), 1)
-    speciality_needed = CONDITION_SPECIALITY_MAP.get(condition.lower(), [])
-
-    for hospital in hospitals:
-        # Filter: skip if accepting=False or beds=0
-        if not hospital.get('accepting', True) or hospital.get('beds', 0) == 0:
+    for h in hospitals:
+        if not h.get("accepting", False):
             continue
-            
+
         distance_km = calculate_distance(
-            ambulance_lat, ambulance_lng, 
-            hospital['lat'], hospital['lng']
+            ambulance_lat, ambulance_lng, h["lat"], h["lng"]
         )
-        
-        avail = set(hospital.get('equipment', []))
-        
-        equipment_match = len(needed & avail) / len(needed) if needed else 1.0
 
-        # New feature: speciality_match
-        if speciality_needed:
-            spec_match_count = sum(1 for item in speciality_needed if item in avail)
-            speciality_match = spec_match_count / len(speciality_needed)
-        else:
-            speciality_match = 1.0
+        eq = [e.lower() for e in (h.get("equipment", []) or [])]
+        equipment_match = (
+            len([e for e in needed if e in eq]) / len(needed)
+            if needed else 1.0
+        )
 
-        # New feature: hospital_load proxy
-        beds_val = hospital.get('beds', 0) or 0
-        hospital_load = min(beds_val / 30, 1.0)
-            
-        # Build feature vector (must match train order exactly — 15 features)
-        features = [
-            distance_km,
-            beds_val,
-            hospital.get('icu', 0),
-            equipment_match,
-            condition_severity,
-            1 if 'ventilator' in avail else 0,
-            1 if 'defibrillator' in avail else 0,
-            1 if 'ct_scan' in avail else 0,
-            1 if 'blood_bank' in avail else 0,
-            1 if 'icu' in avail else 0,
-            hospital.get('doctors', 0),
-            1 if hospital.get('accepting', True) else 0,
-            speciality_match,
-            hospital_load,
-            condition_severity,
-        ]
-        
-        proba = ml_model.predict_proba([features])[0]
-        prob = float(proba[1])
-        confidence = float(max(proba))
-        # Use optimal threshold instead of default 0.5
-        is_selected = prob >= OPTIMAL_THRESHOLD
-        
-        equipment_matched = list(needed & avail)
-        equipment_missing = list(needed - avail)
-        eta_minutes = round((distance_km / 40) * 60)
-        
-        # Data-driven ML insights
-        ml_reasoning = []
-        if hospital.get('icu', 0) > 0 and 'icu' in needed:
-            ml_reasoning.append(f"ICU available ({hospital['icu']} beds)")
-            
-        if needed:
-            if equipment_match > 0.7:
-                ml_reasoning.append(f"High equipment match ({int(round(equipment_match*100))}%)")
-        else:
-            ml_reasoning.append("No specialized equipment required")
-            
-        if hospital_load < 0.5:
-            ml_reasoning.append("Low facility load / high bed availability")
-            
-        if distance_km < 10:
-            ml_reasoning.append(f"Nearby location ({round(distance_km, 1)} km)")
-            
-        if speciality_match == 1.0 and speciality_needed:
-            ml_reasoning.append("Perfect speciality capability match")
-            
-        if hospital.get('accepting') is True:
-            ml_reasoning.append("Target accepting emergency cases")
-        
-        scored.append({
-            **hospital,
-            'ml_score': float(round(prob, 4)),
-            'final_score': float(round(prob, 4)),
-            'confidence': float(round(confidence, 4)),
-            'is_selected': is_selected,
-            'distance_km': float(round(distance_km, 2)),
-            'eta_minutes': eta_minutes,
-            'equipment_matched': equipment_matched,
-            'equipment_missing': equipment_missing,
-            'ml_reasoning': ml_reasoning
+        score = ml_score({
+            "distance_km":       distance_km,
+            "beds":              h.get("beds", 0),
+            "icu":               h.get("icu", 0),
+            "equipment_match":   equipment_match,
+            "severity_weight":   condition_severity / 3.0,
+            "has_ventilator":    int("ventilator" in eq),
+            "has_defibrillator": int("defibrillator" in eq),
+            "has_ct_scan":       int("ct_scan" in eq),
+            "has_blood_bank":    int("blood_bank" in eq),
+            "has_icu_equipment": int("icu_equipment" in eq or "icu" in eq),
+            "doctor_count":      h.get("doctors", 0),
+            "accepting":         int(h.get("accepting", False)),
+            "speciality_match":  int(condition.lower().replace("_", " ") in (h.get("speciality", "") or "").lower()),
+            "hospital_load":     min(h.get("beds", 0) / 30, 1.0),
+            "condition_severity": condition_severity,
         })
 
-    if not scored:
+        matched = [e for e in needed if e in eq]
+        missing = [e for e in needed if e not in eq]
+
+        results.append({
+            **h,
+            "final_score":       round(score, 4),
+            "confidence":        round(score, 4),
+            "distance_km":       round(distance_km, 2),
+            "eta_minutes":       max(round((distance_km / 40) * 60), 1),
+            "equipment_matched": matched,
+            "equipment_missing": missing,
+        })
+
+    if not results:
         return None
 
-    # First try hospitals above threshold
-    selected = [h for h in scored if h.get('is_selected')]
+    results.sort(key=lambda x: x["final_score"], reverse=True)
+    best = results[0]
 
-    if selected:
-        selected.sort(key=lambda x: x['ml_score'], reverse=True)
-        return selected[0]
-    else:
-        # Fallback: return highest scoring hospital regardless
-        scored.sort(key=lambda x: x['ml_score'], reverse=True)
-        return scored[0] if scored else None
+    # Build explainable reasoning
+    reasoning = []
+    reasoning.append(f"Distance: {best['distance_km']} km")
+    reasoning.append(f"Beds: {best.get('beds', 0)}, ICU: {best.get('icu', 0)}")
+    if best["equipment_matched"]:
+        reasoning.append(f"Equipment matched: {', '.join(best['equipment_matched'])}")
+    if best["equipment_missing"]:
+        reasoning.append(f"Equipment missing: {', '.join(best['equipment_missing'])}")
+    reasoning.append(f"ML score: {best['final_score']}")
+    best["ml_reasoning"] = reasoning
+
+    return best

@@ -85,10 +85,11 @@ def dispatch_ambulance(
         confidence=result.get("confidence", 0.0),
         distance_km=result["distance_km"],
         eta_minutes=result["eta_minutes"],
-        beds_available=result["beds"],
+        beds=result["beds"],
+        icu=result["icu"],
         equipment_matched=result["equipment_matched"],
         equipment_missing=result["equipment_missing"],
-        lat=result["lat"],
-        lng=result["lng"],
-        ml_reasoning=result.get("ml_reasoning", [])
+        hospital_lat=result["lat"],
+        hospital_lng=result["lng"],
+        reason="; ".join(result.get("ml_reasoning", [])) if isinstance(result.get("ml_reasoning"), list) else str(result.get("ml_reasoning", ""))
     )

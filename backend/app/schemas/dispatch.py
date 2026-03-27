@@ -17,12 +17,13 @@ class DispatchResponse(BaseModel):
     confidence: float = 0.0
     distance_km: float
     eta_minutes: int
-    beds_available: int
+    beds: int
+    icu: int
     equipment_matched: list[str]
     equipment_missing: list[str]
-    lat: float
-    lng: float
-    ml_reasoning: list[str] = []
+    hospital_lat: float
+    hospital_lng: float
+    reason: str = ""
 
 class CaseOut(BaseModel):
     id: int

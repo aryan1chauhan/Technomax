@@ -106,7 +106,7 @@ export default function HospitalTrack() {
 
     const connectWS = () => {
       if (destroyed) return
-      const ws = new WebSocket(`ws://localhost:8000/ws/hospital/${case_id}`)
+      const ws = new WebSocket(`ws://${window.location.host}/ws/hospital/${case_id}`)
       wsRef.current = ws
 
       ws.onopen = () => setConnected(true)

@@ -9,6 +9,13 @@ router = APIRouter(prefix="/api/auth")
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(user_in: UserCreate, db: Session = Depends(get_db)):
+    valid_roles = {"ambulance", "hospital", "admin"}
+    if user_in.role not in valid_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role. Must be one of: {valid_roles}"
+        )
+    
     user = db.query(User).filter(User.email == user_in.email).first()
     if user:
         raise HTTPException(
@@ -47,5 +54,7 @@ def login(user_in: UserLogin, db: Session = Depends(get_db)):
     
     return {
         "access_token": access_token, 
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "role": user.role,
+        "hospital_id": user.hospital_id,
     }

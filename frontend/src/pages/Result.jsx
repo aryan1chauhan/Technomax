@@ -1,167 +1,167 @@
-import { useLocation, useNavigate, Navigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
-import TerminalLayout from '../components/TerminalLayout'
-import TerminalBox from '../components/TerminalBox'
+import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 export default function Result() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const data = location.state
-  const [animatedScore, setAnimatedScore] = useState(0)
+  const { state } = useLocation();
+  const navigate = useNavigate();
+  const [revealed, setRevealed] = useState(0);
+  const [blink, setBlink] = useState(true);
 
-  if (!data) {
-    return <Navigate to="/dispatch" replace />
-  }
+  const result = state?.result;
+  const ambLat = state?.lat;
+  const ambLng = state?.lng;
 
-  const scorePercent = Math.round(data.final_score * 100)
-  
   useEffect(() => {
-    const timer = setTimeout(() => setAnimatedScore(scorePercent), 100)
-    return () => clearTimeout(timer)
-  }, [scorePercent])
+    if (!result) { navigate("/dispatch"); return; }
+    // Reveal lines one by one for dramatic effect
+    const t = setInterval(() => setRevealed((r) => r + 1), 180);
+    return () => clearInterval(t);
+  }, [result, navigate]);
 
-  const numFilled = Math.round(animatedScore / 10)
-  const numEmpty = 10 - numFilled
-  const asciiBar = '█'.repeat(Math.max(0, numFilled)) + '░'.repeat(Math.max(0, numEmpty))
-  
-  const scoreColor = animatedScore > 70 ? 'var(--term-green)' : animatedScore >= 50 ? 'var(--term-yellow)' : 'var(--term-red)'
+  useEffect(() => {
+    const t = setInterval(() => setBlink((b) => !b), 500);
+    return () => clearInterval(t);
+  }, []);
 
-  // Use case ID if available, otherwise mock one
-  const caseId = data.case_id ? String(data.case_id).padStart(3, '0') : '001'
+  if (!result) return null;
 
-  // Combine matched and missing for display
-  const allEquipment = []
-  if (data.equipment_matched) {
-    data.equipment_matched.forEach(item => {
-      allEquipment.push({ name: item, status: 'matched' })
-    })
-  }
-  if (data.equipment_missing) {
-    data.equipment_missing.forEach(item => {
-      allEquipment.push({ name: item, status: 'missing' })
-    })
-  }
+  const score = result.final_score ?? result.score ?? 0;
+  const scoreBar = Math.round(score * 20); // out of 20 chars
+  const scoreBarStr = "█".repeat(scoreBar) + "░".repeat(20 - scoreBar);
+  const scoreColor = score > 0.7 ? "#00ff41" : score > 0.4 ? "#ffff00" : "#ff4444";
+
+  const lines = [
+    { label: "DISPATCH COMPLETE", value: "", type: "header" },
+    { label: "", value: "", type: "blank" },
+    { label: "ASSIGNED HOSPITAL", value: result.hospital_name?.toUpperCase() || "—", type: "main" },
+    { label: "ADDRESS", value: result.address || "—", type: "sub" },
+    { label: "", value: "", type: "blank" },
+    { label: "ML SCORE", value: `${(score * 100).toFixed(1)}%  [${scoreBarStr}]`, type: "score" },
+    { label: "DISTANCE", value: `${result.distance_km?.toFixed(2) || "—"} km`, type: "stat" },
+    { label: "ETA", value: `${result.eta_minutes || "—"} minutes`, type: "stat" },
+    { label: "AVAILABLE BEDS", value: `${result.beds ?? "—"}`, type: "stat" },
+    { label: "ICU BEDS", value: `${result.icu ?? "—"}`, type: "stat" },
+    { label: "CASE ID", value: `#${result.case_id || result.id || "—"}`, type: "sub" },
+    { label: "", value: "", type: "blank" },
+    { label: "ROUTING STATUS", value: "READY — press MAP to begin navigation", type: "action" },
+  ];
+
+  const getStyle = (type) => {
+    if (type === "header") return { color: "#00ff41", fontSize: 16, fontWeight: "bold", letterSpacing: 3 };
+    if (type === "main") return { color: "#00ff41", fontSize: 15, fontWeight: "bold" };
+    if (type === "score") return { color: scoreColor, fontSize: 13 };
+    if (type === "stat") return { color: "#00cc33", fontSize: 13 };
+    if (type === "action") return { color: "#ffff00", fontSize: 12 };
+    if (type === "sub") return { color: "#00882a", fontSize: 12 };
+    return { color: "#00882a", fontSize: 12 };
+  };
 
   return (
-    <TerminalLayout pageTitle="Ambulance Dispatch Result">
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem 1rem' }}>
-        <TerminalBox title={`📋 DISPATCH RESULT - CASE #${caseId}`} width="600px">
-          
-          <div className="glass-section" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(16, 185, 129, 0.05)' }}>
-            <div style={{ fontWeight: 600, color: 'var(--term-text-muted)' }}>STATUS</div>
-            <div className="status-badge status-stable" style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}>
-              🟢 HOSPITAL ASSIGNED
-            </div>
-          </div>
+    <div style={styles.root}>
+      <div style={styles.scanlines} />
+      <div style={styles.container}>
 
-          <div className="glass-section">
-            <div style={{ marginBottom: '1rem', fontWeight: 600, letterSpacing: '0.05em', color: 'var(--term-primary)' }}>ASSIGNED HOSPITAL</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div style={{ display: 'flex' }}>
-                <span style={{ width: '100px', color: 'var(--term-text-muted)' }}>Name:</span> 
-                <span style={{ fontWeight: 600, fontSize: '1.1rem', color: 'var(--term-text)' }}>{data.hospital_name || data.name}</span>
-              </div>
-              <div style={{ display: 'flex' }}>
-                <span style={{ width: '100px', color: 'var(--term-text-muted)' }}>Address:</span> 
-                <span style={{ color: 'var(--term-text)' }}>{data.address || 'Location Unavailable'}</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', marginTop: '0.75rem' }}>
-                <span style={{ width: '100px', color: 'var(--term-text-muted)' }}>Match Score:</span> 
-                <span style={{ color: scoreColor, fontFamily: 'monospace', letterSpacing: '1px', fontSize: '1.25rem', textShadow: `0 0 10px ${scoreColor}` }}>
-                  {asciiBar}
-                </span>
-                <span style={{ marginLeft: '1rem', fontWeight: 700, color: scoreColor }}>{animatedScore}%</span>
-              </div>
-            </div>
-          </div>
+        <div style={styles.topBar}>
+          ╔══════════════════════════════════════════════════════╗
+        </div>
+        <div style={styles.topMid}>
+          ║&nbsp;&nbsp;🚨 DISPATCH RESULT — OPTIMAL HOSPITAL SELECTED
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;║
+        </div>
+        <div style={styles.topBot}>
+          ╠══════════════════════════════════════════════════════╣
+        </div>
 
-          <div className="glass-section">
-            <div style={{ marginBottom: '1rem', fontWeight: 600, letterSpacing: '0.05em', color: 'var(--term-primary)' }}>VITALS</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
-              <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
-                <div style={{ color: 'var(--term-text-muted)', fontSize: '0.875rem', marginBottom: '0.5rem' }}>Distance</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--term-text)' }}>{data.distance_km} <span style={{ fontSize: '0.9rem', color: 'var(--term-text-muted)', fontWeight: 400 }}>km</span></div>
-              </div>
-              <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
-                <div style={{ color: 'var(--term-text-muted)', fontSize: '0.875rem', marginBottom: '0.5rem' }}>ETA</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--term-text)' }}>{data.eta_minutes} <span style={{ fontSize: '0.9rem', color: 'var(--term-text-muted)', fontWeight: 400 }}>min</span></div>
-              </div>
-              <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
-                <div style={{ color: 'var(--term-text-muted)', fontSize: '0.875rem', marginBottom: '0.5rem' }}>Beds</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--term-text)' }}>{data.beds_available ?? data.beds ?? 0} <span style={{ fontSize: '0.9rem', color: 'var(--term-text-muted)', fontWeight: 400 }}>avail</span></div>
-              </div>
-              <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(16,185,129,0.15)', textAlign: 'center' }}>
-                <div style={{ color: 'var(--term-text-muted)', fontSize: '0.875rem', marginBottom: '0.5rem' }}>Confidence</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--term-green)' }}>
-                  {data.confidence ? `${Math.round(data.confidence * 100)}%` : 'N/A'}
+        <div style={styles.resultBox}>
+          {lines.slice(0, revealed).map((line, i) => (
+            <div key={i} style={{ marginBottom: 6 }}>
+              {line.type === "blank" ? (
+                <div style={{ height: 6 }} />
+              ) : line.type === "header" ? (
+                <div style={getStyle(line.type)}>▶ {line.label}</div>
+              ) : (
+                <div style={{ display: "flex", gap: 12 }}>
+                  <span style={{ color: "#006600", fontSize: 12, minWidth: 160 }}>
+                    {line.label}
+                  </span>
+                  <span style={getStyle(line.type)}>
+                    {line.value}
+                  </span>
                 </div>
-              </div>
+              )}
             </div>
-          </div>
-
-          <div className="glass-section">
-            <div style={{ marginBottom: '1rem', fontWeight: 600, letterSpacing: '0.05em', color: 'var(--term-primary)' }}>EQUIPMENT STATUS</div>
-            {allEquipment.length > 0 ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                {allEquipment.map((eq, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    {eq.status === 'matched' ? (
-                      <><span style={{ color: 'var(--term-green)', fontWeight: 'bold' }}>✓</span> <span style={{ textTransform: 'capitalize', color: 'var(--term-text)' }}>{eq.name.replace('_', ' ')}</span></>
-                    ) : (
-                      <><span style={{ color: 'var(--term-red)', fontWeight: 'bold' }}>✗</span> <span style={{ textTransform: 'capitalize', color: 'var(--term-red)', opacity: 0.9 }}>{eq.name.replace('_', ' ')} (missing)</span></>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ color: 'var(--term-text-muted)', fontStyle: 'italic' }}>No specific equipment requested.</div>
-            )}
-          </div>
-
-          {data.ml_reasoning && data.ml_reasoning.length > 0 && (
-            <div className="glass-section mt-4" style={{ border: '1px solid var(--term-green)', background: 'rgba(16, 185, 129, 0.05)' }}>
-              <h3 style={{ marginBottom: '0.75rem', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--term-green)', margin: '0 0 10px 0', fontSize: '1rem' }}>🤖 AI INSIGHT</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {data.ml_reasoning.map((r, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--term-text)', fontSize: '0.9rem' }}>
-                    <span style={{ color: 'var(--term-green)' }}>→</span> 
-                    <span>{r}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+          ))}
+          {revealed < lines.length && (
+            <span style={{ color: "#00ff41" }}>{blink ? "█" : " "}</span>
           )}
+        </div>
 
-          <div className="glass-section" style={{ display: 'flex', gap: '1rem' }}>
+        <div style={styles.topBot}>
+          ╚══════════════════════════════════════════════════════╝
+        </div>
+
+        {/* Actions */}
+        {revealed >= lines.length && (
+          <div style={styles.actions}>
             <button
+              style={styles.btnPrimary}
               onClick={() =>
-                navigate('/map', {
+                navigate("/map", {
                   state: {
-                    ...location.state,
-                    case_id: location.state.case_id,
-                    ambulance_lat: location.state.ambulance_lat,
-                    ambulance_lng: location.state.ambulance_lng,
-                    lat: location.state.lat,
-                    lng: location.state.lng
+                    hospital: {
+                      lat: result.hospital_lat,
+                      lng: result.hospital_lng,
+                      name: result.hospital_name,
+                    },
+                    caseId: result.case_id || result.id,
+                    ambLat,
+                    ambLng,
                   },
                 })
               }
-              className="term-btn"
-              style={{ flex: 1, padding: '1rem' }}
             >
-              [ VIEW LIVE MAP ]
+              [ 🗺 OPEN NAVIGATION MAP ]
             </button>
             <button
-              onClick={() => navigate('/dispatch')}
-              className="term-btn"
-              style={{ flex: 1, padding: '1rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: 'none' }}
+              style={styles.btnSecondary}
+              onClick={() => navigate("/dispatch")}
             >
-              [ NEW DISPATCH ]
+              [ ← NEW DISPATCH ]
             </button>
           </div>
-          
-        </TerminalBox>
+        )}
+
+        {/* Why this hospital */}
+        {revealed >= lines.length && result.reason && (
+          <div style={styles.reason}>
+            <div style={{ color: "#006600", fontSize: 11, marginBottom: 4 }}>
+              ┌─── ML REASONING ───┐
+            </div>
+            <div style={{ color: "#00882a", fontSize: 11 }}>{result.reason}</div>
+          </div>
+        )}
+
+        <div style={styles.footer}>
+          MediRoute ML Engine • RandomForest • 15 features • 188 hospitals evaluated
+        </div>
       </div>
-    </TerminalLayout>
-  )
+    </div>
+  );
 }
+
+const BG = "#0a0a0a"; const MONO = "'Courier New', monospace";
+
+const styles = {
+  root: { minHeight: "100vh", background: BG, fontFamily: MONO, padding: "1.5rem", position: "relative" },
+  scanlines: { position: "fixed", inset: 0, background: "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,65,0.015) 2px,rgba(0,255,65,0.015) 4px)", pointerEvents: "none", zIndex: 1 },
+  container: { maxWidth: 760, margin: "0 auto", zIndex: 2, position: "relative" },
+  topBar: { color: "#00882a", fontSize: 13 },
+  topMid: { color: "#00ff41", fontSize: 13, fontWeight: "bold" },
+  topBot: { color: "#00882a", fontSize: 13, marginBottom: 8 },
+  resultBox: { padding: "1rem 1.5rem", minHeight: 240 },
+  actions: { display: "flex", gap: 12, marginTop: "1.5rem", flexWrap: "wrap" },
+  btnPrimary: { flex: 1, background: "transparent", border: "2px solid #00ff41", color: "#00ff41", fontFamily: MONO, fontSize: 13, padding: "12px", cursor: "pointer", letterSpacing: 2, fontWeight: "bold" },
+  btnSecondary: { background: "transparent", border: "1px solid #006600", color: "#006600", fontFamily: MONO, fontSize: 12, padding: "12px 16px", cursor: "pointer" },
+  reason: { marginTop: "1rem", padding: "0.5rem 1rem", border: "1px solid #003300" },
+  footer: { color: "#1a3a1a", fontSize: 10, textAlign: "center", marginTop: "2rem", letterSpacing: 1 },
+};

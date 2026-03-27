@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { jwtDecode } from 'jwt-decode'
 import api from '../api/axios'
 
 export default function HospitalDashboard() {
@@ -15,18 +14,17 @@ export default function HospitalDashboard() {
         navigate('/login')
         return
       }
-      const decoded = jwtDecode(token)
-      const hospitalId = decoded.hospital_id
 
-      const res = await api.get('/api/cases/')
+      // FIX #4: Use /api/cases/hospital (not /api/cases/) so hospital users
+      // see cases assigned to their hospital, not cases they dispatched
+      const res = await api.get('/api/cases/hospital')
       let data = res.data
       if (!Array.isArray(data)) {
         data = data.items || []
       }
 
-      let assignedCases = data.filter(c => c.assigned_hospital_id === hospitalId)
-      assignedCases.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      setCases(assignedCases)
+      data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      setCases(data)
     } catch (err) {
       console.error('Failed to fetch cases', err)
     } finally {
@@ -41,7 +39,9 @@ export default function HospitalDashboard() {
   }, [])
 
   const handleLogout = () => {
+    // FIX (bonus): Use removeItem instead of clear() to avoid wiping unrelated storage
     localStorage.removeItem('token')
+    localStorage.removeItem('role')
     navigate('/login')
   }
 
@@ -70,19 +70,13 @@ export default function HospitalDashboard() {
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.5; transform: scale(1.15); }
         }
-        .animate-pulse-incoming {
-          animation: pulse-incoming 1.5s ease-in-out infinite;
-        }
-        @keyframes bar-fill {
-          from { width: 0%; }
-        }
-        .animate-bar-fill {
-          animation: bar-fill 1.2s ease-out forwards;
-        }
+        .animate-pulse-incoming { animation: pulse-incoming 1.5s ease-in-out infinite; }
+        @keyframes bar-fill { from { width: 0%; } }
+        .animate-bar-fill { animation: bar-fill 1.2s ease-out forwards; }
       `}</style>
 
       <div className="min-h-screen bg-[#0F1B2D] text-white">
-        {/* ── HEADER ── */}
+        {/* HEADER */}
         <header className="px-6 py-4 flex items-center justify-between shadow-lg" style={{ backgroundColor: '#0A1628' }}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#16A34A' }}>
@@ -109,7 +103,7 @@ export default function HospitalDashboard() {
           </button>
         </header>
 
-        {/* ── STATS ROW ── */}
+        {/* STATS ROW */}
         <div className="px-6 py-5 grid grid-cols-3 gap-4 max-w-5xl mx-auto">
           <div className="rounded-xl p-5 shadow-lg" style={{ backgroundColor: '#0A1628' }}>
             <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Cases Today</p>
@@ -125,7 +119,7 @@ export default function HospitalDashboard() {
           </div>
         </div>
 
-        {/* ── CASES LIST ── */}
+        {/* CASES LIST */}
         <main className="px-6 pb-12 max-w-5xl mx-auto">
           <h2 className="text-2xl font-bold mb-6">Incoming Emergency Cases</h2>
 
@@ -145,12 +139,8 @@ export default function HospitalDashboard() {
                 const scoreColor = scorePercent > 70 ? '#16A34A' : scorePercent >= 50 ? '#F59E0B' : '#EF4444'
 
                 return (
-                  <div
-                    key={c.id}
-                    className="bg-white rounded-xl shadow-xl overflow-hidden border-l-4"
-                    style={{ borderLeftColor: '#EF4444' }}
-                  >
-                    {/* Row 1 — Top bar */}
+                  <div key={c.id} className="bg-white rounded-xl shadow-xl overflow-hidden border-l-4" style={{ borderLeftColor: '#EF4444' }}>
+                    {/* Top bar */}
                     <div className="px-6 py-3 flex items-center justify-between bg-gray-50 border-b border-gray-100">
                       <div className="flex items-center gap-2">
                         <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse-incoming"></span>
@@ -162,17 +152,14 @@ export default function HospitalDashboard() {
                       </div>
                     </div>
 
-                    {/* Row 2 — Condition + Equipment */}
+                    {/* Condition + Equipment */}
                     <div className="px-6 py-4 border-b border-gray-100">
                       <p className="text-2xl font-extrabold uppercase text-red-600 mb-3">{c.condition}</p>
                       <div className="flex flex-wrap gap-2">
                         {c.equipment_needed?.length > 0 ? (
                           c.equipment_needed.map(eq => (
-                            <span
-                              key={eq}
-                              className="px-3 py-1 bg-[#DCFCE7] text-[#15803D] text-xs font-bold rounded-md uppercase"
-                            >
-                              {eq.replace('_', ' ')}
+                            <span key={eq} className="px-3 py-1 bg-[#DCFCE7] text-[#15803D] text-xs font-bold rounded-md uppercase">
+                              {eq.replace(/_/g, ' ')}
                             </span>
                           ))
                         ) : (
@@ -181,16 +168,13 @@ export default function HospitalDashboard() {
                       </div>
                     </div>
 
-                    {/* Row 3 — Score / Distance / ETA */}
+                    {/* Score / Distance / ETA */}
                     <div className="px-6 py-4 flex items-center gap-8 border-b border-gray-100">
                       <div className="flex items-center gap-3 flex-1">
                         <span className="text-sm font-bold text-gray-500">Score</span>
                         <span className="text-lg font-extrabold" style={{ color: scoreColor }}>{scorePercent}%</span>
                         <div className="h-2.5 flex-1 bg-gray-200 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full animate-bar-fill"
-                            style={{ width: `${scorePercent}%`, backgroundColor: scoreColor }}
-                          ></div>
+                          <div className="h-full rounded-full animate-bar-fill" style={{ width: `${scorePercent}%`, backgroundColor: scoreColor }}></div>
                         </div>
                       </div>
                       <div className="flex items-center gap-6 text-gray-700">
@@ -205,7 +189,7 @@ export default function HospitalDashboard() {
                       </div>
                     </div>
 
-                    {/* Row 4 — Action Button */}
+                    {/* Action */}
                     <div className="px-6 py-4">
                       <button
                         onClick={() => navigate(`/hospital/track/${c.id}`)}

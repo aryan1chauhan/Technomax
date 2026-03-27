@@ -17,6 +17,25 @@ def haversine_distance(lat1, lon1, lat2, lon2):
         math.sin(dlon/2) * math.sin(dlon/2)
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
+# ─── Normalization functions ──────────────────────────────────
+# CRITICAL: These MUST be identical to ml_scorer.py so the model
+# trains on the exact same feature scale it sees at inference.
+
+def log_normalize_beds(beds):
+    """Matches ml_scorer._log_normalize_beds exactly."""
+    return math.log(1 + max(float(beds), 0)) / math.log(502)
+
+def normalize_distance(km):
+    """1/(1 + km*0.1) — closer = higher value."""
+    return 1 / (1 + float(km) * 0.1)
+
+def normalize_icu(icu):
+    return min(float(icu) / 50, 1.0)
+
+def normalize_doctors(doctors):
+    return min(float(doctors) / 20, 1.0)
+
+
 CONDITION_SPECIALITY_MAP = {
     'cardiac arrest':      ['defibrillator', 'ventilator', 'icu'],
     'stroke':              ['ct_scan', 'icu'],
@@ -65,7 +84,9 @@ def extract_equipment(raw):
 def build_features(hospital, needed_items, speciality_needed, case_lat, case_lng, condition_severity):
     avail_items = extract_equipment(hospital.get('equipment', []))
     beds_val = int(hospital.get('beds', 0) or 0)
-    distance_km = haversine_distance(
+    icu_val = int(hospital.get('icu', 0) or 0)
+    doctor_val = int(hospital.get('doctors', 0) or 0)
+    raw_distance_km = haversine_distance(
         case_lat, case_lng,
         float(hospital.get('lat', 0) or 0),
         float(hospital.get('lng', 0) or 0)
@@ -78,23 +99,25 @@ def build_features(hospital, needed_items, speciality_needed, case_lat, case_lng
         sum(1 for item in speciality_needed if item in avail_items) / len(speciality_needed)
         if speciality_needed else 1.0
     )
-    hospital_load = min(beds_val / 30, 1.0)
 
+    # FIX: Normalize ALL continuous features to match ml_scorer.py inference
+    # Previously these were raw values (beds=300, distance_km=45.2, doctors=18)
+    # but ml_scorer.py sends normalized 0-1 values — mismatch killed the model
     return {
-        'distance_km': distance_km,
-        'beds': beds_val,
-        'icu': int(hospital.get('icu', 0) or 0),
-        'equipment_match': equipment_match,
-        'severity_weight': condition_severity,
+        'distance_km':       normalize_distance(raw_distance_km),  # 0-1, higher=closer
+        'beds':              log_normalize_beds(beds_val),          # 0-1, log-scaled
+        'icu':               normalize_icu(icu_val),                # 0-1, capped at 50
+        'equipment_match':   equipment_match,
+        'severity_weight':   condition_severity / 3.0,
         'has_ventilator':    1 if 'ventilator'    in avail_items else 0,
         'has_defibrillator': 1 if 'defibrillator' in avail_items else 0,
         'has_ct_scan':       1 if 'ct_scan'       in avail_items else 0,
         'has_blood_bank':    1 if 'blood_bank'    in avail_items else 0,
         'has_icu_equipment': 1 if 'icu'           in avail_items else 0,
-        'doctor_count': int(hospital.get('doctors', 0) or 0),
-        'accepting': 1 if hospital.get('accepting', True) else 0,
-        'speciality_match': speciality_match,
-        'hospital_load': hospital_load,
+        'doctor_count':      normalize_doctors(doctor_val),         # 0-1, capped at 20
+        'accepting':         1 if hospital.get('accepting', True) else 0,
+        'speciality_match':  speciality_match,
+        'hospital_load':     log_normalize_beds(beds_val),          # same as beds
         'condition_severity': condition_severity,
     }
 
@@ -151,7 +174,7 @@ def generate_dataset():
             h for h in hospitals_list
             if h['id'] != assigned_hosp_id
         ]
-        # Bias negatives toward geographically close hospitals —
+        # Bias negatives toward geographically close hospitals --
         # these are the hard negatives the model needs to learn to reject
         other_hospitals.sort(
             key=lambda h: haversine_distance(
@@ -181,6 +204,11 @@ def generate_dataset():
     print(f"Generated {len(df)} training samples")
     print(f"Positives: {pos} | Negatives: {neg} | Ratio: 1:{round(neg/pos, 1)}")
     print(f"Skipped cases (no matching hospital): {skipped}")
+
+    # Sanity-check normalized ranges
+    for col in ['distance_km', 'beds', 'icu', 'doctor_count']:
+        lo, hi = df[col].min(), df[col].max()
+        print(f"  {col:20s} range: {lo:.3f} - {hi:.3f}")
 
     output_path = os.path.join(os.path.dirname(__file__), 'training_data.csv')
     df.to_csv(output_path, index=False)

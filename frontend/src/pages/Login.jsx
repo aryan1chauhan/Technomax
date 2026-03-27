@@ -1,296 +1,134 @@
-import { useState, useEffect } from "react";
+// frontend/src/pages/Login.jsx
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
-
-const BOOT_LINES = [
-  "MEDIROUTE OS v2.1.0 — UTTARAKHAND EMERGENCY DISPATCH",
-  "Initializing hospital network... [188 nodes online]",
-  "Loading ML dispatch engine... [XGBoost/RF ready]",
-  "WebSocket relay... [ACTIVE]",
-  "GPS tracking module... [ACTIVE]",
-  "System status: ALL SYSTEMS OPERATIONAL",
-  "",
-  "╔══════════════════════════════════════════════════╗",
-  "║         AUTHORIZED PERSONNEL ONLY                ║",
-  "║   Unauthorized access will be logged & reported  ║",
-  "╚══════════════════════════════════════════════════╝",
-  "",
-  "Enter credentials to continue...",
-];
-
-// FIX #1: Decode role from JWT payload (backend doesn't return role in response body)
-function getRoleFromToken(token) {
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    // Try common key names used in FastAPI JWT payloads
-    return payload.role || payload.user_role || payload.sub_role || null;
-  } catch {
-    return null;
-  }
-}
+import { jwtDecode } from "jwt-decode";
+import api from "../api/axios";
 
 export default function Login() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [bootLines, setBootLines] = useState([]);
-  const [bootDone, setBootDone] = useState(false);
-  const [blink, setBlink] = useState(true);
-
-  // Boot sequence typewriter effect
-  useEffect(() => {
-    let i = 0;
-    const interval = setInterval(() => {
-      if (i < BOOT_LINES.length) {
-        setBootLines((prev) => [...prev, BOOT_LINES[i]]);
-        i++;
-      } else {
-        clearInterval(interval);
-        setBootDone(true);
-      }
-    }, 120);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Cursor blink
-  useEffect(() => {
-    const t = setInterval(() => setBlink((b) => !b), 500);
-    return () => clearInterval(t);
-  }, []);
+  const [error, setError]       = useState("");
+  const [loading, setLoading]   = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
-      const res = await axios.post("/api/auth/login", {
-        email,
-        password,
-      });
-
+      const res = await api.post("/api/auth/login", { email, password });
       const { access_token } = res.data;
       localStorage.setItem("token", access_token);
-
-      // FIX #1: Decode role from JWT payload since backend only returns access_token
-      const role = getRoleFromToken(access_token);
-      if (role) {
-        localStorage.setItem("role", role);
-      }
-
-      if (role === "ambulance") navigate("/dispatch");
+      const decoded = jwtDecode(access_token);
+      const role = decoded.role || "ambulance";
+      localStorage.setItem("role", role);
+      if (role === "ambulance")  navigate("/dispatch");
       else if (role === "hospital") navigate("/hospital/dashboard");
       else if (role === "admin") navigate("/admin/dashboard");
-      else {
-        // Fallback: if role can't be decoded, redirect based on email hint
-        // or go to dispatch as safe default
-        console.warn("Could not decode role from JWT. Defaulting to /dispatch.");
-        navigate("/dispatch");
-      }
     } catch {
-      setError("ACCESS DENIED — Invalid credentials");
-    } finally {
-      setLoading(false);
-    }
+      setError("Invalid email or password. Please try again.");
+    } finally { setLoading(false); }
   };
 
+  const stats = [
+    { val: "188", label: "Hospitals",    accent: "#1A78F2" },
+    { val: "6",   label: "Districts",    accent: "#17B86B" },
+    { val: "15",  label: "ML Features",  accent: "#FFB21A" },
+  ];
+
   return (
-    <div style={styles.root}>
-      {/* Scanline overlay */}
-      <div style={styles.scanlines} />
+    <div className="flex h-screen w-screen overflow-hidden font-['Inter',sans-serif]">
 
-      <div style={styles.container}>
-        {/* Boot log */}
-        <div style={styles.bootLog}>
-          {bootLines.map((line, i) => (
-            <div key={i} style={styles.bootLine}>
-              {line.startsWith("MEDIROUTE") ? (
-                <span style={styles.title}>{line}</span>
-              ) : line.startsWith("╔") || line.startsWith("║") || line.startsWith("╚") ? (
-                <span style={styles.border}>{line}</span>
-              ) : line.startsWith("System status") ? (
-                <span style={styles.success}>{line}</span>
-              ) : line.startsWith("Enter") ? (
-                <span style={styles.prompt}>{line}</span>
-              ) : (
-                <span style={styles.info}>{line}</span>
-              )}
+      {/* ── Left Panel ── */}
+      <div className="relative w-[600px] flex-shrink-0 bg-[#0D1830] flex flex-col overflow-hidden">
+        {/* Blue gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[rgba(26,120,242,0.25)] to-transparent pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col h-full px-[52px] py-[52px]">
+          {/* Logo */}
+          <div className="flex items-center gap-4 mb-6">
+            <div className="relative w-14 h-14 bg-[#EE3B3B] rounded-2xl flex items-center justify-center flex-shrink-0">
+              <div className="absolute w-6 h-2 bg-white rounded-sm" />
+              <div className="absolute w-2 h-6 bg-white rounded-sm" />
             </div>
-          ))}
-          {!bootDone && (
-            <span style={styles.cursor}>{blink ? "█" : " "}</span>
-          )}
-        </div>
-
-        {/* Login form — appears after boot */}
-        {bootDone && (
-          <div style={styles.formBox}>
-            <div style={styles.formHeader}>
-              ┌─── AUTHENTICATION REQUIRED ───────────────────┐
-            </div>
-
-            <form onSubmit={handleLogin} style={styles.form}>
-              <div style={styles.field}>
-                <label style={styles.label}>│  USER ID (EMAIL):</label>
-                <div style={styles.inputRow}>
-                  <span style={styles.prompt2}>&gt; </span>
-                  <input
-                    style={styles.input}
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    autoFocus
-                    spellCheck={false}
-                    placeholder="user@mediroute.in"
-                  />
-                </div>
-              </div>
-
-              <div style={styles.field}>
-                <label style={styles.label}>│  PASSWORD:</label>
-                <div style={styles.inputRow}>
-                  <span style={styles.prompt2}>&gt; </span>
-                  <input
-                    style={styles.input}
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    placeholder="••••••••"
-                  />
-                </div>
-              </div>
-
-              {error && (
-                <div style={styles.error}>
-                  ⚠ {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                style={loading ? styles.btnLoading : styles.btn}
-                disabled={loading}
-              >
-                {loading ? "[ AUTHENTICATING... ]" : "[ AUTHENTICATE → ]"}
-              </button>
-            </form>
-
-            <div style={styles.formFooter}>
-              └───────────────────────────────────────────────┘
-            </div>
-
-            <div style={styles.hint}>
-              DEMO — amb1@test.com | bhagwati@test.com | pass: test123
+            <div>
+              <h1 className="text-[36px] font-bold text-white leading-tight">MediRoute</h1>
+              <p className="text-[16px] text-[#C7CCD9]">Emergency Dispatch System</p>
             </div>
           </div>
-        )}
+
+          {/* Stat Cards */}
+          <div className="mt-[140px] flex flex-col gap-5">
+            {stats.map(({ val, label, accent }) => (
+              <div key={label} className="relative w-[200px] h-[88px] bg-[#172954] rounded-xl overflow-hidden">
+                <div className="absolute left-0 top-0 w-1 h-full rounded-xl" style={{ backgroundColor: accent }} />
+                <div className="pl-6 pt-4">
+                  <p className="text-[32px] font-bold text-white leading-none">{val}</p>
+                  <p className="text-[13px] text-[#C7CCD9] mt-1">{label}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-auto text-[13px] text-[#737A8F]">Uttarakhand State Health Network</p>
+        </div>
+      </div>
+
+      {/* ── Right Panel ── */}
+      <div className="flex-1 bg-[#F7F7FC] flex items-center justify-center">
+        <div className="w-[440px] bg-white rounded-[20px] border border-[#F0F2F7] shadow-lg p-10">
+          <h2 className="text-[28px] font-bold text-[#1A1E2E]">Welcome back</h2>
+          <p className="text-[15px] text-[#737A8F] mt-2 mb-8">Sign in to your MediRoute account</p>
+
+          <form onSubmit={handleLogin} className="flex flex-col gap-5">
+            <div>
+              <label className="block text-[13px] font-medium text-[#404454] mb-2">
+                Email address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                autoFocus
+                className="w-full h-12 bg-[#F0F2F7] rounded-[10px] px-4 text-[14px] text-[#1A1E2E] placeholder-[#C7CCD9] outline-none focus:ring-2 focus:ring-[#1A78F2] transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[13px] font-medium text-[#404454] mb-2">
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="w-full h-12 bg-[#F0F2F7] rounded-[10px] px-4 text-[14px] text-[#1A1E2E] placeholder-[#C7CCD9] outline-none focus:ring-2 focus:ring-[#1A78F2] transition"
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 text-[13px] rounded-lg px-4 py-3">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-[52px] bg-[#1A78F2] hover:bg-[#1259C8] disabled:opacity-60 text-white font-semibold text-[15px] rounded-xl transition mt-2"
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
+          </form>
+
+          <p className="text-center text-[12px] text-[#C7CCD9] mt-6">
+            Demo: amb1@test.com &nbsp;·&nbsp; bhagwati@test.com &nbsp;·&nbsp; admin@test.com &nbsp;/&nbsp; test123
+          </p>
+        </div>
       </div>
     </div>
   );
 }
-
-const GREEN = "#00ff41";
-const DIM_GREEN = "#00aa2a";
-const RED = "#ff4444";
-const YELLOW = "#ffff00";
-const BG = "#0a0a0a";
-const MONO = "'Courier New', 'Lucida Console', monospace";
-
-const styles = {
-  root: {
-    minHeight: "100vh",
-    background: BG,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontFamily: MONO,
-    position: "relative",
-    overflow: "hidden",
-  },
-  scanlines: {
-    position: "fixed",
-    inset: 0,
-    background:
-      "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,65,0.015) 2px, rgba(0,255,65,0.015) 4px)",
-    pointerEvents: "none",
-    zIndex: 1,
-  },
-  container: {
-    width: "min(720px, 96vw)",
-    zIndex: 2,
-    padding: "2rem 1rem",
-  },
-  bootLog: {
-    marginBottom: "1.5rem",
-    fontSize: "clamp(11px, 1.5vw, 13px)",
-    lineHeight: "1.7",
-  },
-  bootLine: { display: "block" },
-  title: { color: GREEN, fontWeight: "bold", fontSize: "1.1em" },
-  border: { color: DIM_GREEN },
-  success: { color: GREEN },
-  info: { color: DIM_GREEN },
-  prompt: { color: YELLOW },
-  cursor: { color: GREEN, fontSize: "1rem" },
-  formBox: { marginTop: "0.5rem" },
-  formHeader: { color: DIM_GREEN, fontSize: "13px", marginBottom: "0.5rem" },
-  form: { padding: "0 1rem" },
-  field: { marginBottom: "1rem" },
-  label: { color: DIM_GREEN, fontSize: "12px", display: "block", marginBottom: "4px" },
-  inputRow: { display: "flex", alignItems: "center", gap: "6px" },
-  prompt2: { color: GREEN, fontSize: "14px" },
-  input: {
-    background: "transparent",
-    border: "none",
-    borderBottom: `1px solid ${DIM_GREEN}`,
-    color: GREEN,
-    fontFamily: MONO,
-    fontSize: "14px",
-    outline: "none",
-    width: "100%",
-    padding: "4px 0",
-    caretColor: GREEN,
-  },
-  error: {
-    color: RED,
-    fontSize: "13px",
-    margin: "0.5rem 0",
-    animation: "blink 1s step-end infinite",
-  },
-  btn: {
-    marginTop: "1rem",
-    background: "transparent",
-    border: `1px solid ${GREEN}`,
-    color: GREEN,
-    fontFamily: MONO,
-    fontSize: "14px",
-    padding: "10px 24px",
-    cursor: "pointer",
-    letterSpacing: "2px",
-    transition: "all 0.2s",
-    width: "100%",
-  },
-  btnLoading: {
-    marginTop: "1rem",
-    background: "transparent",
-    border: `1px solid ${DIM_GREEN}`,
-    color: DIM_GREEN,
-    fontFamily: MONO,
-    fontSize: "14px",
-    padding: "10px 24px",
-    cursor: "not-allowed",
-    letterSpacing: "2px",
-    width: "100%",
-  },
-  formFooter: { color: DIM_GREEN, fontSize: "13px", marginTop: "0.5rem" },
-  hint: {
-    color: "#333",
-    fontSize: "11px",
-    marginTop: "1.5rem",
-    textAlign: "center",
-    letterSpacing: "1px",
-  },
-};

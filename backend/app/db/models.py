@@ -41,6 +41,7 @@ class Case(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     condition = Column(String)
+    custom_condition = Column(String, nullable=True)
     equipment_needed = Column(ARRAY(String), default=[])
     ambulance_lat = Column(Float)
     ambulance_lng = Column(Float)
@@ -48,4 +49,5 @@ class Case(Base):
     final_score = Column(Float)
     distance_km = Column(Float)
     eta_minutes = Column(Integer)
+    notes = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

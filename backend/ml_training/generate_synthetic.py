@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-# All 20 conditions — EQUAL distribution across all of them
 CONDITIONS = {
     'cardiac arrest':       {'severity': 3, 'equipment': ['defibrillator', 'ventilator']},
     'stroke':               {'severity': 3, 'equipment': ['ct_scan']},
@@ -31,7 +30,6 @@ CONDITIONS = {
     'broken bone':          {'severity': 1, 'equipment': []},
 }
 
-# 5 districts for ambulance location diversity
 DISTRICTS = [
     {'name': 'Roorkee',  'lat_min': 29.82, 'lat_max': 29.90, 'lng_min': 77.85, 'lng_max': 77.95},
     {'name': 'Haridwar', 'lat_min': 29.88, 'lat_max': 29.98, 'lng_min': 78.10, 'lng_max': 78.20},
@@ -47,6 +45,10 @@ def haversine(lat1, lon1, lat2, lon2):
     a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
+def log_normalize_beds(beds):
+    """FIX: Must match ml_scorer.py exactly so training data = inference."""
+    return math.log(1 + max(beds, 0)) / math.log(502)
+
 def generate():
     if not DATABASE_URL:
         print("Error: DATABASE_URL not found in .env")
@@ -54,7 +56,6 @@ def generate():
 
     engine = create_engine(DATABASE_URL)
 
-    # Load ALL hospitals with their equipment
     with engine.connect() as conn:
         rows = conn.execute(text(
             "SELECT h.id, h.name, h.lat, h.lng, a.beds, a.icu, a.equipment, a.accepting "
@@ -82,66 +83,64 @@ def generate():
 
     print(f"Found {len(hospitals)} hospitals")
 
-    # DELETE all existing synthetic cases first
     with engine.connect() as conn:
         result = conn.execute(text("DELETE FROM cases WHERE user_id = 4"))
         conn.commit()
         print(f"Deleted {result.rowcount} old synthetic cases")
 
     cases_to_insert = []
-    cases_per_condition = 30  # 30 × 20 conditions = 600 total
+    cases_per_condition = 30
 
     for condition, info in CONDITIONS.items():
         needed_eq = info['equipment']
         count = 0
 
         for _ in range(cases_per_condition):
-            # Pick random district
             district = random.choice(DISTRICTS)
             amb_lat = random.uniform(district['lat_min'], district['lat_max'])
             amb_lng = random.uniform(district['lng_min'], district['lng_max'])
 
-            # Score each hospital using scorer.py formula
+            accepting = [h for h in hospitals if h['beds'] > 0 and h['accepting']]
+            if not accepting:
+                accepting = hospitals
+
+            # FIX: Pre-filter nearest 30 — matches inference behaviour in ml_scorer.py
+            for h in accepting:
+                h['_dist'] = haversine(amb_lat, amb_lng, h['lat'], h['lng'])
+            accepting.sort(key=lambda h: h['_dist'])
+            candidates = accepting[:30]
+
             best_hospital = None
             best_score = -1
 
-            for h in hospitals:
-                # Filter: beds > 0 AND accepting = True
-                if h['beds'] <= 0:
-                    continue
-                if not h['accepting']:
-                    continue
+            for h in candidates:
+                dist = h['_dist']
 
-                # Equipment match (fraction of needed equipment the hospital has)
                 if needed_eq:
                     eq_match = sum(1 for e in needed_eq if e in h['equipment']) / len(needed_eq)
                 else:
                     eq_match = 1.0
 
-                # Distance
-                dist = haversine(amb_lat, amb_lng, h['lat'], h['lng'])
-                distance_score = 1 / (1 + dist)
+                # FIX: Use IDENTICAL formula to ml_scorer._rule_fallback
+                # distance 0.45, equipment 0.30, beds (log-normalized) 0.25
+                bed_score = log_normalize_beds(h['beds'])
+                distance_score = 1 / (1 + dist * 0.1)
+                noise = random.uniform(-0.03, 0.03)
+                score = (distance_score * 0.45) + (eq_match * 0.30) + (bed_score * 0.25) + noise
 
-                # Normalize beds to 0-1 range (cap at 100 beds)
-                availability = min(h['beds'] / 100, 1.0)
-                # Add small random noise to prevent always picking same hospital
-                noise = random.uniform(-0.05, 0.05)
-                score = (availability * 0.25) + (eq_match * 0.45) + (distance_score * 0.30) + noise
-
-                # Equipment-specific bonuses
+                # Equipment bonuses (kept, but smaller to not override distance)
                 if 'defibrillator' in needed_eq and 'defibrillator' in h['equipment']:
-                    score += 0.3
+                    score += 0.15
                 if 'ct_scan' in needed_eq and 'ct_scan' in h['equipment']:
-                    score += 0.2
+                    score += 0.10
                 if 'blood_bank' in needed_eq and 'blood_bank' in h['equipment']:
-                    score += 0.2
+                    score += 0.10
 
                 if score > best_score:
                     best_score = score
                     best_hospital = h
 
             if not best_hospital:
-                # Fallback: pick nearest
                 best_hospital = min(hospitals, key=lambda h: haversine(amb_lat, amb_lng, h['lat'], h['lng']))
 
             dist_km = haversine(amb_lat, amb_lng, best_hospital['lat'], best_hospital['lng'])
@@ -161,9 +160,8 @@ def generate():
             })
             count += 1
 
-        print(f"  {condition}: {count} cases")
+        print(f"  {condition}: {count} cases → district spread ensures variety")
 
-    # Batch insert
     with engine.connect() as conn:
         for c in cases_to_insert:
             conn.execute(text(
@@ -171,22 +169,21 @@ def generate():
                 "assigned_hospital_id, final_score, distance_km, eta_minutes) "
                 "VALUES (:user_id, :condition, :equipment_needed, :ambulance_lat, :ambulance_lng, "
                 ":assigned_hospital_id, :final_score, :distance_km, :eta_minutes)"
-            ), {
-                'user_id': c['user_id'],
-                'condition': c['condition'],
-                'equipment_needed': c['equipment_needed'],
-                'ambulance_lat': c['ambulance_lat'],
-                'ambulance_lng': c['ambulance_lng'],
-                'assigned_hospital_id': c['assigned_hospital_id'],
-                'final_score': c['final_score'],
-                'distance_km': c['distance_km'],
-                'eta_minutes': c['eta_minutes'],
-            })
+            ), c)
         conn.commit()
 
     print(f"\nTotal inserted: {len(cases_to_insert)} synthetic cases")
     print(f"({cases_per_condition} per condition × {len(CONDITIONS)} conditions)")
-    print(f"Districts: {', '.join(d['name'] for d in DISTRICTS)}")
+
+    # Show top-5 most-selected hospitals to verify AIIMS no longer dominates
+    from collections import Counter
+    hospital_counts = Counter(c['assigned_hospital_id'] for c in cases_to_insert)
+    top5 = hospital_counts.most_common(5)
+    hosp_names = {h['id']: h['name'] for h in hospitals}
+    print("\nTop 5 most-selected hospitals (should be spread across districts):")
+    for hid, cnt in top5:
+        pct = cnt / len(cases_to_insert) * 100
+        print(f"  {hosp_names.get(hid, hid)}: {cnt} cases ({pct:.1f}%)")
 
 if __name__ == '__main__':
     generate()

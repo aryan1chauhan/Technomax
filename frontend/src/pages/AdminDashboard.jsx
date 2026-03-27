@@ -1,59 +1,17 @@
-import { useEffect, useState } from "react";
+// frontend/src/pages/AdminDashboard.jsx
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const GREEN = "#00ff41";
-const DIM = "#00aa2a";
-const DARK = "#006600";
-const RED = "#ff4444";
-const YELLOW = "#ffff00";
-const BG = "#0a0a0a";
-const MONO = "'Courier New', 'Lucida Console', monospace";
-
-// ASCII bar chart — fills `width` chars proportionally
-function AsciiBar({ value, max, width = 18, color = GREEN }) {
-  const filled = max > 0 ? Math.round((value / max) * width) : 0;
-  const empty = width - filled;
-  return (
-    <span style={{ color }}>
-      {"█".repeat(filled)}{"░".repeat(empty)}
-    </span>
-  );
-}
-
-function StatBox({ label, value, sub, color = GREEN }) {
-  return (
-    <div style={{
-      border: `1px solid ${DARK}`,
-      padding: "12px 16px",
-      minWidth: 140,
-      flex: 1,
-    }}>
-      <div style={{ color: DARK, fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>
-        {label}
-      </div>
-      <div style={{ color, fontSize: 28, fontWeight: "bold", lineHeight: 1 }}>
-        {value}
-      </div>
-      {sub && (
-        <div style={{ color: DARK, fontSize: 10, marginTop: 4 }}>{sub}</div>
-      )}
-    </div>
-  );
-}
-
 export default function AdminDashboard() {
-  const navigate = useNavigate();
-  const [data, setData] = useState(null);
-  const [error, setError] = useState("");
-  const [time, setTime] = useState(new Date());
-  const [blink, setBlink] = useState(true);
+  const navigate  = useNavigate();
+  const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
+  const [time,    setTime]    = useState(new Date());
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
-    const b = setInterval(() => setBlink((v) => !v), 500);
-    return () => { clearInterval(t); clearInterval(b); };
+    return () => clearInterval(t);
   }, []);
 
   const fetchStats = async () => {
@@ -63,259 +21,156 @@ export default function AdminDashboard() {
         headers: { Authorization: `Bearer ${token}` },
       });
       setData(res.data);
-    } catch (e) {
-      setError(e.response?.data?.detail || "Failed to fetch stats");
-    } finally {
-      setLoading(false);
-    }
+    } catch { } finally { setLoading(false); }
   };
 
   useEffect(() => {
     fetchStats();
-    const t = setInterval(fetchStats, 15000); // refresh every 15s
+    const t = setInterval(fetchStats, 15000);
     return () => clearInterval(t);
   }, []);
 
-  const maxBeds = data
-    ? Math.max(...(data.districts?.map((d) => d.beds) || [1]))
-    : 1;
+  const maxBeds    = data ? Math.max(...data.districts.map(d => d.beds), 1) : 1;
+  const scoreColor = s => s > 0.7 ? "#17B86B" : s > 0.4 ? "#FFB21A" : "#EE3B3B";
+  const navItems   = ["📊  Overview","🏥  Hospitals","🚑  Dispatches","🤖  ML Engine","⚙️  Settings"];
 
   return (
-    <div style={{ minHeight: "100vh", background: BG, fontFamily: MONO, padding: "1rem", position: "relative" }}>
-      {/* Scanlines */}
-      <div style={{
-        position: "fixed", inset: 0,
-        background: "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,65,0.015) 2px,rgba(0,255,65,0.015) 4px)",
-        pointerEvents: "none", zIndex: 1,
-      }} />
+    <div className="flex h-screen bg-[#F7F7FC] font-['Inter',sans-serif] overflow-hidden">
 
-      <div style={{ maxWidth: 960, margin: "0 auto", position: "relative", zIndex: 2 }}>
+      {/* ── Sidebar ── */}
+      <aside className="w-[240px] bg-[#0D1830] flex-shrink-0 flex flex-col relative">
+        <div className="absolute left-0 top-0 w-[3px] h-full bg-[#1A78F2]" />
+        <div className="px-7 pt-7 pb-5">
+          <p className="text-[18px] font-bold text-white">MediRoute</p>
+          <p className="text-[12px] text-[#737A8F]">Admin Control</p>
+        </div>
+        <nav className="flex flex-col gap-1 px-3">
+          {navItems.map((item, i) => (
+            <div key={i} className={`px-4 py-3 rounded-xl text-[14px] cursor-pointer transition
+              ${i===0 ? "bg-[#172954] text-white font-semibold" : "text-[#737A8F] hover:text-white"}`}>
+              {item}
+            </div>
+          ))}
+        </nav>
+        <div className="mt-auto px-7 pb-6">
+          <p className="text-[12px] text-[#737A8F]">admin@test.com</p>
+          <button onClick={() => { localStorage.clear(); navigate("/login"); }}
+            className="mt-1 text-[12px] text-[#737A8F] hover:text-white transition">
+            Sign out →
+          </button>
+        </div>
+      </aside>
 
-        {/* ── Header ── */}
-        <div style={{ marginBottom: "1.5rem" }}>
-          <div style={{ color: DARK, fontSize: 12 }}>
-            ╔══════════════════════════════════════════════════════════════╗
-          </div>
-          <div style={{ color: GREEN, fontSize: 14, fontWeight: "bold" }}>
-            ║&nbsp;&nbsp;⚡ MEDIROUTE — SYSTEM CONTROL PANEL &nbsp;•&nbsp;
-            <span style={{ color: DIM }}>ADMIN</span>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;║
-          </div>
-          <div style={{ color: DARK, fontSize: 12 }}>
-            ╚══════════════════════════════════════════════════════════════╝
-          </div>
-          <div style={{ color: DARK, fontSize: 11, marginTop: 6, display: "flex", justifyContent: "space-between" }}>
-            <span>
-              {time.toLocaleDateString("en-IN")} &nbsp;
-              {time.toLocaleTimeString()} IST
-            </span>
-            <span style={{ color: data ? GREEN : YELLOW }}>
-              {data ? `● LIVE — auto-refresh 15s` : blink ? "● CONNECTING..." : "○ CONNECTING..."}
+      {/* ── Main ── */}
+      <main className="flex-1 overflow-y-auto">
+        {/* Top bar */}
+        <div className="bg-white border-b border-[#F0F2F7] h-16 flex items-center justify-between px-8">
+          <h1 className="text-[22px] font-bold text-[#1A1E2E]">System Overview</h1>
+          <div className="flex items-center gap-4">
+            <span className="text-[12px] text-[#737A8F]">{time.toLocaleTimeString()} IST</span>
+            <span className={`flex items-center gap-2 text-[11px] font-bold px-3 py-1.5 rounded-full ${data ? "bg-[#E8FDF2] text-[#17B86B]" : "bg-[#FFF8E0] text-[#FFB21A]"}`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+              {data ? "LIVE · ↻ 15s" : "CONNECTING..."}
             </span>
           </div>
         </div>
 
-        {loading && (
-          <div style={{ color: DIM, fontSize: 13, textAlign: "center", padding: "4rem" }}>
-            LOADING SYSTEM DATA{blink ? "..." : "   "}
+        {loading ? (
+          <div className="flex justify-center py-24">
+            <div className="w-10 h-10 border-4 border-[#1A78F2] border-t-transparent rounded-full animate-spin" />
           </div>
-        )}
+        ) : data && (
+          <div className="p-8 flex flex-col gap-6">
 
-        {error && (
-          <div style={{ color: RED, fontSize: 13, padding: "1rem", border: `1px solid ${RED}` }}>
-            ⚠ ERROR: {error}
-          </div>
-        )}
-
-        {data && (
-          <>
-            {/* ── Stat Cards ── */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ color: DARK, fontSize: 11, marginBottom: 8 }}>
-                ┌─── SYSTEM OVERVIEW ──────────────────────────────────────────┐
-              </div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <StatBox
-                  label="HOSPITALS ONLINE"
-                  value={data.total_hospitals}
-                  sub={`${data.accepting_hospitals} currently accepting`}
-                />
-                <StatBox
-                  label="TOTAL BEDS"
-                  value={data.total_beds.toLocaleString()}
-                  sub="across Uttarakhand"
-                  color={DIM}
-                />
-                <StatBox
-                  label="ICU BEDS"
-                  value={data.total_icu.toLocaleString()}
-                  sub="critical care capacity"
-                  color={YELLOW}
-                />
-                <StatBox
-                  label="TOTAL DISPATCHES"
-                  value={data.total_cases}
-                  sub={`${data.cases_last_24h} in last 24h`}
-                  color={GREEN}
-                />
-              </div>
-              <div style={{ color: DARK, fontSize: 11, marginTop: 8 }}>
-                └──────────────────────────────────────────────────────────────┘
-              </div>
+            {/* Stat Cards */}
+            <div className="grid grid-cols-4 gap-4">
+              {[
+                { val: data.total_hospitals,  label: "Hospitals Online",  sub: `${data.accepting_hospitals} accepting`, accent: "#1A78F2" },
+                { val: data.total_beds.toLocaleString(), label: "Total Beds", sub: "Across Uttarakhand", accent: "#17B86B" },
+                { val: data.total_icu.toLocaleString(),  label: "ICU Beds",   sub: "Critical care", accent: "#FFB21A" },
+                { val: data.total_cases,      label: "Total Dispatches", sub: `${data.cases_last_24h} in last 24h`, accent: "#EE3B3B" },
+              ].map(({ val, label, sub, accent }) => (
+                <div key={label} className="bg-white rounded-xl border border-[#F0F2F7] overflow-hidden">
+                  <div className="h-1" style={{ backgroundColor: accent }} />
+                  <div className="p-5">
+                    <p className="text-[32px] font-extrabold text-[#1A1E2E]">{val}</p>
+                    <p className="text-[13px] font-semibold text-[#1A1E2E] mt-1">{label}</p>
+                    <p className="text-[11px] text-[#737A8F]">{sub}</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            {/* ── District Breakdown ── */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ color: DARK, fontSize: 11, marginBottom: 8 }}>
-                ┌─── DISTRICT CAPACITY MAP ────────────────────────────────────┐
-              </div>
-              <div style={{ padding: "0 1rem" }}>
-                {/* Column headers */}
-                <div style={{ display: "grid", gridTemplateColumns: "110px 1fr 60px 60px 70px", gap: 8, marginBottom: 6 }}>
-                  <span style={{ color: DARK, fontSize: 10, letterSpacing: 1 }}>DISTRICT</span>
-                  <span style={{ color: DARK, fontSize: 10, letterSpacing: 1 }}>BED CAPACITY</span>
-                  <span style={{ color: DARK, fontSize: 10, letterSpacing: 1 }}>BEDS</span>
-                  <span style={{ color: DARK, fontSize: 10, letterSpacing: 1 }}>ICU</span>
-                  <span style={{ color: DARK, fontSize: 10, letterSpacing: 1 }}>HOSP.</span>
+            {/* Middle row */}
+            <div className="grid grid-cols-2 gap-6">
+              {/* District Breakdown */}
+              <div className="bg-white rounded-xl border border-[#F0F2F7] p-6">
+                <p className="text-[15px] font-bold text-[#1A1E2E] mb-5">District Capacity</p>
+                <div className="flex flex-col gap-4">
+                  {data.districts.map(d => (
+                    <div key={d.name} className="flex items-center gap-3">
+                      <p className="text-[12px] font-semibold text-[#1A1E2E] w-20 flex-shrink-0">{d.name}</p>
+                      <div className="flex-1 h-2.5 bg-[#F0F2F7] rounded-full overflow-hidden">
+                        <div className="h-full bg-[#1A78F2] rounded-full transition-all"
+                          style={{ width: `${(d.beds / maxBeds) * 100}%` }} />
+                      </div>
+                      <span className="text-[11px] text-[#737A8F] w-16 text-right">{d.beds} beds</span>
+                      <span className="text-[11px] text-[#FFB21A] w-14 text-right">{d.icu} ICU</span>
+                    </div>
+                  ))}
                 </div>
-                {data.districts.map((d) => (
-                  <div
-                    key={d.name}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "110px 1fr 60px 60px 70px",
-                      gap: 8,
-                      alignItems: "center",
-                      marginBottom: 8,
-                      padding: "6px 0",
-                      borderBottom: "1px solid #0d1f0d",
-                    }}
-                  >
-                    <span style={{ color: GREEN, fontSize: 12 }}>{d.name.toUpperCase()}</span>
-                    <span>
-                      <AsciiBar value={d.beds} max={maxBeds} width={22} />
-                    </span>
-                    <span style={{ color: DIM, fontSize: 12 }}>{d.beds}</span>
-                    <span style={{ color: YELLOW, fontSize: 12 }}>{d.icu}</span>
-                    <span style={{ color: DARK, fontSize: 12 }}>
-                      {d.accepting}/{d.hospitals}
-                    </span>
-                  </div>
-                ))}
               </div>
-              <div style={{ color: DARK, fontSize: 11, marginTop: 4 }}>
-                └──────────────────────────────────────────────────────────────┘
-              </div>
-            </div>
 
-            {/* ── Recent Dispatches ── */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ color: DARK, fontSize: 11, marginBottom: 8 }}>
-                ┌─── RECENT DISPATCHES (last 24h) ─────────────────────────────┐
-              </div>
-              {data.recent_cases.length === 0 ? (
-                <div style={{ color: DARK, fontSize: 12, padding: "1rem" }}>
-                  NO DISPATCHES IN LAST 24 HOURS
-                </div>
-              ) : (
-                <div style={{ padding: "0 0.5rem" }}>
-                  {/* Header row */}
-                  <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "60px 130px 220px 80px 80px 70px",
-                    gap: 8, marginBottom: 6,
-                  }}>
-                    {["ID", "TIME", "HOSPITAL", "CONDITION", "ML SCORE", "DIST/ETA"].map((h) => (
-                      <span key={h} style={{ color: DARK, fontSize: 10, letterSpacing: 1 }}>{h}</span>
-                    ))}
-                  </div>
-                  {data.recent_cases.map((c) => {
-                    const scoreColor = c.score > 0.7 ? GREEN : c.score > 0.4 ? YELLOW : RED;
-                    return (
-                      <div
-                        key={c.id}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "60px 130px 220px 80px 80px 70px",
-                          gap: 8,
-                          padding: "5px 0",
-                          borderBottom: "1px solid #0d1f0d",
-                          fontSize: 11,
-                          alignItems: "center",
-                        }}
-                      >
-                        <span style={{ color: DARK }}>#{c.id}</span>
-                        <span style={{ color: DARK }}>{c.created_at}</span>
-                        <span style={{ color: DIM, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {c.hospital_name}
-                        </span>
-                        <span style={{ color: GREEN, textTransform: "uppercase" }}>
-                          {c.condition?.replace("_", " ")}
-                        </span>
-                        <span style={{ color: scoreColor }}>
-                          {(c.score * 100).toFixed(1)}%
-                        </span>
-                        <span style={{ color: DARK }}>
-                          {c.distance_km}km/{c.eta_minutes}m
+              {/* Recent Dispatches */}
+              <div className="bg-white rounded-xl border border-[#F0F2F7] p-6">
+                <p className="text-[15px] font-bold text-[#1A1E2E] mb-5">Recent Dispatches</p>
+                {data.recent_cases.length === 0 ? (
+                  <p className="text-[13px] text-[#C7CCD9] text-center py-8">No dispatches yet</p>
+                ) : (
+                  <div className="flex flex-col gap-0">
+                    {data.recent_cases.slice(0, 6).map((c, i) => (
+                      <div key={c.id} className={`flex items-center gap-3 px-3 py-3 rounded-lg text-[12px] ${i%2===0 ? "bg-[#F7F7FC]" : ""}`}>
+                        <span className="text-[#C7CCD9] font-mono w-8">#{c.id}</span>
+                        <span className="text-[#C7CCD9] w-12">{c.created_at}</span>
+                        <span className="text-[#1A1E2E] font-semibold flex-1 truncate">{c.hospital_name}</span>
+                        <span className="text-[#737A8F] uppercase text-[10px] w-20 truncate">{c.condition?.replace("_"," ")}</span>
+                        <span className="font-bold w-10 text-right" style={{ color: scoreColor(c.score) }}>
+                          {Math.round(c.score*100)}%
                         </span>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-              <div style={{ color: DARK, fontSize: 11, marginTop: 8 }}>
-                └──────────────────────────────────────────────────────────────┘
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* ── ML Model Status ── */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ color: DARK, fontSize: 11, marginBottom: 8 }}>
-                ┌─── ML ENGINE STATUS ─────────────────────────────────────────┐
+            {/* ML Engine Status */}
+            <div className="bg-white rounded-xl border border-[#F0F2F7] overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-[#F0F2F7] px-6 py-4">
+                <div className="w-1 h-6 bg-[#1A78F2] rounded-full" />
+                <p className="text-[15px] font-bold text-[#1A1E2E]">ML Engine Status</p>
+                <span className="ml-auto bg-[#E8FDF2] text-[#17B86B] text-[11px] font-bold px-3 py-1 rounded-full">● OPERATIONAL</span>
               </div>
-              <div style={{ padding: "0.5rem 1rem", display: "flex", flexWrap: "wrap", gap: 24 }}>
+              <div className="grid grid-cols-6 divide-x divide-[#F0F2F7]">
                 {[
-                  ["ALGORITHM",    "RandomForest (class_weight=balanced)"],
-                  ["TRAINING SAMPLES", "112,800"],
-                  ["FEATURES",     "15"],
-                  ["HOSPITALS",    "188 (Uttarakhand)"],
-                  ["THRESHOLD",    "Auto-tuned (F1 optimal)"],
-                  ["FALLBACK",     "Rule-based scorer"],
-                ].map(([k, v]) => (
-                  <div key={k} style={{ minWidth: 200 }}>
-                    <div style={{ color: DARK, fontSize: 10, letterSpacing: 1 }}>{k}</div>
-                    <div style={{ color: GREEN, fontSize: 12 }}>{v}</div>
+                  ["RandomForest",   "Algorithm"],
+                  ["112,800",        "Training Samples"],
+                  ["15",             "Input Features"],
+                  ["188",            "Hospitals Scored"],
+                  ["Auto-tuned",     "Threshold"],
+                  ["Rule-based",     "Fallback"],
+                ].map(([val, label]) => (
+                  <div key={label} className="p-5">
+                    <p className="text-[16px] font-bold text-[#1A78F2]">{val}</p>
+                    <p className="text-[11px] text-[#737A8F] mt-1">{label}</p>
                   </div>
                 ))}
               </div>
-              <div style={{ color: DARK, fontSize: 11, marginTop: 4 }}>
-                └──────────────────────────────────────────────────────────────┘
-              </div>
             </div>
 
-          </>
+          </div>
         )}
-
-        {/* ── Nav ── */}
-        <div style={{ display: "flex", gap: 10, marginTop: "1rem" }}>
-          <button
-            onClick={() => navigate("/dispatch")}
-            style={{ background: "transparent", border: `1px solid ${DARK}`, color: DARK, fontFamily: MONO, fontSize: 11, padding: "8px 16px", cursor: "pointer" }}
-          >
-            [ DISPATCH CONSOLE ]
-          </button>
-          <button
-            onClick={() => { localStorage.clear(); navigate("/login"); }}
-            style={{ background: "transparent", border: `1px solid #330000`, color: "#660000", fontFamily: MONO, fontSize: 11, padding: "8px 16px", cursor: "pointer" }}
-          >
-            [ LOGOUT ]
-          </button>
-        </div>
-
-        <div style={{ color: "#111", fontSize: 10, textAlign: "center", marginTop: "2rem", letterSpacing: 1 }}>
-          MEDIROUTE CONTROL SYSTEM • UTTARAKHAND STATE EMERGENCY NETWORK
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

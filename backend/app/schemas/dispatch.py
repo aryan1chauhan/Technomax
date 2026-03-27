@@ -4,9 +4,14 @@ from datetime import datetime
 
 class DispatchRequest(BaseModel):
     condition: str
-    equipment_needed: list[str]
+    custom_condition: Optional[str] = None
+    equipment_needed: list[str] = []
     ambulance_lat: float
     ambulance_lng: float
+    severity: Optional[int] = None
+    patient_age: Optional[int] = None
+    patient_gender: Optional[str] = None
+    notes: Optional[str] = None
 
 class DispatchResponse(BaseModel):
     case_id: int

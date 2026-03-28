@@ -38,13 +38,13 @@
 *   **`pages/HospitalDashboard.jsx` & `AdminDashboard.jsx`**: Polling/live dashboards showing incoming cases, district hospital capacities, and system-wide ML statistics.
 
 ## 4. Current State & Recent Work
-The project is currently in a highly-polished, feature-complete state for a hackathon demo. 
+The project is currently in a highly-polished, feature-complete state for a high-stakes hackathon demo. 
 
-**Recently Completed Tasks:**
-1.  **Massive UI Overhaul:** Completely redesigned the frontend from basic components to a high-end Figma-based design.
-2.  **Voice-to-AI Dispatch:** Implemented browser-native Web Speech API. The paramedic speaks, the transcript is sent to Claude via the backend, and the UI automatically populates conditions and equipment requirements.
-3.  **Database Evolution:** Upgraded the `Case` table to include `custom_condition` and `notes` to support the new AI parameters without breaking legacy strict rules.
-4.  **Security & API Fixes:** Routed the Anthropic API call through the FastAPI backend to prevent frontend CORS errors and secure the API key.
+**Recently Completed Tasks (Latest Session):**
+1.  **ML Engine Rebalancing (Critical Fix):** Discovered a train/inference data mismatch where the ML model was trained on raw values (e.g., beds=300) but inference (`ml_scorer.py`) sent normalized 0-1 values. Fixed `generate_dataset.py` to write normalized values to the CSV. Retrained the model, elevating `distance_km` to the #1 most important feature, ensuring dispatches correctly prioritize proximity.
+2.  **Voice-to-Text Setup & AI Resilience:** Integrated the browser Web Speech API into `Dispatch.jsx`. Created a robust, structured JSON rule-based fallback in `ai.py` that handles requests seamlessly if the Anthropic API is offline or out of credits, ensuring the frontend never crashes during the demo.
+3.  **Database N+1 Query Optimization:** Refactored the core `/api/dispatch` endpoint to use a single SQL `JOIN` query for hospital/availability lookup, eliminating 189 unnecessary database roundtrips and resolving SQL column errors.
+4.  **UI Data Parity:** Synchronized the frontend `Dispatch.jsx` state arrays with the backend's rule-based fallbacks (e.g., adding `kidney_failure`, `spinal_injury`) so all AI auto-detections map correctly to interactive UI buttons without exposing internal fallback metadata to the user.
 
 ## 5. Known Quirks / Development Notes
 *   **Authentication:** The backend `/api/auth/login` endpoint only returns an `access_token` and `token_type`. The frontend uses `jwt-decode` to extract the `role` from the token payload to determine routing.

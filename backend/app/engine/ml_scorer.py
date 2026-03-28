@@ -34,7 +34,7 @@ def _log_normalize_beds(beds: int) -> float:
     log(501)/log(501) = 1.0 (max), log(101)/log(501) ≈ 0.82,
     log(51)/log(501) ≈ 0.64 — meaningful spread without runaway values.
     """
-    return math.log(1 + max(beds, 0)) / math.log(502)
+    return min(math.log(1 + max(beds, 0)) / math.log(502), 1.0)
 
 
 def ml_score(features: dict) -> float:
@@ -49,8 +49,9 @@ def ml_score(features: dict) -> float:
         "distance_km", "beds", "icu", "equipment_match",
         "severity_weight", "has_ventilator", "has_defibrillator",
         "has_ct_scan", "has_blood_bank", "has_icu_equipment",
-        "doctor_count", "accepting", "speciality_match",
-        "hospital_load", "condition_severity"
+        "accepting", "specialist_present",
+        "hospital_load", "condition_severity",
+        "ot_available"
     ]
 
     row = np.array([[features.get(c, 0) for c in COLS]])
@@ -108,6 +109,21 @@ SEVERITY_MAP = {
     "head_injury": 3, "internal_bleeding": 3, "spinal_injury": 3,
 }
 
+CONDITION_SPECIALIST_MAP = {
+    "cardiac arrest": "cardiologist",
+    "chest pain":     "cardiologist",
+    "stroke":         "neurologist",
+    "spinal injury":  "orthopedic",
+    "trauma":         "general_surgeon",
+    "obstetric":      "gynecologist",
+    "kidney failure": "nephrologist",
+    "respiratory":    "pulmonologist",
+    "burns":          "plastic_surgeon",
+    "pediatric":      "pediatrician",
+    "seizure":        "neurologist",
+    "heart failure":  "cardiologist",
+}
+
 
 def predict_best_hospital(
     hospitals: list,
@@ -153,6 +169,16 @@ def predict_best_hospital(
             if needed else 1.0
         )
 
+        import json
+        specialists = h.get('specialists', {})
+        if isinstance(specialists, str):
+            try:
+                specialists = json.loads(specialists)
+            except:
+                specialists = {}
+        needed_specialist = CONDITION_SPECIALIST_MAP.get(condition_clean, '')
+        specialist_present = int(specialists.get(needed_specialist, 0) > 0)
+
         # FIX: pass log-normalized bed value as feature so ML model
         # sees a sane 0-1 range instead of raw 500
         score = ml_score({
@@ -166,11 +192,11 @@ def predict_best_hospital(
             "has_ct_scan":       int("ct_scan" in eq),
             "has_blood_bank":    int("blood_bank" in eq),
             "has_icu_equipment": int("icu_equipment" in eq or "icu" in eq),
-            "doctor_count":      min(h.get("doctors", 0) / 20, 1.0),    # normalized
             "accepting":         1,
-            "speciality_match":  int(condition_clean in (h.get("speciality", "") or "").lower()),
-            "hospital_load":     _log_normalize_beds(h.get("beds", 0)), # same as beds
+            "specialist_present": specialist_present,
+            "hospital_load":     min(h.get("active_cases", 0) / 20.0, 1.0),
             "condition_severity": condition_severity,
+            "ot_available":      min(h.get("ot_available", 0) / 6.0, 1.0),
         })
 
         matched = [e for e in needed if e in eq]
@@ -193,14 +219,40 @@ def predict_best_hospital(
     best = results[0]
 
     reasoning = [
-        f"Distance: {best['distance_km']} km",
+        f"Distance: {best['distance_km']} km — nearest qualified hospital",
         f"Beds: {best.get('beds', 0)}, ICU: {best.get('icu', 0)}",
     ]
+
+    # Show specialist availability
+    needed_specialist = CONDITION_SPECIALIST_MAP.get(condition_clean, '')
+    specialists = best.get('specialists', {})
+    if isinstance(specialists, str):
+        try:
+            import json
+            specialists = json.loads(specialists)
+        except:
+            specialists = {}
+
+    if needed_specialist and specialists.get(needed_specialist, 0) > 0:
+        reasoning.append(f"Specialist: {needed_specialist.replace('_', ' ').title()} available ✓")
+    elif needed_specialist:
+        reasoning.append(f"Specialist: {needed_specialist.replace('_', ' ').title()} not available")
+
+    # Show OT availability
+    ot = best.get('ot_available', 0)
+    if ot > 0:
+        reasoning.append(f"Operation Theatres available: {ot}")
+
+    # Show hospital load
+    active = best.get('active_cases', 0)
+    reasoning.append(f"Current hospital load: {active} active cases")
+
     if best["equipment_matched"]:
-        reasoning.append(f"Matched: {', '.join(best['equipment_matched'])}")
+        reasoning.append(f"Equipment matched: {', '.join(best['equipment_matched'])}")
     if best["equipment_missing"]:
-        reasoning.append(f"Missing: {', '.join(best['equipment_missing'])}")
-    reasoning.append(f"ML score: {best['final_score']}")
+        reasoning.append(f"Equipment missing: {', '.join(best['equipment_missing'])}")
+
+    reasoning.append(f"ML confidence score: {round(best['final_score'] * 100)}%")
     best["ml_reasoning"] = reasoning
 
     return best

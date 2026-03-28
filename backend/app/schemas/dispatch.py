@@ -28,7 +28,7 @@ class DispatchResponse(BaseModel):
     equipment_missing: list[str]
     hospital_lat: float
     hospital_lng: float
-    reason: str = ""
+    ml_reasoning: list[str] = []
 
 class CaseOut(BaseModel):
     id: int

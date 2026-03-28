@@ -29,7 +29,7 @@ def dispatch_ambulance(
     rows = db.execute(text("""
         SELECT
             h.id, h.name, h.address, h.lat, h.lng,
-            h.speciality,
+            NULL as speciality,
             a.beds, a.icu, a.doctors, a.equipment, a.accepting,
             a.updated_at
         FROM hospitals h
@@ -99,12 +99,6 @@ def dispatch_ambulance(
     db.commit()
     db.refresh(new_case)
 
-    reasoning_str = (
-        "; ".join(result["ml_reasoning"])
-        if isinstance(result.get("ml_reasoning"), list)
-        else str(result.get("ml_reasoning", ""))
-    )
-
     return DispatchResponse(
         case_id=new_case.id,
         hospital_id=result["id"],
@@ -120,5 +114,5 @@ def dispatch_ambulance(
         equipment_missing=result["equipment_missing"],
         hospital_lat=result["lat"],
         hospital_lng=result["lng"],
-        reason=reasoning_str,
+        ml_reasoning=result.get("ml_reasoning", []),
     )

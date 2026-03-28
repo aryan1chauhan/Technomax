@@ -1,0 +1,12 @@
+Error reading from database: (psycopg2.errors.UndefinedColumn) column a.active_cases does not exist
+LINE 4: ...ment, a.accepting, a.ot_available, a.specialists, a.active_c...
+                                                             ^
+
+[SQL: 
+            SELECT h.id, h.name, h.lat, h.lng,
+                   a.beds, a.icu, a.doctors,
+                   a.equipment, a.accepting, a.ot_available, a.specialists, a.active_cases
+            FROM hospitals h
+            JOIN availabilities a ON a.hospital_id = h.id
+        ]
+(Background on this error at: https://sqlalche.me/e/20/f405)

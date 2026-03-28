@@ -1,0 +1,48 @@
+Feature ranges (should all be 0-1, already normalized by generate_dataset.py):
+  distance_km          0.039 - 0.996  [OK]
+  beds                 0.177 - 1.065  [OK]
+  icu                  0.000 - 1.000  [OK]
+  ot_available         0.000 - 0.667  [OK]
+  hospital_load        0.000 - 0.700  [OK]
+
+Total samples : 5130
+Positive (1)  : 660 (12.87%)
+Negative (0)  : 4470
+
+Training RandomForest with class_weight='balanced'...
+
+Best threshold : 0.53
+Best F1 score  : 0.8674
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.99      0.97      0.98       894
+           1       0.82      0.92      0.87       132
+
+    accuracy                           0.96      1026
+   macro avg       0.91      0.94      0.92      1026
+weighted avg       0.97      0.96      0.96      1026
+
+ROC-AUC: 0.9833
+
+Feature Importances (distance_km should be top 3):
+   1. distance_km            0.2019 <--
+   2. has_ventilator         0.1578
+   3. beds                   0.1537
+   4. icu                    0.1492
+   5. has_blood_bank         0.0782
+   6. equipment_match        0.0569
+   7. has_icu_equipment      0.0499
+   8. hospital_load          0.0461
+   9. has_defibrillator      0.0272
+  10. has_ct_scan            0.0254
+  11. ot_available           0.0205
+  12. specialist_present     0.0163
+  13. severity_weight        0.0086
+  14. condition_severity     0.0084
+  15. accepting              0.0000
+
+>> distance_km ranked #1 -- normalization fix working correctly!
+
+Model saved: C:\Users\ARYAN\OneDrive\Desktop(1)\team tech\backend\ml_training\hospital_model.pkl

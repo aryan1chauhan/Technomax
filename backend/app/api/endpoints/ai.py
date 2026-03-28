@@ -10,6 +10,36 @@ router = APIRouter(prefix="/api/ai", tags=["AI"])
 # FIX: Lazy-init client so a missing key doesn't crash startup
 _client = None
 
+MEDICAL_KEYWORDS = {
+    "pain", "arrest", "bleed", "bleeding", "injury", "trauma", "stroke",
+    "breath", "breathing", "unconscious", "seizure", "burn", "fracture",
+    "chest", "head", "cardiac", "heart", "attack", "fall", "accident",
+    "vomit", "fever", "swelling", "allergic", "diabetic", "pregnant",
+    "labour", "delivery", "kidney", "renal", "spine", "spinal", "poison",
+    "overdose", "asthma", "respiratory", "oxygen", "paralysis", "convulsion",
+    "epilepsy", "sugar", "insulin", "blood", "baby", "birth", "drug",
+    "toxic", "fire", "scald", "anaphyla", "allerg", "hepatic", "jaundice",
+    "dialysis", "urine", "neck", "back", "congestive", "facial", "speech"
+}
+
+def _is_medical(text: str) -> bool:
+    words = set(text.lower().split())
+    # Also check substrings for compound words like "anaphylaxis"
+    full = text.lower()
+    return bool(words & MEDICAL_KEYWORDS) or any(k in full for k in MEDICAL_KEYWORDS)
+
+def _non_medical_response() -> dict:
+    return {
+        "condition_label": None,
+        "severity": 0,
+        "severity_label": "Unknown",
+        "recommended_equipment": [],
+        "notes": "No medical condition detected. Please re-describe the emergency clearly.",
+        "matched_condition_id": "none",
+        "low_confidence": True
+    }
+
+
 def get_client():
     global _client
     if _client is None:
@@ -38,6 +68,10 @@ class CaseInput(BaseModel):
 async def analyze_case(case: CaseInput):
     if not _has_key():
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not configured in .env")
+
+    # GUARD: Reject non-medical input
+    if not _is_medical(case.input):
+        return {"result": _non_medical_response()}
 
     try:
         input_lower = case.input.lower()
@@ -107,6 +141,9 @@ async def recommend_equipment(body: VoiceInput):
     Called by Dispatch.jsx after the paramedic speaks.
     If API key missing, returns a graceful fallback instead of 500.
     """
+    # GUARD: Reject non-medical input before hitting Claude or fallback
+    if not _is_medical(body.voice_text):
+        return _non_medical_response()
     client = get_client()
 
     # FIX: Graceful fallback when no API key — rule-based equipment suggestions
@@ -199,6 +236,36 @@ def _rule_based_fallback(text: str) -> dict:
         condition_id = "obstetric"
         condition_label = "Obstetric Emergency"
         severity = 3
+    elif any(w in t for w in ["kidney", "renal", "dialysis", "urine", "urinary"]):
+        equipment = ["ventilator", "blood_bank", "icu_equipment"]
+        condition_id = "kidney_failure"
+        condition_label = "Kidney Failure"
+        severity = 2
+    elif any(w in t for w in ["liver", "jaundice", "hepatic"]):
+        equipment = ["blood_bank", "ventilator", "icu_equipment"]
+        condition_id = "liver_failure"
+        condition_label = "Liver Failure"
+        severity = 2
+    elif any(w in t for w in ["seizure", "convulsion", "epilepsy", "fitting"]):
+        equipment = ["ventilator", "ct_scan", "icu_equipment"]
+        condition_id = "seizure"
+        condition_label = "Seizure"
+        severity = 2
+    elif any(w in t for w in ["spine", "spinal", "neck injury", "back injury", "paralysed"]):
+        equipment = ["ct_scan", "ventilator", "icu_equipment"]
+        condition_id = "spinal_injury"
+        condition_label = "Spinal Injury"
+        severity = 3
+    elif any(w in t for w in ["heart failure", "cardiac failure", "congestive"]):
+        equipment = ["defibrillator", "ecg", "ventilator", "icu_equipment", "blood_bank"]
+        condition_id = "heart_failure"
+        condition_label = "Heart Failure"
+        severity = 4
+    elif any(w in t for w in ["allerg", "anaphyla", "bee sting", "swelling throat"]):
+        equipment = ["ventilator"]
+        condition_id = "allergic_reaction"
+        condition_label = "Allergic Reaction"
+        severity = 2
 
     return {
         "condition_label": condition_label,

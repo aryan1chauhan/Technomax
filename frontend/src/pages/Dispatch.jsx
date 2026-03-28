@@ -3,52 +3,57 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 
-// ─── Equipment rules (rule-based fallback + base for AI merge) ────────────────
 const CONDITION_EQUIPMENT = {
-  cardiac_arrest:   ["defibrillator", "ventilator", "ecg", "blood_bank", "icu_equipment"],
-  chest_pain:       ["ecg", "ventilator", "blood_bank"],
-  stroke:           ["ct_scan", "ventilator", "blood_bank", "icu_equipment"],
-  trauma:           ["blood_bank", "ventilator", "icu_equipment", "ct_scan"],
-  respiratory:      ["ventilator", "icu_equipment"],
-  burns:            ["ventilator", "blood_bank", "icu_equipment"],
-  poisoning:        ["ventilator", "icu_equipment"],
-  obstetric:        ["blood_bank", "ventilator", "icu_equipment"],
-  pediatric:        ["ventilator", "icu_equipment"],
-  diabetic:         ["blood_bank", "icu_equipment"],
-  fracture:         ["ct_scan"],
-  snake_bite:       ["blood_bank", "ventilator"],
-  drowning:         ["ventilator", "icu_equipment", "defibrillator"],
-  electrocution:    ["defibrillator", "ventilator", "ecg"],
-  seizure:          ["ventilator", "ct_scan", "icu_equipment"],
-  allergic_reaction:["ventilator"],
-  heart_failure:    ["defibrillator", "ecg", "ventilator", "icu_equipment", "blood_bank"],
-  kidney_failure:   ["ventilator", "blood_bank", "icu_equipment"],
-  liver_failure:    ["blood_bank", "ventilator", "icu_equipment"],
-  spinal_injury:    ["ct_scan", "ventilator", "icu_equipment"],
+  cardiac_arrest:    ["defibrillator", "ventilator", "ecg", "blood_bank", "icu_equipment"],
+  chest_pain:        ["ecg", "ventilator", "blood_bank"],
+  stroke:            ["ct_scan", "ventilator", "blood_bank", "icu_equipment"],
+  trauma:            ["blood_bank", "ventilator", "icu_equipment", "ct_scan"],
+  respiratory:       ["ventilator", "icu_equipment"],
+  burns:             ["ventilator", "blood_bank", "icu_equipment"],
+  poisoning:         ["ventilator", "icu_equipment"],
+  obstetric:         ["blood_bank", "ventilator", "icu_equipment"],
+  pediatric:         ["ventilator", "icu_equipment"],
+  diabetic:          ["blood_bank", "icu_equipment"],
+  fracture:          ["ct_scan"],
+  snake_bite:        ["blood_bank", "ventilator"],
+  drowning:          ["ventilator", "icu_equipment", "defibrillator"],
+  electrocution:     ["defibrillator", "ventilator", "ecg"],
+  seizure:           ["ventilator", "ct_scan", "icu_equipment"],
+  allergic_reaction: ["ventilator"],
+  heart_failure:     ["defibrillator", "ecg", "ventilator", "icu_equipment", "blood_bank"],
+  kidney_failure:    ["ventilator", "blood_bank", "icu_equipment"],
+  liver_failure:     ["blood_bank", "ventilator", "icu_equipment"],
+  spinal_injury:     ["ct_scan", "ventilator", "icu_equipment"],
 };
 
 const EQUIPMENT_LABELS = {
   defibrillator: "Defibrillator",
-  ventilator: "Ventilator",
-  ecg: "ECG Monitor",
-  ct_scan: "CT Scan",
-  blood_bank: "Blood Bank",
+  ventilator:    "Ventilator",
+  ecg:           "ECG Monitor",
+  ct_scan:       "CT Scan",
+  blood_bank:    "Blood Bank",
   icu_equipment: "ICU Equipment",
 };
 
 const ALL_EQUIPMENT = Object.keys(EQUIPMENT_LABELS);
 
 const CONDITIONS = [
-  { id: "cardiac_arrest", label: "Cardiac Arrest",   icon: "♥",  color: "#EE3B3B" },
-  { id: "chest_pain",     label: "Chest Pain",       icon: "⚡", color: "#FF6B35" },
-  { id: "stroke",         label: "Stroke / TIA",     icon: "🧠", color: "#9B59B6" },
-  { id: "trauma",         label: "Trauma / Injury",  icon: "🩹", color: "#E67E22" },
-  { id: "respiratory",    label: "Respiratory",       icon: "💨", color: "#3498DB" },
-  { id: "burns",          label: "Burns",             icon: "🔥", color: "#E74C3C" },
-  { id: "poisoning",      label: "Poisoning / OD",   icon: "☠",  color: "#2ECC71" },
-  { id: "obstetric",      label: "Obstetric",         icon: "🤰", color: "#E91E8C" },
-  { id: "pediatric",      label: "Pediatric",         icon: "👶", color: "#00BCD4" },
-  { id: "diabetic",       label: "Diabetic Emergency",icon: "💉", color: "#FF9800" },
+  { id: "cardiac_arrest",    label: "Cardiac Arrest",    icon: "♥",  color: "#EE3B3B" },
+  { id: "chest_pain",        label: "Chest Pain",        icon: "⚡", color: "#FF6B35" },
+  { id: "stroke",            label: "Stroke / TIA",      icon: "🧠", color: "#9B59B6" },
+  { id: "trauma",            label: "Trauma / Injury",   icon: "🩹", color: "#E67E22" },
+  { id: "respiratory",       label: "Respiratory",        icon: "💨", color: "#3498DB" },
+  { id: "burns",             label: "Burns",              icon: "🔥", color: "#E74C3C" },
+  { id: "poisoning",         label: "Poisoning / OD",    icon: "☠",  color: "#2ECC71" },
+  { id: "obstetric",         label: "Obstetric",          icon: "🤰", color: "#E91E8C" },
+  { id: "pediatric",         label: "Pediatric",          icon: "👶", color: "#00BCD4" },
+  { id: "diabetic",          label: "Diabetic Emergency", icon: "💉", color: "#FF9800" },
+  // FIX: Added kidney_failure as selectable condition — was in CONDITION_EQUIPMENT but not CONDITIONS
+  { id: "kidney_failure",    label: "Kidney Failure",     icon: "🫘", color: "#6C5CE7" },
+  { id: "seizure",           label: "Seizure",            icon: "⚡", color: "#E17055" },
+  { id: "allergic_reaction", label: "Allergic Reaction",  icon: "🌿", color: "#00B894" },
+  { id: "spinal_injury",     label: "Spinal Injury",      icon: "🦴", color: "#636E72" },
+  { id: "heart_failure",     label: "Heart Failure",      icon: "💔", color: "#D63031" },
 ];
 
 const SEVERITY_LEVELS = [
@@ -58,7 +63,15 @@ const SEVERITY_LEVELS = [
   { value: 4, label: "Critical", color: "#EE3B3B", bg: "#FFF0F0" },
 ];
 
-// ─── AI Equipment Analyzer (via backend proxy) ──────────────────────────────
+// FIX: Filter out internal fallback notes — never show "Rule-based assessment (AI offline)" to user
+function isInternalNote(text) {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  return t.includes("rule-based assessment") ||
+         t.includes("ai offline") ||
+         t.includes("(ai offline)");
+}
+
 async function analyzeWithAI(voiceText) {
   try {
     const res = await api.post("/api/ai/equipment-recommend", { voice_text: voiceText });
@@ -68,7 +81,6 @@ async function analyzeWithAI(voiceText) {
   }
 }
 
-// ─── Voice Pulse Animation ────────────────────────────────────────────────────
 function VoicePulse({ active }) {
   return (
     <div className="flex items-center gap-[3px] h-6">
@@ -90,11 +102,9 @@ function VoicePulse({ active }) {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
 export default function Dispatch() {
   const navigate = useNavigate();
 
-  // Form state
   const [selectedCondition, setSelectedCondition] = useState(null);
   const [checkedEquipment, setCheckedEquipment] = useState([]);
   const [notes, setNotes] = useState("");
@@ -103,7 +113,6 @@ export default function Dispatch() {
   const [gpsLabel, setGpsLabel] = useState("Acquiring GPS...");
   const [gpsReady, setGpsReady] = useState(false);
 
-  // Voice state
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [voiceError, setVoiceError] = useState("");
@@ -111,13 +120,13 @@ export default function Dispatch() {
   const [aiResult, setAiResult] = useState(null);
   const [showVoicePanel, setShowVoicePanel] = useState(false);
   const [aiSuggestedItems, setAiSuggestedItems] = useState([]);
+  // FIX: Track whether AI result is from real Claude or rule-based fallback
+  const [aiIsRealResult, setAiIsRealResult] = useState(false);
 
-  // Misc
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const recognitionRef = useRef(null);
 
-  // ── Get GPS on mount
   useEffect(() => {
     if (!navigator.geolocation) {
       setLat(30.3165); setLng(78.0322);
@@ -139,7 +148,6 @@ export default function Dispatch() {
     );
   }, []);
 
-  // ── Auto-select equipment when condition changes
   useEffect(() => {
     if (selectedCondition) {
       const base = CONDITION_EQUIPMENT[selectedCondition] || [];
@@ -148,7 +156,6 @@ export default function Dispatch() {
     }
   }, [selectedCondition]);
 
-  // ── Voice recognition
   const startListening = useCallback(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { setVoiceError("Voice input not supported. Use Chrome or Edge."); return; }
@@ -172,6 +179,7 @@ export default function Dispatch() {
     setVoiceError("");
     setVoiceTranscript("");
     setAiResult(null);
+    setAiIsRealResult(false);
   }, []);
 
   const stopListening = useCallback(() => {
@@ -179,24 +187,37 @@ export default function Dispatch() {
     setIsListening(false);
   }, []);
 
-  // ── Analyze voice with backend AI
   const analyzeVoice = useCallback(async () => {
     if (!voiceTranscript.trim()) return;
     setIsAnalyzing(true);
     setError("");
     const result = await analyzeWithAI(voiceTranscript);
+
     if (result) {
+      if (result.low_confidence) {
+        setVoiceError("No medical condition detected. Please re-describe the emergency.");
+        setAiResult(null);
+        setIsAnalyzing(false);
+        return;
+      }
       setAiResult(result);
-      if (result.notes) setNotes(result.notes);
+
+      // FIX: Only set notes if it's a real AI note, not the internal fallback message
+      if (result.notes && !isInternalNote(result.notes)) {
+        setNotes(result.notes);
+      }
+      // FIX: Detect if this is real AI or rule-based fallback
+      const isReal = !isInternalNote(result.notes || "");
+      setAiIsRealResult(isReal);
+
       if (result.matched_condition_id && result.matched_condition_id !== "other") {
         setSelectedCondition(result.matched_condition_id);
       }
-      // Merge AI equipment suggestions with condition defaults
+
       if (result.recommended_equipment?.length) {
         const baseEquip = result.matched_condition_id !== "other"
           ? (CONDITION_EQUIPMENT[result.matched_condition_id] || [])
           : [];
-        // Normalize AI suggestions to match our equipment keys
         const normalizeMap = {
           "defibrillator": "defibrillator", "ventilator": "ventilator",
           "ecg monitor": "ecg", "ecg": "ecg", "ct scan": "ct_scan",
@@ -213,8 +234,8 @@ export default function Dispatch() {
         setAiSuggestedItems(aiExtra);
       }
     } else {
-      setNotes(voiceTranscript);
-      setError("AI analysis unavailable — transcript saved as notes. Select condition manually.");
+      // Complete failure — don't pollute notes, just show error
+      setError("Could not analyze voice. Please select condition manually.");
     }
     setIsAnalyzing(false);
   }, [voiceTranscript]);
@@ -225,7 +246,6 @@ export default function Dispatch() {
     );
   };
 
-  // ── Submit dispatch
   const handleSubmit = async () => {
     if (!selectedCondition) { setError("Please select a patient condition."); return; }
     setLoading(true); setError("");
@@ -236,15 +256,18 @@ export default function Dispatch() {
         equipment_needed: checkedEquipment,
         ambulance_lat: lat,
         ambulance_lng: lng,
-        notes: notes || null,
+        // FIX: Only send notes if they're real (not internal fallback text)
+        notes: (notes && !isInternalNote(notes)) ? notes : null,
       });
-      navigate("/result", { state: { result: res.data, lat, lng } });
+      navigate("/result", { state: { result: res.data, ambLat: lat, ambLng: lng } });
     } catch (e) {
       setError(e.response?.data?.detail || "Dispatch failed. Please try again.");
     } finally { setLoading(false); }
   };
 
-  const currentSeverityObj = aiResult ? SEVERITY_LEVELS.find(s => s.value === aiResult.severity) : null;
+  const currentSeverityObj = aiResult
+    ? SEVERITY_LEVELS.find(s => s.value === aiResult.severity)
+    : null;
 
   return (
     <div className="min-h-screen bg-[#F7F7FC] font-['Inter',sans-serif]">
@@ -269,7 +292,7 @@ export default function Dispatch() {
 
       <div className="max-w-[960px] mx-auto px-8 py-8">
 
-        {/* ── VOICE INPUT SECTION ─────────────────────────────────────── */}
+        {/* VOICE PANEL */}
         <div className={`rounded-xl border-[1.5px] p-5 mb-6 transition-all ${showVoicePanel ? "bg-[#EBF3FF] border-[#1A78F2]" : "bg-white border-[#F0F2F7]"}`}>
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
@@ -334,7 +357,10 @@ export default function Dispatch() {
                 <div className="mt-4 bg-white border-[1.5px] border-[#17B86B] rounded-[10px] p-4">
                   <div className="flex items-center gap-1.5 mb-3">
                     <span className="text-[14px]">✅</span>
-                    <span className="font-semibold text-[#17B86B] text-[14px]">AI Analysis Complete</span>
+                    <span className="font-semibold text-[#17B86B] text-[14px]">
+                      {/* FIX: Show "AI Analysis" vs "Smart Detection" depending on source */}
+                      {aiIsRealResult ? "AI Analysis Complete" : "Smart Detection Complete"}
+                    </span>
                   </div>
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div className="bg-[#F7F7FC] rounded-lg px-3 py-2">
@@ -348,9 +374,23 @@ export default function Dispatch() {
                       </div>
                     </div>
                   </div>
-                  {aiResult.notes && (
+                  {/* FIX: Only show hospital note if it's a real note, never show internal fallback text */}
+                  {aiResult.notes && !isInternalNote(aiResult.notes) && (
                     <div className="bg-[#FFFBEB] border border-[#FFE082] rounded-lg px-3 py-2 text-[13px] text-[#7A5C00]">
                       <strong>Hospital note:</strong> {aiResult.notes}
+                    </div>
+                  )}
+                  {/* FIX: Show equipment that was auto-selected so user knows what happened */}
+                  {checkedEquipment.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-[#E8F5E9]">
+                      <div className="text-[11px] text-[#737A8F] mb-2">Equipment auto-selected based on condition:</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {checkedEquipment.map(eq => (
+                          <span key={eq} className="text-[11px] bg-[#EBF3FF] text-[#1A78F2] border border-[#BDD6FF] rounded px-2 py-0.5 font-medium">
+                            ✓ {EQUIPMENT_LABELS[eq] || eq}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -365,7 +405,7 @@ export default function Dispatch() {
           <div className="flex-1 h-px bg-[#E2E6F0]" />
         </div>
 
-        {/* ── CONDITION GRID ──────────────────────────────────────────── */}
+        {/* CONDITION GRID */}
         <div className="bg-white border border-[#F0F2F7] rounded-xl p-5 mb-6">
           <h3 className="text-[13px] font-semibold text-[#404454] uppercase tracking-wider mb-4">Patient Condition</h3>
           <div className="grid grid-cols-5 gap-3">
@@ -389,7 +429,7 @@ export default function Dispatch() {
           </div>
         </div>
 
-        {/* ── EQUIPMENT PANEL ─────────────────────────────────────────── */}
+        {/* EQUIPMENT PANEL */}
         {(selectedCondition || aiResult) && (
           <div className="bg-white border-[1.5px] border-[#1A78F2] rounded-xl p-5 mb-6 animate-[fadeIn_0.3s_ease]">
             <style>{`@keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}`}</style>
@@ -400,7 +440,7 @@ export default function Dispatch() {
                   <div className="font-semibold text-[14px] text-[#1A1E2E]">Recommended Equipment</div>
                   <div className="text-[12px] text-[#737A8F]">
                     {aiSuggestedItems.length > 0
-                      ? `Rule-based + ${aiSuggestedItems.length} AI suggestions`
+                      ? `Condition defaults + ${aiSuggestedItems.length} AI additions`
                       : `Auto-suggested for ${CONDITIONS.find(c => c.id === selectedCondition)?.label || "condition"}`}
                   </div>
                 </div>
@@ -447,7 +487,7 @@ export default function Dispatch() {
           </div>
         )}
 
-        {/* ── NOTES ───────────────────────────────────────────────────── */}
+        {/* NOTES */}
         <div className="bg-white border border-[#F0F2F7] rounded-xl p-5 mb-6">
           <label className="text-[12px] text-[#737A8F] block mb-2">Additional Notes (optional)</label>
           <textarea
@@ -459,14 +499,12 @@ export default function Dispatch() {
           />
         </div>
 
-        {/* ── ERROR ───────────────────────────────────────────────────── */}
         {error && (
           <div className="bg-[#FFF0F0] border border-[#FFCDD2] rounded-lg px-4 py-3 text-[#EE3B3B] text-[13px] mb-4 flex items-center gap-2">
             ⚠ {error}
           </div>
         )}
 
-        {/* ── DISPATCH BUTTON ─────────────────────────────────────────── */}
         <button
           onClick={handleSubmit}
           disabled={loading || !gpsReady}

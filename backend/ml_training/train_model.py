@@ -17,7 +17,7 @@ df = pd.read_csv(os.path.join(BASE_DIR, "training_data.csv"))
 # using the same functions as ml_scorer.py. Do NOT re-normalize here.
 # Verify the ranges look sane (all should be 0-1)
 print("Feature ranges (should all be 0-1, already normalized by generate_dataset.py):")
-for col in ['distance_km', 'beds', 'icu', 'doctor_count', 'hospital_load']:
+for col in ['distance_km', 'beds', 'icu', 'ot_available', 'hospital_load']:
     lo, hi = df[col].min(), df[col].max()
     ok = "OK" if hi <= 1.1 else "RAW - NEEDS FIX"
     print(f"  {col:20s} {lo:.3f} - {hi:.3f}  [{ok}]")
@@ -27,8 +27,9 @@ FEATURES = [
     "distance_km", "beds", "icu", "equipment_match",
     "severity_weight", "has_ventilator", "has_defibrillator",
     "has_ct_scan", "has_blood_bank", "has_icu_equipment",
-    "doctor_count", "accepting", "speciality_match",
-    "hospital_load", "condition_severity"
+    "accepting", "specialist_present",
+    "hospital_load", "condition_severity",
+    "ot_available"
 ]
 
 X = df[FEATURES]
@@ -97,7 +98,7 @@ output = {
         "beds":         "log(1+x)/log(502)",
         "hospital_load":"log(1+x)/log(502)",
         "icu":          "min(x/50, 1.0)",
-        "doctor_count": "min(x/20, 1.0)",
+        "ot_available": "min(x/6, 1.0)",
         "distance_km":  "1/(1+x*0.1)  [higher=closer]",
     }
 }

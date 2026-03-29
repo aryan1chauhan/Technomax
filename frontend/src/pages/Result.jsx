@@ -1,4 +1,3 @@
-// frontend/src/pages/Result.jsx
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
@@ -8,8 +7,8 @@ export default function Result() {
   const [show, setShow] = useState(false);
 
   const result = state?.result;
-  const ambLat = state?.lat;
-  const ambLng = state?.lng;
+  const ambLat = state?.ambLat ?? state?.lat;   // FIX: accept both key names
+  const ambLng = state?.ambLng ?? state?.lng;
 
   useEffect(() => {
     if (!result) { navigate("/dispatch"); return; }
@@ -31,9 +30,24 @@ export default function Result() {
     { val: result.icu ?? "—", label: "ICU Beds" },
   ];
 
+  // FIX: Build map state that matches exactly what Map.jsx reads:
+  // data.ambLat, data.ambLng, data.result.hospital_lat, data.result.hospital_lng,
+  // data.result.case_id, data.result.hospital_name, data.result.eta_minutes, data.result.distance_km
+  const mapState = {
+    ambLat,
+    ambLng,
+    result: {
+      hospital_lat:  result.hospital_lat,
+      hospital_lng:  result.hospital_lng,
+      hospital_name: result.hospital_name,
+      case_id:       result.case_id,
+      eta_minutes:   result.eta_minutes,
+      distance_km:   result.distance_km,
+    },
+  };
+
   return (
     <div className="min-h-screen bg-[#F7F7FC] font-['Inter',sans-serif]">
-
       {/* Nav */}
       <nav className="bg-white border-b border-[#F0F2F7] h-16 flex items-center px-8 gap-3">
         <div className="relative w-9 h-9 bg-[#17B86B] rounded-lg flex items-center justify-center">
@@ -57,7 +71,6 @@ export default function Result() {
 
         {/* Main card */}
         <div className="bg-white rounded-2xl border border-[#F0F2F7] overflow-hidden shadow-sm mb-6">
-          {/* Top stripe */}
           <div className="h-1.5 bg-[#EE3B3B] w-full" />
           <div className="p-8">
             <p className="text-[11px] font-bold text-[#EE3B3B] tracking-widest mb-1">ASSIGNED HOSPITAL</p>
@@ -80,7 +93,7 @@ export default function Result() {
               </div>
             </div>
 
-            {/* Stats row */}
+            {/* Stats */}
             <div className="grid grid-cols-4 gap-0 border border-[#F0F2F7] rounded-xl overflow-hidden mb-6">
               {stats.map(({ val, label }, i) => (
                 <div key={label} className={`p-5 ${i < 3 ? "border-r border-[#F0F2F7]" : ""}`}>
@@ -90,12 +103,12 @@ export default function Result() {
               ))}
             </div>
 
-            {/* Equipment matched */}
-            {result.equipment_matched?.length > 0 && (
+            {/* Equipment */}
+            {(result.equipment_matched?.length > 0 || result.equipment_missing?.length > 0) && (
               <div>
-                <p className="text-[12px] text-[#737A8F] mb-2">Equipment Matched</p>
+                <p className="text-[12px] text-[#737A8F] mb-2">Equipment</p>
                 <div className="flex flex-wrap gap-2">
-                  {result.equipment_matched.map(eq => (
+                  {result.equipment_matched?.map(eq => (
                     <span key={eq} className="bg-[#E8FDF2] text-[#17B86B] text-[11px] font-semibold px-3 py-1 rounded-full">
                       {eq.replace(/_/g, " ")} ✓
                     </span>
@@ -108,19 +121,51 @@ export default function Result() {
                 </div>
               </div>
             )}
+
+            {/* ML Reasoning */}
+            {result.ml_reasoning?.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-[#F0F2F7]">
+                <p className="text-[14px] font-bold text-[#1A1E2E] mb-4 flex items-center gap-2">
+                  <span className="text-[16px]">🧠</span> Explaining the Model's Choice
+                </p>
+                <div className="bg-[#F8FAFC] rounded-xl p-5 border border-[#E2E8F0]">
+                  <ul className="space-y-3.5">
+                    {result.ml_reasoning.map((line, i) => (
+                      <li key={i} className="text-[13.5px] text-[#334155] flex items-start gap-3 leading-relaxed font-medium">
+                        <span className="text-[#3B82F6] font-bold mt-0.5">✦</span>
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {/* FIX: Show reason string if ml_reasoning array is missing */}
+            {!result.ml_reasoning?.length && result.reason && (
+              <div className="mt-8 pt-6 border-t border-[#F0F2F7]">
+                <p className="text-[14px] font-bold text-[#1A1E2E] mb-4 flex items-center gap-2">
+                  <span className="text-[16px]">🧠</span> Explaining the Model's Choice
+                </p>
+                <div className="bg-[#F8FAFC] rounded-xl p-5 border border-[#E2E8F0]">
+                  <ul className="space-y-3.5">
+                    {result.reason.split(";").map((line, i) => (
+                      <li key={i} className="text-[13.5px] text-[#334155] flex items-start gap-3 leading-relaxed font-medium">
+                        <span className="text-[#3B82F6] font-bold mt-0.5">✦</span>
+                        <span>{line.trim()}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Action buttons */}
         <div className="flex gap-4 mb-6">
           <button
-            onClick={() => navigate("/map", {
-              state: {
-                hospital: { lat: result.hospital_lat, lng: result.hospital_lng, name: result.hospital_name },
-                caseId: result.case_id,
-                ambLat, ambLng,
-              },
-            })}
+            onClick={() => navigate("/map", { state: mapState })}
             className="flex-1 h-[56px] bg-[#1A78F2] hover:bg-[#1259C8] text-white font-bold text-[15px] rounded-xl transition"
           >
             🗺&nbsp; Open Navigation Map
@@ -133,19 +178,6 @@ export default function Result() {
           </button>
         </div>
 
-        {/* ML Reasoning */}
-        {result.ml_reasoning?.length > 0 && (
-          <div className="bg-white rounded-xl border border-[#F0F2F7] p-6">
-            <p className="text-[14px] font-bold text-[#1A1E2E] mb-3">Why this hospital?</p>
-            <ul className="space-y-2">
-              {result.ml_reasoning.map((line, i) => (
-                <li key={i} className="text-[13px] text-[#737A8F] flex gap-2">
-                  <span className="text-[#1A78F2] font-bold">•</span> {line}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
     </div>
   );

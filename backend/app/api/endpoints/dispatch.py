@@ -31,7 +31,7 @@ def dispatch_ambulance(
             h.id, h.name, h.address, h.lat, h.lng,
             NULL as speciality,
             a.beds, a.icu, a.doctors, a.equipment, a.accepting,
-            a.updated_at
+            a.updated_at, a.specialists
         FROM hospitals h
         JOIN availabilities a ON a.hospital_id = h.id
         -- Keep only the most recent availability row per hospital
@@ -65,6 +65,7 @@ def dispatch_ambulance(
             "doctors":    r[8] or 0,
             "equipment":  equipment,
             "accepting":  bool(r[10]),
+            "specialists": r[12] or {},
         })
 
     result = predict_best_hospital(

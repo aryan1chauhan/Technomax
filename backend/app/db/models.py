@@ -1,6 +1,7 @@
 
 
-from sqlalchemy import Column, Integer, String, Float, Boolean, ARRAY, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, ARRAY, DateTime, ForeignKey, JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from app.db.database import Base
 
@@ -22,6 +23,7 @@ class Hospital(Base):
     address = Column(String)
     lat = Column(Float)
     lng = Column(Float)
+    specialists = Column(JSON, default=dict)
 
 class Availability(Base):
     __tablename__ = "availabilities"
@@ -33,6 +35,7 @@ class Availability(Base):
     doctors = Column(Integer, default=0)
     equipment = Column(ARRAY(String), default=[])
     accepting = Column(Boolean, default=True)
+    specialists = Column(JSONB, default=dict)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 class Case(Base):

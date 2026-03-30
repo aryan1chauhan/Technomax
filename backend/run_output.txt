@@ -1,0 +1,21 @@
+=== USERS ===
+(4, 'amb1@test.com', 'ambulance', None)
+(5, 'hospital@test.com', 'hospital', 25)
+(39, 'hospital_user_25@test.com', 'hospital', 25)
+(40, 'bhagwati@test.com', 'hospital', 28)
+(41, 'admin@test.com', 'admin', None)
+
+=== RECENT CASES ===
+(7690, 'chest_pain', 26, 0.5573, 2.89)
+(7689, 'allergic_reaction', 26, 0.5573, 2.88)
+(7688, 'cardiac_arrest', 26, 0.6006, 2.88)
+(7687, 'cardiac_arrest', 26, 0.6006, 2.9)
+(7686, 'heart_failure', 26, 0.5403, 2.88)
+
+=== HOSPITAL USERS ===
+('hospital_user_25@test.com', 25, 'Civil Hospital Roorkee')
+('hospital@test.com', 25, 'Civil Hospital Roorkee')
+('bhagwati@test.com', 28, 'Bhagwati Hospital')
+
+=== ADMIN USER CHECK ===
+(41, 'admin@test.com', 'admin', '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW')

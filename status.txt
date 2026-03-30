@@ -1,0 +1,7 @@
+ M docker-compose.yml
+ M frontend/src/pages/Map.jsx
+ M frontend/src/pages/Result.jsx
+?? backend/diagnose.py
+?? backend/fix_db.py
+?? backend/run_output.txt
+?? status.txt

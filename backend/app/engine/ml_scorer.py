@@ -122,6 +122,18 @@ CONDITION_SPECIALIST_MAP = {
     "pediatric":      "pediatrician",
     "seizure":        "neurologist",
     "heart failure":  "cardiologist",
+    "head injury":          "neurologist",
+    "internal bleeding":    "general_surgeon",
+    "chest injury":         "cardiothoracic_surgeon",
+    "anaphylaxis":          "emergency_physician",
+    "allergic reaction":    "emergency_physician",
+    "poisoning":            "emergency_physician",
+    "fracture":             "orthopedic",
+    "broken bone":          "orthopedic",
+    "diabetic":             "endocrinologist",
+    "hypoglycemic crisis":  "endocrinologist",
+    "severe bleeding":      "general_surgeon",
+    "pelvic injury":        "orthopedic",
 }
 
 
@@ -158,6 +170,29 @@ def predict_best_hospital(
     accepting.sort(key=lambda h: h["_dist"])
     candidates = accepting[:30]
 
+    import json
+    for h in candidates:
+        if isinstance(h.get('specialists'), str):
+            try:
+                h['specialists'] = json.loads(h['specialists'])
+            except:
+                h['specialists'] = {}
+        elif not isinstance(h.get('specialists'), dict):
+            h['specialists'] = {}
+
+    # === SPECIALIST PRE-FILTER ===
+    needed_specialist = CONDITION_SPECIALIST_MAP.get(condition_clean, '')
+    no_specialist_warning = False
+    if needed_specialist:
+        specialist_candidates = [
+            h for h in candidates
+            if h.get('specialists', {}).get(needed_specialist, 0) > 0
+        ]
+        if specialist_candidates:
+            candidates = specialist_candidates
+        else:
+            no_specialist_warning = True
+
     results = []
 
     for h in candidates:
@@ -169,14 +204,7 @@ def predict_best_hospital(
             if needed else 1.0
         )
 
-        import json
         specialists = h.get('specialists', {})
-        if isinstance(specialists, str):
-            try:
-                specialists = json.loads(specialists)
-            except:
-                specialists = {}
-        needed_specialist = CONDITION_SPECIALIST_MAP.get(condition_clean, '')
         specialist_present = int(specialists.get(needed_specialist, 0) > 0)
 
         # FIX: pass log-normalized bed value as feature so ML model
@@ -224,19 +252,15 @@ def predict_best_hospital(
     ]
 
     # Show specialist availability
-    needed_specialist = CONDITION_SPECIALIST_MAP.get(condition_clean, '')
     specialists = best.get('specialists', {})
-    if isinstance(specialists, str):
-        try:
-            import json
-            specialists = json.loads(specialists)
-        except:
-            specialists = {}
 
     if needed_specialist and specialists.get(needed_specialist, 0) > 0:
         reasoning.append(f"Specialist: {needed_specialist.replace('_', ' ').title()} available ✓")
     elif needed_specialist:
         reasoning.append(f"Specialist: {needed_specialist.replace('_', ' ').title()} not available")
+        
+    if no_specialist_warning and needed_specialist:
+        reasoning.append(f"⚠️ No {needed_specialist.replace('_', ' ').title()} available nearby — routing to best equipped hospital")
 
     # Show OT availability
     ot = best.get('ot_available', 0)

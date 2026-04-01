@@ -104,7 +104,8 @@ export default function MapPage() {
     if (!caseId) return;
     let reconnectTimer;
     const connect = () => {
-      const ws = new WebSocket(`ws://${window.location.host}/ws/ambulance/${caseId}`);
+      const token = localStorage.getItem('token');
+      const ws = new WebSocket(`ws://${window.location.host}/ws/ambulance/${caseId}?token=${token}`);
       ws.onopen  = () => console.log("WS connected");
       ws.onerror = (e) => console.error("WS error", e);
       ws.onclose = () => { reconnectTimer = setTimeout(connect, 2000); };

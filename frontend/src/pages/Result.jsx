@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import CaseTimeline from "../components/CaseTimeline";
 
 export default function Result() {
   const { state }  = useLocation();
@@ -161,6 +162,9 @@ export default function Result() {
             )}
           </div>
         </div>
+
+        {/* Timeline */}
+        <CaseTimeline caseId={result.case_id} role="ambulance" />
 
         {/* Action buttons */}
         <div className="flex gap-4 mb-6">

@@ -17,20 +17,20 @@ export default function App() {
         <Route path="/login" element={<Login />} />
 
         {/* Ambulance routes */}
-        <Route element={<ProtectedRoute />}>
+        <Route element={<ProtectedRoute allowedRoles={["ambulance"]} />}>
           <Route path="/dispatch" element={<Dispatch />} />
           <Route path="/result" element={<Result />} />
           <Route path="/map" element={<Map />} />
         </Route>
 
         {/* Hospital routes */}
-        <Route element={<ProtectedRoute />}>
+        <Route element={<ProtectedRoute allowedRoles={["hospital"]} />}>
           <Route path="/hospital/dashboard" element={<HospitalDashboard />} />
           <Route path="/hospital/track/:case_id" element={<HospitalTrack />} />
         </Route>
 
         {/* Admin routes */}
-        <Route element={<ProtectedRoute />}>
+        <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
         </Route>
       </Routes>

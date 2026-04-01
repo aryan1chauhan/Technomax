@@ -1,0 +1,15 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.0.1, pluggy-1.6.0
+rootdir: C:\Users\ARYAN\OneDrive\Desktop(1)\team tech\backend
+plugins: anyio-4.11.0
+collected 19 items
+
+tests\test_cases.py ...................                                  [100%]
+
+============================== warnings summary ===============================
+tests/test_cases.py: 570 warnings
+  C:\Users\ARYAN\AppData\Local\Programs\Python\Python312\Lib\site-packages\sklearn\utils\validation.py:2691: UserWarning: X does not have valid feature names, but RandomForestClassifier was fitted with feature names
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+====================== 19 passed, 570 warnings in 32.44s ======================

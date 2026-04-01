@@ -15,6 +15,7 @@ class DispatchRequest(BaseModel):
 
 class DispatchResponse(BaseModel):
     case_id: int
+    status: str
     hospital_id: int
     hospital_name: str
     address: str
@@ -32,6 +33,7 @@ class DispatchResponse(BaseModel):
 
 class CaseOut(BaseModel):
     id: int
+    status: str
     condition: str
     equipment_needed: list[str]
     ambulance_lat: float

@@ -2,16 +2,23 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.db.database import get_db
-from app.db.models import Case, User
+from app.db.models import Case, User, Availability, CaseEvent
+from datetime import datetime, timezone
 from app.schemas.dispatch import DispatchRequest, DispatchResponse
 from app.core.security import get_current_user
 from app.engine.ml_scorer import predict_best_hospital
+
+import asyncio
+import httpx
+import logging
+from app.core.config import settings
+from fastapi import APIRouter, Depends, HTTPException, status
 
 router = APIRouter(prefix="/api/dispatch")
 
 
 @router.post("/", response_model=DispatchResponse)
-def dispatch_ambulance(
+async def dispatch_ambulance(
     request: DispatchRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -26,21 +33,26 @@ def dispatch_ambulance(
     # Previously: db.query(Hospital) then loop with db.query(Availability) per hospital
     # = 1 + 188 = 189 DB round-trips per dispatch → slow.
     # Now: 1 query total, roughly 20-50x faster.
-    rows = db.execute(text("""
-        SELECT
-            h.id, h.name, h.address, h.lat, h.lng,
-            NULL as speciality,
-            a.beds, a.icu, a.doctors, a.equipment, a.accepting,
-            a.updated_at, a.specialists
-        FROM hospitals h
-        JOIN availabilities a ON a.hospital_id = h.id
-        -- Keep only the most recent availability row per hospital
-        WHERE a.updated_at = (
-            SELECT MAX(a2.updated_at)
-            FROM availabilities a2
-            WHERE a2.hospital_id = h.id
-        )
-    """)).fetchall()
+    loop = asyncio.get_running_loop()
+
+    def fetch_hospitals():
+        return db.execute(text("""
+            SELECT
+                h.id, h.name, h.address, h.lat, h.lng,
+                NULL as speciality,
+                a.beds, a.icu, a.doctors, a.equipment, a.accepting,
+                a.updated_at, a.specialists
+            FROM hospitals h
+            JOIN availabilities a ON a.hospital_id = h.id
+            -- Keep only the most recent availability row per hospital
+            WHERE a.updated_at = (
+                SELECT MAX(a2.updated_at)
+                FROM availabilities a2
+                WHERE a2.hospital_id = h.id
+            )
+        """)).fetchall()
+
+    rows = await loop.run_in_executor(None, fetch_hospitals)
 
     hospital_dicts = []
     for r in rows:
@@ -82,6 +94,30 @@ def dispatch_ambulance(
             detail="No suitable hospital found. All hospitals may be at capacity."
         )
 
+    # Phase 4 ORS Integration
+    if not settings.ors_api_key or settings.ors_api_key == "dummy_ors_key":
+        # TODO: Drop in real ORS api key for prod
+        pass
+    else:
+        try:
+            async with httpx.AsyncClient() as client:
+                ors_url = "https://api.openrouteservice.org/v2/directions/driving-car"
+                params = {
+                    "api_key": settings.ors_api_key,
+                    "start": f"{request.ambulance_lng},{request.ambulance_lat}",
+                    "end": f"{result['lng']},{result['lat']}",
+                }
+                resp = await client.get(ors_url, params=params, timeout=5.0)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    eta_sec = data['features'][0]['properties']['summary']['duration']
+                    dist_meters = data['features'][0]['properties']['summary']['distance']
+                    # Overwrite ML scorer's simple haversine bounds with precise ORS values
+                    result['eta_minutes'] = int(eta_sec / 60)
+                    result['distance_km'] = round(dist_meters / 1000, 1)
+        except Exception as e:
+            logging.getLogger(__name__).warning("ORS ETA calc failed, falling back to haversine: %s", e)
+
     new_case = Case(
         user_id=current_user.id,
         condition=request.condition,
@@ -96,12 +132,35 @@ def dispatch_ambulance(
         notes=getattr(request, "notes", None),
     )
 
-    db.add(new_case)
-    db.commit()
-    db.refresh(new_case)
+    def save_case_and_decrement():
+        db.add(new_case)
+        db.commit()
+        db.refresh(new_case)
+
+        # [A] DECREMENT BEDS
+        availability = db.query(Availability).filter(
+            Availability.hospital_id == result["id"]
+        ).first()
+        if availability and availability.beds > 0:
+            availability.beds -= 1
+            availability.updated_at = datetime.now(timezone.utc)
+
+        # [B] CREATE INITIAL CaseEvent
+        initial_event = CaseEvent(
+            case_id=new_case.id,
+            status="dispatched",
+            actor_id=current_user.id,
+            actor_role=current_user.role,
+            note="Case dispatched by system",
+        )
+        db.add(initial_event)
+        db.commit()
+
+    await loop.run_in_executor(None, save_case_and_decrement)
 
     return DispatchResponse(
         case_id=new_case.id,
+        status=new_case.status,
         hospital_id=result["id"],
         hospital_name=result["name"],
         address=result["address"],
@@ -117,3 +176,4 @@ def dispatch_ambulance(
         hospital_lng=result["lng"],
         ml_reasoning=result.get("ml_reasoning", []),
     )
+

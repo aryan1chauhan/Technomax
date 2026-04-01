@@ -124,9 +124,11 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="text-center text-[12px] text-[#C7CCD9] mt-6">
-            Demo: amb1@test.com &nbsp;·&nbsp; bhagwati@test.com &nbsp;·&nbsp; admin@test.com &nbsp;/&nbsp; test123
-          </p>
+          {import.meta.env.DEV && (
+            <p className="text-center text-[12px] text-[#C7CCD9] mt-6">
+              Demo: amb1@test.com &nbsp;·&nbsp; bhagwati@test.com &nbsp;·&nbsp; admin@test.com &nbsp;/&nbsp; test123
+            </p>
+          )}
         </div>
       </div>
     </div>

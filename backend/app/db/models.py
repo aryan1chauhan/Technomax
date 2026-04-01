@@ -13,7 +13,9 @@ class User(Base):
     password_hash = Column(String)
     role = Column(String)
     hospital_id = Column(Integer, ForeignKey("hospitals.id"), nullable=True)
+    fcm_token = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class Hospital(Base):
     __tablename__ = "hospitals"
@@ -53,4 +55,19 @@ class Case(Base):
     distance_km = Column(Float)
     eta_minutes = Column(Integer)
     notes = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="dispatched")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class CaseEvent(Base):
+    __tablename__ = "case_events"
+    id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, ForeignKey("cases.id"), nullable=False)
+    status = Column(String, nullable=False)
+    actor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    actor_role = Column(String, nullable=True)
+    note = Column(String, nullable=True)
+    timestamp = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )

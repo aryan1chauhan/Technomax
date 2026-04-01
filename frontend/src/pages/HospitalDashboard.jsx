@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../api/axios";
 
 export default function HospitalDashboard() {
   const navigate  = useNavigate();
@@ -11,9 +11,7 @@ export default function HospitalDashboard() {
     try {
       const token = localStorage.getItem("token");
       if (!token) { navigate("/login"); return; }
-      const res = await axios.get("/api/cases/hospital", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get("/api/cases/hospital");
       const data = Array.isArray(res.data) ? res.data : (res.data.items || []);
       setCases(data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
     } catch { } finally { setLoading(false); }

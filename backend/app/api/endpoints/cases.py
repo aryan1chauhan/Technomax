@@ -5,7 +5,11 @@ from sqlalchemy import func, desc, Integer
 from app.db.database import get_db
 from app.db.models import Case, User, Hospital, Availability
 from app.schemas.dispatch import CaseOut
+from app.schemas.case import CaseStatusUpdate, CaseEventOut
 from app.core.security import get_current_user
+from app.db.models import CaseEvent
+from app.core.transitions import validate_transition, VALID_TRANSITIONS, BED_RESTORE_STATUSES
+from app.core.firebase import send_push
 
 router = APIRouter(prefix="/api/cases")
 
@@ -45,8 +49,8 @@ def admin_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role not in ("admin", "ambulance", "hospital"):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
 
     # Total hospitals + accepting count
     total_hospitals = db.query(Hospital).count()
@@ -126,3 +130,96 @@ def admin_stats(
         "recent_cases": cases_out,
         "districts": districts,
     }
+
+@router.put("/{case_id}/status")
+def update_case_status(
+    case_id: int,
+    update_data: CaseStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    case = db.query(Case).filter(Case.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    if current_user.role == "ambulance":
+        if case.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to update this case")
+    elif current_user.role == "hospital":
+        if case.assigned_hospital_id != current_user.hospital_id:
+            raise HTTPException(status_code=403, detail="Not authorized to update this case")
+    elif current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Invalid role")
+
+    new_status = update_data.status
+    if not validate_transition(case.status, new_status):
+        allowed = VALID_TRANSITIONS.get(case.status, [])
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid transition: {case.status} → {new_status}. Allowed: {allowed}"
+        )
+
+    if new_status == "arrived" and current_user.role != "ambulance":
+        raise HTTPException(
+            status_code=403,
+            detail="Only ambulances can mark case as arrived"
+        )
+
+    case.status = new_status
+
+    if new_status in BED_RESTORE_STATUSES:
+        availability = db.query(Availability).filter(
+            Availability.hospital_id == case.assigned_hospital_id
+        ).first()
+        if availability:
+            # Let's cap beds if needed, but since we just decrement, we can just increment.
+            # But wait, step 9 says: `min(beds + 1, hospital.total_beds) if total_beds field
+            # exists, otherwise just increment freely`. Availability has no total_beds, just let it increment.
+            availability.beds += 1
+            availability.updated_at = datetime.now(timezone.utc)
+
+    event = CaseEvent(
+        case_id=case.id,
+        status=new_status,
+        actor_id=current_user.id,
+        actor_role=current_user.role,
+        note=update_data.note,
+    )
+    db.add(event)
+    db.commit()
+
+    if new_status == "arrived":
+        # Notify hospital staff via FCM
+        hospital_users = db.query(User).filter(
+            User.hospital_id == case.assigned_hospital_id,
+            User.fcm_token.is_not(None)
+        ).all()
+        for user in hospital_users:
+            send_push(
+                token=user.fcm_token,
+                title="Ambulance Arrived",
+                body=f"Ambulance for case #{case.id} has arrived at your hospital.",
+                data={"case_id": str(case.id), "status": "arrived"}
+            )
+    
+    return {"status": new_status, "case_id": case.id}
+
+@router.get("/{case_id}/timeline", response_model=list[CaseEventOut])
+def get_case_timeline(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    case = db.query(Case).filter(Case.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    if current_user.role == "ambulance":
+        if case.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this case")
+    elif current_user.role == "hospital":
+        if case.assigned_hospital_id != current_user.hospital_id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this case")
+            
+    events = db.query(CaseEvent).filter(CaseEvent.case_id == case_id).order_by(CaseEvent.timestamp.asc()).all()
+    return events

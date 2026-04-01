@@ -1,0 +1,28 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Firebase — never commit service account credentials
+firebase-service-account.json
+*-service-account.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Virtual environments
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Test artifacts
+pytest_output.txt
+pytest_full.txt
+pytest_fix_err.txt
+fix.py

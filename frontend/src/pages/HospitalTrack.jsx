@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet"
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import api from "../api/axios";
+import CaseTimeline from "../components/CaseTimeline";
 
 // Fix leaflet default icon paths broken by Vite
 delete L.Icon.Default.prototype._getIconUrl;
@@ -75,7 +76,8 @@ export default function HospitalTrack() {
     if (!case_id) return;
     let reconnectTimer;
     const connect = () => {
-      const ws = new WebSocket(`ws://${window.location.host}/ws/hospital/${case_id}`);
+      const token = localStorage.getItem('token');
+      const ws = new WebSocket(`ws://${window.location.host}/ws/hospital/${case_id}?token=${token}`);
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data);
@@ -238,6 +240,11 @@ export default function HospitalTrack() {
               </div>
             )}
           </MapContainer>
+        </div>
+
+        {/* Timeline Component - Note: Match existing HospitalTrack terminal-green design system slightly by wrapping it or just putting it below */}
+        <div style={{ marginBottom: "1rem" }}>
+          <CaseTimeline caseId={case_id} role="hospital" />
         </div>
 
         {/* Action buttons */}

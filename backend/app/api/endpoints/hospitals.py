@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from datetime import datetime, timezone
 from app.db.database import get_db
 from app.db.models import Hospital, Availability, User
@@ -10,15 +11,24 @@ router = APIRouter(prefix="/api/hospitals")
 
 @router.get("/", response_model=list[HospitalOut])
 def get_hospitals(db: Session = Depends(get_db)):
-    hospitals = db.query(Hospital).all()
-    result = []
+    # FIX: Single JOIN query instead of N+1 (was 189 queries, now 1)
+    # Subquery: get the latest availability record per hospital
+    latest_avail = db.query(
+        Availability.hospital_id,
+        func.max(Availability.updated_at).label("max_updated")
+    ).group_by(Availability.hospital_id).subquery()
     
-    for hospital in hospitals:
-        availability = db.query(Availability)\
-            .filter(Availability.hospital_id == hospital.id)\
-            .order_by(Availability.updated_at.desc())\
-            .first()
-            
+    rows = db.query(Hospital, Availability).outerjoin(
+        latest_avail,
+        Hospital.id == latest_avail.c.hospital_id
+    ).outerjoin(
+        Availability,
+        (Availability.hospital_id == latest_avail.c.hospital_id) &
+        (Availability.updated_at == latest_avail.c.max_updated)
+    ).all()
+    
+    result = []
+    for hospital, availability in rows:
         hospital_dict = {
             "id": hospital.id,
             "name": hospital.name,
@@ -42,6 +52,13 @@ def update_availability(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only hospital accounts can update availability"
+        )
+    
+    # SECURITY: Prevent IDOR — hospital can only update its own availability
+    if hospital_id != current_user.hospital_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Can only update your own hospital"
         )
         
     availability = db.query(Availability).filter(Availability.hospital_id == hospital_id).first()

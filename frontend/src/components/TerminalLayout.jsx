@@ -10,7 +10,9 @@ const TerminalLayout = ({ children, pageTitle = 'SYSTEM DASHBOARD' }) => {
   }, []);
 
   const handleLogout = () => {
-    console.log('Logging out...');
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    window.location.href = '/login';
   };
 
   return (

@@ -1,7 +1,7 @@
 // frontend/src/pages/AdminDashboard.jsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../api/axios";
 
 export default function AdminDashboard() {
   const navigate  = useNavigate();
@@ -16,10 +16,7 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get("/api/cases/admin/stats", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get("/api/cases/admin/stats");
       setData(res.data);
     } catch { } finally { setLoading(false); }
   };

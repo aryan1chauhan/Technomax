@@ -1,0 +1,6 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.0.1, pluggy-1.6.0 -- C:\Users\ARYAN\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\ARYAN\OneDrive\Desktop(1)\team tech\backend
+plugins: anyio-4.11.0
+collecting ... 

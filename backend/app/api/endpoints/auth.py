@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models import User
 from app.schemas.user import UserCreate, UserLogin
 from app.core.security import hash_password, verify_password, create_access_token
+from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/api/auth")
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def register(user_in: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def register(request: Request, user_in: UserCreate, db: Session = Depends(get_db)):
     valid_roles = {"ambulance", "hospital", "admin"}
     if user_in.role not in valid_roles:
         raise HTTPException(
@@ -39,7 +41,8 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
     return {"message": "User registered successfully"}
 
 @router.post("/login")
-def login(user_in: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def login(request: Request, user_in: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == user_in.email).first()
     
     if not user or not verify_password(user_in.password, user.password_hash):

@@ -1,5 +1,5 @@
 # app/engine/ml_scorer.py
-import pickle, os, math, numpy as np
+import joblib, hashlib, os, math, numpy as np
 
 _BASE = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 _MODEL_PATH = os.path.join(_BASE, "ml_training", "hospital_model.pkl")
@@ -7,12 +7,35 @@ _MODEL_PATH = os.path.join(_BASE, "ml_training", "hospital_model.pkl")
 _model = None
 _threshold = 0.5
 _features = None
+_CHECKSUM_PATH = _MODEL_PATH + ".sha256"
+
+def _verify_model_integrity(path: str) -> bool:
+    """Verify model file hasn't been tampered with via SHA256 checksum."""
+    with open(path, "rb") as f:
+        current_hash = hashlib.sha256(f.read()).hexdigest()
+    
+    if os.path.exists(_CHECKSUM_PATH):
+        with open(_CHECKSUM_PATH, "r") as f:
+            stored_hash = f.read().strip()
+        if current_hash != stored_hash:
+            print(f"[ML] ⚠ MODEL INTEGRITY FAILURE: checksum mismatch!")
+            print(f"[ML]   Expected: {stored_hash[:16]}...")
+            print(f"[ML]   Got:      {current_hash[:16]}...")
+            return False
+    else:
+        # First run — store the checksum
+        with open(_CHECKSUM_PATH, "w") as f:
+            f.write(current_hash)
+        print(f"[ML] Model checksum stored: {current_hash[:16]}...")
+    return True
 
 def _load():
     global _model, _threshold, _features
     if os.path.exists(_MODEL_PATH):
-        with open(_MODEL_PATH, "rb") as f:
-            data = pickle.load(f)
+        if not _verify_model_integrity(_MODEL_PATH):
+            print("[ML] REFUSING to load tampered model — using rule-based fallback")
+            return
+        data = joblib.load(_MODEL_PATH)
         if isinstance(data, dict):
             _model = data["model"]
             _threshold = data.get("threshold", 0.5)
@@ -20,7 +43,7 @@ def _load():
         else:
             _model = data
             _threshold = 0.5
-        print(f"[ML] Model loaded. Threshold={_threshold:.2f}")
+        print(f"[ML] Model loaded (joblib). Threshold={_threshold:.2f}")
     else:
         print("[ML] No model file found — using rule-based fallback")
 

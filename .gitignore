@@ -24,3 +24,7 @@ Thumbs.db
 # Python virtual environments
 venv/
 .venv/
+
+# Firebase — never commit service account credentials
+firebase-service-account.json
+*-service-account.json

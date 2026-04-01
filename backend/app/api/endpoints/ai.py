@@ -1,9 +1,10 @@
 import os
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from anthropic import Anthropic
 from app.core.config import settings
+from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
 
@@ -65,7 +66,8 @@ class CaseInput(BaseModel):
 
 
 @router.post("/analyze")
-async def analyze_case(case: CaseInput):
+@limiter.limit("20/minute")
+async def analyze_case(request: Request, case: CaseInput):
     if not _has_key():
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not configured in .env")
 
@@ -135,7 +137,8 @@ class VoiceInput(BaseModel):
 # FIX: This is the endpoint Dispatch.jsx calls for voice analysis
 # Route name matches what the frontend posts to: /api/ai/equipment-recommend
 @router.post("/equipment-recommend")
-async def recommend_equipment(body: VoiceInput):
+@limiter.limit("20/minute")
+async def recommend_equipment(request: Request, body: VoiceInput):
     """
     Analyze voice transcript → return condition + recommended equipment.
     Called by Dispatch.jsx after the paramedic speaks.

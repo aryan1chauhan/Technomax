@@ -1,3 +1,5 @@
+import json
+import os
 import logging
 import firebase_admin
 from firebase_admin import credentials, messaging
@@ -6,22 +8,36 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 def init_firebase():
-    """Initialize Firebase Admin SDK with credentials from settings."""
-    if not settings.firebase_service_account_path or settings.firebase_service_account_path == "dummy_path":
-        logger.warning("Firebase not initialized: FIREBASE_SERVICE_ACCOUNT_PATH not set or is dummy.")
-        return
+    """Initialize Firebase Admin SDK.
+    
+    Prefers FIREBASE_SERVICE_ACCOUNT_JSON env var (JSON string, for Render/cloud).
+    Falls back to FIREBASE_SERVICE_ACCOUNT_PATH (file path, for local Docker).
+    """
+    if firebase_admin._apps:
+        return  # Already initialized
 
     try:
-        # Prevent re-initialization if already initialized
-        if not firebase_admin._apps:
-            # TODO: Drop in the real firebase-adminsdk credentials JSON file into the project.
-            # Make sure the FIREBASE_SERVICE_ACCOUNT_PATH environment variable points to it.
-            # e.g., FIREBASE_SERVICE_ACCOUNT_PATH=/app/credentials/firebase-service-account.json
-            cred = credentials.Certificate(settings.firebase_service_account_path)
+        # Cloud path: JSON string directly in env var
+        sa_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+        if sa_json:
+            sa_dict = json.loads(sa_json)
+            cred = credentials.Certificate(sa_dict)
             firebase_admin.initialize_app(cred)
-            logger.info("Firebase Admin initialized successfully.")
+            logger.info("Firebase initialized from FIREBASE_SERVICE_ACCOUNT_JSON")
+            return
+
+        # Local path: file on disk
+        sa_path = settings.firebase_service_account_path
+        if not sa_path or sa_path == "dummy_path":
+            logger.warning("Firebase not configured — push notifications disabled")
+            return
+
+        cred = credentials.Certificate(sa_path)
+        firebase_admin.initialize_app(cred)
+        logger.info("Firebase initialized from file: %s", sa_path)
+
     except Exception as e:
-        logger.error(f"Failed to initialize Firebase Admin: {e}")
+        logger.warning("Firebase init failed: %s", e)
 
 def send_push(token: str, title: str, body: str, data: dict = None) -> bool:
     """

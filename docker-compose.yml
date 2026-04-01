@@ -28,13 +28,16 @@ services:
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 60
       CLAUDE_API_KEY: ${CLAUDE_API_KEY}
+      ORS_API_KEY: ${ORS_API_KEY}
+      FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
     volumes:
-      - ./backend/ml_training:/app/ml_training  # persist model file
+      - ./backend/ml_training:/app/ml_training
+      - ./backend/firebase-service-account.json:/app/firebase-service-account.json:ro
 
   frontend:
     build: ./frontend

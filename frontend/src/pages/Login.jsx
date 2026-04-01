@@ -21,6 +21,7 @@ export default function Login() {
       const decoded = jwtDecode(access_token);
       const role = decoded.role || "ambulance";
       localStorage.setItem("role", role);
+      localStorage.setItem("email", decoded.sub);
       if (role === "ambulance")  navigate("/dispatch");
       else if (role === "hospital") navigate("/hospital/dashboard");
       else if (role === "admin") navigate("/admin/dashboard");

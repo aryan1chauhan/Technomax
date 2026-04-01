@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
 import api from "../api/axios";
 
 export default function HospitalDashboard() {
   const navigate  = useNavigate();
   const [cases,   setCases]   = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hospitalInfo, setHospitalInfo] = useState({ name: "Hospital", id: "", beds: "—" });
 
   const fetchCases = async () => {
     try {
@@ -19,6 +21,24 @@ export default function HospitalDashboard() {
 
   useEffect(() => {
     fetchCases();
+    // Decode JWT to get hospital_id, then fetch hospital name + beds
+    try {
+      const token = localStorage.getItem("token");
+      if (token) {
+        const decoded = jwtDecode(token);
+        const hid = decoded.hospital_id;
+        if (hid) {
+          api.get("/api/hospitals/").then(res => {
+            const h = res.data.find(h => h.id === hid);
+            if (h) setHospitalInfo({
+              name: h.name,
+              id: hid,
+              beds: h.availability?.beds ?? "—",
+            });
+          }).catch(() => {});
+        }
+      }
+    } catch {}
     const t = setInterval(fetchCases, 10000);
     return () => clearInterval(t);
   }, []);
@@ -57,7 +77,7 @@ export default function HospitalDashboard() {
         </nav>
         <div className="mt-auto px-7 pb-6 border-t border-[#172954] pt-5">
           <p className="text-[13px] font-semibold text-white">{localStorage.getItem("email") || "Bhagwati Hospital"}</p>
-          <p className="text-[12px] text-[#737A8F]">Roorkee · ID #28</p>
+          <p className="text-[12px] text-[#737A8F]">{hospitalInfo.name} · ID #{hospitalInfo.id}</p>
           <div className="flex items-center gap-2 mt-2">
             <div className="w-2 h-2 rounded-full bg-[#17B86B]" />
             <p className="text-[12px] text-[#17B86B]">Accepting cases</p>
@@ -94,7 +114,7 @@ export default function HospitalDashboard() {
               { val: todayCount,    label: "Cases Today",    accent: "#EE3B3B" },
               { val: cases.length,  label: "Active Cases",   accent: "#1A78F2" },
               { val: `${avgScore}%`,label: "Avg ML Score",   accent: "#17B86B" },
-              { val: "28",          label: "Beds Available", accent: "#FFB21A" },
+              { val: hospitalInfo.beds, label: "Beds Available", accent: "#FFB21A" },
             ].map(({ val, label, accent }) => (
               <div key={label} className="bg-white rounded-xl border border-[#F0F2F7] overflow-hidden">
                 <div className="h-1" style={{ backgroundColor: accent }} />

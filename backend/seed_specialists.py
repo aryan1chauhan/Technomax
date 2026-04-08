@@ -1,4 +1,3 @@
-# seed_specialists.py
 from app.db.database import engine
 from sqlalchemy import text
 import json

@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     claude_api_key: str | None = None
+    gemini_api_key: str | None = None
     ors_api_key: str | None = None
     firebase_service_account_path: str | None = None
 

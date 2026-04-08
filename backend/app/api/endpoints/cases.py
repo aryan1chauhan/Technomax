@@ -167,16 +167,16 @@ def update_case_status(
 
     case.status = new_status
 
-    if new_status in BED_RESTORE_STATUSES:
-        availability = db.query(Availability).filter(
+    if case.assigned_hospital_id and new_status in BED_RESTORE_STATUSES:
+        db.query(Availability).filter(
             Availability.hospital_id == case.assigned_hospital_id
-        ).first()
-        if availability:
-            # Let's cap beds if needed, but since we just decrement, we can just increment.
-            # But wait, step 9 says: `min(beds + 1, hospital.total_beds) if total_beds field
-            # exists, otherwise just increment freely`. Availability has no total_beds, just let it increment.
-            availability.beds += 1
-            availability.updated_at = datetime.now(timezone.utc)
+        ).update(
+            {
+                Availability.beds: Availability.beds + 1,
+                Availability.updated_at: datetime.now(timezone.utc)
+            },
+            synchronize_session=False
+        )
 
     event = CaseEvent(
         case_id=case.id,

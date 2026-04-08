@@ -77,7 +77,9 @@ export default function HospitalTrack() {
     let reconnectTimer;
     const connect = () => {
       const token = localStorage.getItem('token');
-      const ws = new WebSocket(`ws://${window.location.host}/ws/hospital/${case_id}?token=${token}`);
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const wsBase = apiUrl ? apiUrl.replace(/^http/, 'ws') : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+      const ws = new WebSocket(`${wsBase}/ws/hospital/${case_id}?token=${token}`);
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data);

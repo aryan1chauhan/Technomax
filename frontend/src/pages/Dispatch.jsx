@@ -54,6 +54,12 @@ const CONDITIONS = [
   { id: "allergic_reaction", label: "Allergic Reaction",  icon: "🌿", color: "#00B894" },
   { id: "spinal_injury",     label: "Spinal Injury",      icon: "🦴", color: "#636E72" },
   { id: "heart_failure",     label: "Heart Failure",      icon: "💔", color: "#D63031" },
+  // FIX: Bug #6 — 5 conditions existed in CONDITION_EQUIPMENT but were not selectable in the UI
+  { id: "fracture",          label: "Fracture",           icon: "🦴", color: "#795548" },
+  { id: "snake_bite",        label: "Snake Bite",         icon: "🐍", color: "#4CAF50" },
+  { id: "drowning",          label: "Drowning",           icon: "💧", color: "#0288D1" },
+  { id: "electrocution",     label: "Electrocution",      icon: "⚡", color: "#FFC107" },
+  { id: "liver_failure",     label: "Liver Failure",      icon: "🫀", color: "#8D6E63" },
 ];
 
 const SEVERITY_LEVELS = [
@@ -259,6 +265,7 @@ export default function Dispatch() {
         // FIX: Only send notes if they're real (not internal fallback text)
         notes: (notes && !isInternalNote(notes)) ? notes : null,
       });
+      // Pass full enriched response — Result.jsx reads selected_hospital, alternatives, etc.
       navigate("/result", { state: { result: res.data, ambLat: lat, ambLng: lng } });
     } catch (e) {
       setError(e.response?.data?.detail || "Dispatch failed. Please try again.");

@@ -64,10 +64,14 @@ def update_availability(
     availability = db.query(Availability).filter(Availability.hospital_id == hospital_id).first()
     
     if availability:
-        availability.beds = availability_in.beds
-        availability.icu = availability_in.icu
-        availability.doctors = availability_in.doctors
-        availability.equipment = availability_in.equipment
+        if availability_in.beds is not None:
+            availability.beds = availability_in.beds
+        if availability_in.icu is not None:
+            availability.icu = availability_in.icu
+        if availability_in.doctors is not None:
+            availability.doctors = availability_in.doctors
+        if availability_in.equipment is not None:
+            availability.equipment = availability_in.equipment
         availability.accepting = availability_in.accepting
         availability.updated_at = datetime.now(timezone.utc)
     else:

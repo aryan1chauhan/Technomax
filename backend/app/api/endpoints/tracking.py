@@ -1,10 +1,49 @@
+"""
+tracking.py — WebSocket endpoint with smart ETA broadcasting.
+
+Upgraded from the original to add per-ping ETA recalculation via
+the routing_service.ETAPredictor.
+
+WebSocket message types (server → client):
+  { type: "route_init",   coords, eta_minutes, total_distance_km, road_type, confidence }
+  { type: "position",     lat, lng, eta_minutes, delta_minutes, remaining_km,
+                          confidence, congested, observed_speed_kmh, predicted_speed_kmh }
+  { type: "status_change", status }
+  { type: "error",         message }
+  { type: "ping" }         — keepalive
+
+WebSocket message types (client → server):
+  { type: "ping", lat, lng, speed_kmh? }     — ambulance sends GPS position
+  { type: "status", status }                 — ambulance/hospital updates case status
+
+Endpoints:
+  /ws/track/{case_id}        — NEW: smart ETA tracking (bidirectional)
+  /ws/ambulance/{case_id}    — LEGACY: kept for backward compat
+  /ws/hospital/{case_id}     — LEGACY: kept for backward compat
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
 import time
+from typing import Optional
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
+
 from app.core.config import settings
+from app.db.database import SessionLocal
+from app.db.models import Case, Hospital
+from app.services.routing_service import eta_predictor
 
 router = APIRouter()
 
+# Per-case route geometry cache so we don't re-fetch ORS on every ping
+_route_cache: dict[int, list[list[float]]] = {}
+
+
+# ── JWT validation (reused from the original tracking.py) ─────────────────────
 
 def _validate_ws_token(token: str | None) -> dict | None:
     """Validate JWT token from WebSocket query params. Returns decoded payload or None."""
@@ -19,78 +58,248 @@ def _validate_ws_token(token: str | None) -> dict | None:
         return None
 
 
-class ConnectionManager:
+async def _send(ws: WebSocket, payload: dict) -> None:
+    """Safe send — swallows errors if connection is already closing."""
+    try:
+        await ws.send_json(payload)
+    except Exception:
+        pass
+
+
+# ── NEW: Smart tracking endpoint ──────────────────────────────────────────────
+
+@router.websocket("/ws/track/{case_id}")
+async def track_case(
+    websocket: WebSocket,
+    case_id: int,
+):
+    # ── JWT auth via query param ──
+    token = websocket.query_params.get("token")
+    payload = _validate_ws_token(token)
+    if not payload:
+        await websocket.close(code=4001, reason="Missing or invalid token")
+        return
+
+    await websocket.accept()
+
+    db = SessionLocal()
+    try:
+        case = db.query(Case).filter(Case.id == case_id).first()
+        if not case:
+            await _send(websocket, {"type": "error", "message": "Case not found"})
+            await websocket.close()
+            return
+
+        # ── Initial route fetch + ETA ──
+        if case_id not in _route_cache and case.assigned_hospital_id:
+            hospital = db.query(Hospital).filter(
+                Hospital.id == case.assigned_hospital_id
+            ).first()
+            if hospital:
+                try:
+                    route_result = await eta_predictor.initial_eta(
+                        origin_lat=case.ambulance_lat,
+                        origin_lng=case.ambulance_lng,
+                        dest_lat=hospital.lat,
+                        dest_lng=hospital.lng,
+                        case_id=case_id,
+                        emergency=True,
+                    )
+                    _route_cache[case_id] = route_result.route_coords
+                    await _send(websocket, {
+                        "type": "route_init",
+                        "coords": route_result.route_coords,
+                        "eta_minutes": route_result.estimated_eta_minutes,
+                        "total_distance_km": route_result.total_distance_km,
+                        "road_type": route_result.road_type_hint,
+                        "confidence": route_result.confidence,
+                    })
+                except Exception as e:
+                    await _send(websocket, {
+                        "type": "error",
+                        "message": f"Route fetch failed: {str(e)}",
+                    })
+
+        # ── Main receive loop ──
+        while True:
+            try:
+                raw = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+            except asyncio.TimeoutError:
+                # Send keepalive
+                await _send(websocket, {"type": "ping"})
+                continue
+            except WebSocketDisconnect:
+                break
+            except RuntimeError as e:
+                if "WebSocket is not connected" in str(e):
+                    break
+                raise
+
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+
+            msg_type = msg.get("type")
+
+            # ── GPS position ping from ambulance ──
+            if msg_type == "ping":
+                lat = msg.get("lat")
+                lng = msg.get("lng")
+                speed_kmh = msg.get("speed_kmh")
+
+                if lat is None or lng is None:
+                    continue
+
+                route_coords = _route_cache.get(case_id, [])
+                eta_update = eta_predictor.update_eta(
+                    case_id=case_id,
+                    current_lat=lat,
+                    current_lng=lng,
+                    route_coords=route_coords,
+                    observed_speed_kmh=speed_kmh,
+                    emergency=True,
+                )
+
+                broadcast_payload: dict = {
+                    "type": "position",
+                    "lat": lat,
+                    "lng": lng,
+                    "eta_minutes": eta_update.updated_eta_minutes if eta_update else None,
+                    "delta_minutes": eta_update.delta_minutes if eta_update else 0,
+                    "remaining_km": eta_update.remaining_distance_km if eta_update else None,
+                    "confidence": eta_update.confidence if eta_update else 0.5,
+                    "congested": eta_update.congested if eta_update else False,
+                    "observed_speed_kmh": eta_update.observed_speed_kmh if eta_update else None,
+                    "predicted_speed_kmh": eta_update.predicted_speed_kmh if eta_update else None,
+                }
+                await _send(websocket, broadcast_payload)
+
+                # Also forward to any hospital listener on the legacy endpoint
+                if case_id in _legacy_manager.hospital_connections:
+                    await _legacy_manager.forward_location(case_id, broadcast_payload)
+
+            # ── Status change ──
+            elif msg_type == "status":
+                new_status = msg.get("status")
+                if new_status:
+                    # Refresh the case object before updating
+                    db.refresh(case)
+                    case.status = new_status
+                    db.commit()
+
+                    # Clear predictor state when case is done
+                    if new_status in ("arrived", "completed", "cancelled"):
+                        eta_predictor.clear_case(case_id)
+                        _route_cache.pop(case_id, None)
+
+                    await _send(websocket, {
+                        "type": "status_change",
+                        "status": new_status,
+                    })
+
+    finally:
+        db.close()
+
+
+# ── LEGACY: Original ambulance/hospital endpoints (kept for backward compat) ─
+
+class _ConnectionManager:
     def __init__(self):
         self.ambulance_connections: dict = {}
         self.hospital_connections: dict = {}
-    
+
     async def connect_ambulance(self, case_id: int, ws: WebSocket):
         await ws.accept()
         self.ambulance_connections[case_id] = ws
-    
+
     async def connect_hospital(self, case_id: int, ws: WebSocket):
         await ws.accept()
         self.hospital_connections[case_id] = ws
-    
+
     async def forward_location(self, case_id: int, data: dict):
         if case_id in self.hospital_connections:
             try:
                 await self.hospital_connections[case_id].send_json(data)
             except (ConnectionError, RuntimeError):
                 del self.hospital_connections[case_id]
-    
+
     def disconnect(self, case_id: int, role: str):
         if role == "ambulance":
             self.ambulance_connections.pop(case_id, None)
         else:
             self.hospital_connections.pop(case_id, None)
 
-manager = ConnectionManager()
+
+_legacy_manager = _ConnectionManager()
+
 
 @router.websocket("/ws/ambulance/{case_id}")
 async def websocket_ambulance(websocket: WebSocket, case_id: int):
-    # SECURITY: Validate JWT token before allowing WebSocket connection
+    """Legacy ambulance WebSocket — forwards GPS data to hospital listener."""
     token = websocket.query_params.get("token")
     payload = _validate_ws_token(token)
     if not payload:
         await websocket.close(code=1008, reason="Authentication required")
         return
-    
-    await manager.connect_ambulance(case_id, websocket)
+
+    await _legacy_manager.connect_ambulance(case_id, websocket)
     last_eta_calc = 0.0
 
     try:
         while True:
             data = await websocket.receive_json()
-            
-            # WebSocket ETA tick - 60-second ORS ping interval
+
+            # Smart ETA recalculation on every ping (replace the 60s TODO)
             now = time.time()
-            if now - last_eta_calc >= 60.0:
-                # TODO: Make ORS API call with data['lat'], data['lng'] and hospital coords
-                # Update data['eta_minutes'] with real routing time
-                # Example:
-                # ors_response = await httpx.get("https://api.openrouteservice.org/...", params={...})
-                # data['eta_minutes'] = ors_response.json()['features'][0]['properties']['summary']['duration'] / 60
-                
-                last_eta_calc = now
-            
-            await manager.forward_location(case_id, data)
+            lat = data.get("lat")
+            lng = data.get("lng")
+
+            if lat is not None and lng is not None:
+                route_coords = _route_cache.get(case_id, [])
+                eta_update = eta_predictor.update_eta(
+                    case_id=case_id,
+                    current_lat=lat,
+                    current_lng=lng,
+                    route_coords=route_coords,
+                    observed_speed_kmh=data.get("speed_kmh"),
+                    emergency=True,
+                )
+                if eta_update:
+                    data["eta_minutes"] = eta_update.updated_eta_minutes
+                    data["remaining_km"] = eta_update.remaining_distance_km
+                    data["confidence"] = eta_update.confidence
+                    data["congested"] = eta_update.congested
+                    data["observed_speed_kmh"] = eta_update.observed_speed_kmh
+                    data["delta_minutes"] = eta_update.delta_minutes
+
+            await _legacy_manager.forward_location(case_id, data)
     except WebSocketDisconnect:
-        manager.disconnect(case_id, "ambulance")
+        _legacy_manager.disconnect(case_id, "ambulance")
+    except RuntimeError as e:
+        if "WebSocket is not connected" in str(e):
+            _legacy_manager.disconnect(case_id, "ambulance")
+        else:
+            raise
+
 
 @router.websocket("/ws/hospital/{case_id}")
 async def websocket_hospital(websocket: WebSocket, case_id: int):
-    # SECURITY: Validate JWT token before allowing WebSocket connection
+    """Legacy hospital WebSocket — receives forwarded ambulance data."""
     token = websocket.query_params.get("token")
     payload = _validate_ws_token(token)
     if not payload:
         await websocket.close(code=1008, reason="Authentication required")
         return
-    
-    await manager.connect_hospital(case_id, websocket)
+
+    await _legacy_manager.connect_hospital(case_id, websocket)
     try:
         while True:
-            # The hospital just listens, but we need to receive to detect disconnects
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(case_id, "hospital")
+        _legacy_manager.disconnect(case_id, "hospital")
+    except RuntimeError as e:
+        if "WebSocket is not connected" in str(e):
+            _legacy_manager.disconnect(case_id, "hospital")
+        else:
+            raise

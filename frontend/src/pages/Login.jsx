@@ -15,7 +15,7 @@ export default function Login() {
     e.preventDefault();
     setLoading(true); setError("");
     try {
-      const res = await api.post("/api/auth/login", { email, password });
+      const res = await api.post("/api/auth/login", { email, password }, { timeout: 8000 });
       const { access_token } = res.data;
       localStorage.setItem("token", access_token);
       const decoded = jwtDecode(access_token);
@@ -40,7 +40,7 @@ export default function Login() {
     <div className="flex h-screen w-screen overflow-hidden font-['Inter',sans-serif]">
 
       {/* ── Left Panel ── */}
-      <div className="relative w-[600px] flex-shrink-0 bg-[#0D1830] flex flex-col overflow-hidden">
+      <div className="relative w-[600px] flex-shrink-0 bg-[#0D1830] flex-col overflow-hidden hidden lg:flex">
         {/* Blue gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-[rgba(26,120,242,0.25)] to-transparent pointer-events-none" />
 
@@ -75,7 +75,7 @@ export default function Login() {
       </div>
 
       {/* ── Right Panel ── */}
-      <div className="flex-1 bg-[#F7F7FC] flex items-center justify-center">
+      <div className="flex-1 min-w-0 bg-[#F7F7FC] flex items-center justify-center px-4">
         <div className="w-[440px] bg-white rounded-[20px] border border-[#F0F2F7] shadow-lg p-10">
           <h2 className="text-[28px] font-bold text-[#1A1E2E]">Welcome back</h2>
           <p className="text-[15px] text-[#737A8F] mt-2 mb-8">Sign in to your MediRoute account</p>

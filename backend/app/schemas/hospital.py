@@ -9,10 +9,10 @@ class HospitalBase(BaseModel):
     lng: float
 
 class AvailabilityUpdate(BaseModel):
-    beds: int
-    icu: int
-    doctors: int
-    equipment: list[str]
+    beds: Optional[int] = None
+    icu: Optional[int] = None
+    doctors: Optional[int] = None
+    equipment: Optional[list[str]] = None
     accepting: bool
 
 class AvailabilityOut(BaseModel):

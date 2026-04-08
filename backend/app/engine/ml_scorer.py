@@ -1,305 +1,504 @@
 # app/engine/ml_scorer.py
-import joblib, hashlib, os, math, numpy as np
+"""
+Transparent weighted hospital scorer.
 
-_BASE = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-_MODEL_PATH = os.path.join(_BASE, "ml_training", "hospital_model.pkl")
+Replaces the opaque RandomForest + pickle model with a fully interpretable
+scoring engine. Every sub-score, weight, and decision is traceable.
 
-_model = None
-_threshold = 0.5
-_features = None
-_CHECKSUM_PATH = _MODEL_PATH + ".sha256"
+Key behaviors:
+  - Hard equipment filter: hospitals missing ANY required equipment are rejected
+  - Severity-based weight overrides from SEVERITY_CONFIG
+  - Returns top-N scored candidates with score_breakdown, explanation, pros, cons
+"""
+from __future__ import annotations
 
-def _verify_model_integrity(path: str) -> bool:
-    """Verify model file hasn't been tampered with via SHA256 checksum."""
-    with open(path, "rb") as f:
-        current_hash = hashlib.sha256(f.read()).hexdigest()
+import math
+from dataclasses import dataclass, field
+from typing import Optional
+
+from sqlalchemy.orm import Session
+from app.db.models import Case
+
+from app.core.severity import Severity, SEVERITY_CONFIG, get_severity_config
+
+
+# ── Condition → Severity mapping ─────────────────────────────────────────────
+
+SEVERITY_MAP: dict[str, Severity] = {
+    "cardiac arrest":   Severity.CRITICAL,
+    "cardiac_arrest":   Severity.CRITICAL,
+    "stroke":           Severity.CRITICAL,
+    "trauma":           Severity.CRITICAL,
+    "severe trauma":    Severity.CRITICAL,
+    "head injury":      Severity.CRITICAL,
+    "head_injury":      Severity.CRITICAL,
+    "internal bleeding": Severity.CRITICAL,
+    "internal_bleeding": Severity.CRITICAL,
+    "spinal injury":    Severity.CRITICAL,
+    "spinal_injury":    Severity.CRITICAL,
+    "chest injury":     Severity.CRITICAL,
+    "chest_pain":       Severity.CRITICAL,
+    "severe bleeding":  Severity.CRITICAL,
+    "respiratory":      Severity.CRITICAL,
+    "respiratory failure": Severity.CRITICAL,
+    "heart failure":    Severity.CRITICAL,
+    "heart_failure":    Severity.CRITICAL,
+    "drowning":         Severity.CRITICAL,
+    "electrocution":    Severity.CRITICAL,
+
+    "burns":            Severity.MODERATE,
+    "anaphylaxis":      Severity.MODERATE,
+    "kidney failure":   Severity.MODERATE,
+    "kidney_failure":   Severity.MODERATE,
+    "liver failure":    Severity.MODERATE,
+    "liver_failure":    Severity.MODERATE,
+    "obstetric":        Severity.MODERATE,
+    "pediatric":        Severity.MODERATE,
+    "poisoning":        Severity.MODERATE,
+    "allergic_reaction": Severity.MODERATE,
+    "allergic reaction": Severity.MODERATE,
+    "seizure":          Severity.MODERATE,
+    "diabetic":         Severity.MODERATE,
+    "snake_bite":       Severity.MODERATE,
+    "snake bite":       Severity.MODERATE,
+    "pelvic injury":    Severity.MODERATE,
+    "hypoglycemic crisis": Severity.MODERATE,
+    "spinal":           Severity.MODERATE,
+
+    "fracture":         Severity.LOW,
+    "fractures":        Severity.LOW,
+    "broken bone":      Severity.LOW,
+    "soft tissue injury": Severity.LOW,
+    "facial injury":    Severity.LOW,
+    "eye_injury":       Severity.LOW,
+    "psychiatric":      Severity.LOW,
+    "psychological trauma": Severity.LOW,
+    "general":          Severity.LOW,
+    "infection":        Severity.LOW,
+}
+
+
+# ── Condition → Required specialist mapping ──────────────────────────────────
+
+CONDITION_SPECIALIST_MAP: dict[str, list[str]] = {
+    "cardiac arrest":       ["cardiologist"],
+    "cardiac_arrest":       ["cardiologist"],
+    "chest pain":           ["cardiologist"],
+    "chest_pain":           ["cardiologist"],
+    "heart failure":        ["cardiologist"],
+    "heart_failure":        ["cardiologist"],
+    "stroke":               ["neurologist"],
+    "seizure":              ["neurologist"],
+    "head injury":          ["neurologist"],
+    "head_injury":          ["neurologist"],
+    "spinal injury":        ["orthopedic"],
+    "spinal_injury":        ["orthopedic"],
+    "fracture":             ["orthopedic"],
+    "broken bone":          ["orthopedic"],
+    "pelvic injury":        ["orthopedic"],
+    "trauma":               ["general_surgeon"],
+    "severe trauma":        ["general_surgeon"],
+    "internal bleeding":    ["general_surgeon"],
+    "internal_bleeding":    ["general_surgeon"],
+    "severe bleeding":      ["general_surgeon"],
+    "obstetric":            ["gynecologist"],
+    "kidney failure":       ["nephrologist"],
+    "kidney_failure":       ["nephrologist"],
+    "respiratory":          ["pulmonologist"],
+    "respiratory failure":  ["pulmonologist"],
+    "burns":                ["plastic_surgeon"],
+    "pediatric":            ["pediatrician"],
+    "diabetic":             ["endocrinologist"],
+    "hypoglycemic crisis":  ["endocrinologist"],
+    "poisoning":            ["emergency_physician"],
+    "anaphylaxis":          ["emergency_physician"],
+    "allergic reaction":    ["emergency_physician"],
+    "allergic_reaction":    ["emergency_physician"],
+    "chest injury":         ["cardiothoracic_surgeon"],
+    "liver failure":        ["gastroenterologist"],
+    "liver_failure":        ["gastroenterologist"],
+}
+
+# ── Condition → Bonus equipment mapping ──────────────────────────────────────
+
+CONDITION_BONUS_EQUIPMENT_MAP: dict[str, list[str]] = {
+    "cardiac arrest":       ["ecg", "defibrillator", "oxygen"],
+    "cardiac_arrest":       ["ecg", "defibrillator", "oxygen"],
+    "stroke":               ["ct_scan", "mri", "oxygen"],
+    "trauma":               ["xray", "ct_scan", "blood_bank"],
+    "severe trauma":        ["xray", "ct_scan", "blood_bank"],
+    "internal bleeding":    ["blood_bank", "ct_scan"],
+    "internal_bleeding":    ["blood_bank", "ct_scan"],
+    "chest injury":         ["xray", "ct_scan", "oxygen"],
+    "chest_pain":           ["ecg", "oxygen"],
+    "respiratory":          ["oxygen", "nebulizer", "pulse_oximeter"],
+    "respiratory failure":  ["oxygen", "nebulizer", "pulse_oximeter", "ventilator"],
+    "heart failure":        ["ecg", "oxygen", "defibrillator"],
+    "heart_failure":        ["ecg", "oxygen", "defibrillator"],
+    "burns":                ["oxygen", "iv_fluids", "wound_care"],
+    "fracture":             ["xray", "plaster"],
+    "broken bone":          ["xray", "plaster"],
+    "poisoning":            ["oxygen", "iv_fluids", "gastric_lavage"],
+    "anaphylaxis":          ["oxygen", "iv_fluids", "epinephrine"],
+    "allergic reaction":    ["oxygen", "iv_fluids"],
+    "allergic_reaction":    ["oxygen", "iv_fluids"],
+}
+
+
+# ── Scored result dataclass ──────────────────────────────────────────────────
+
+@dataclass
+class ScoredHospital:
+    hospital_id: int
+    name: str
+    distance_km: float
+    available_beds: int
+    score: float
+    score_breakdown: dict[str, float]
+    explanation: list[str]
+    pros: list[str]
+    cons: list[str]
+    icu_beds: int = 0
+    data_source: str = "live"
+    last_updated: Optional[str] = None
+    hospital_lat: Optional[float] = None
+    hospital_lng: Optional[float] = None
+    address: Optional[str] = None
+    eta_minutes: Optional[int] = None
+
+
+# ── Sub-score functions (public for testing) ─────────────────────────────────
+
+def _haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance in km between two lat/lng points."""
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = (math.sin(dlat / 2) ** 2 +
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+         math.sin(dlng / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _distance_score(distance_km: float, max_distance_km: float) -> float:
+    """Exponential normalized decay: 1.0 at 0 km, dropping heavily over distance."""
+    if distance_km >= max_distance_km or max_distance_km <= 0:
+        return 0.0
+    normalized = distance_km / max_distance_km
+    return math.exp(-3.0 * normalized)
+
+
+BED_CAP = 50  # Beds beyond this don't add more benefit
+
+def _beds_score(beds: int, icu_beds: int = 0, severity: Severity = Severity.MODERATE) -> float:
+    """Linear 0-1 score: proportional to beds, capped at BED_CAP. Bonus for ICU in critical cases."""
+    base = min(1.0, max(0, beds) / BED_CAP)
+    if severity == Severity.CRITICAL and icu_beds > 0:
+        icu_bonus = min(0.5, icu_beds * 0.15)
+        return min(1.0, base + icu_bonus)
+    return base
+
+
+def _specialist_score(
+    hospital_specialists: list[str],
+    required_specialists: list[str],
+) -> float:
+    """Ratio of required specialists that the hospital has. Falls back to doctor count."""
+    if not required_specialists:
+        return min(1.0, len(hospital_specialists) / 20.0)
+    h_specs = {s.lower() for s in hospital_specialists}
+    matched = sum(1 for s in required_specialists if s.lower() in h_specs)
+    return matched / len(required_specialists)
+
+def _equipment_score(h_equip: set, req_equip: set, bonus_equip: list) -> float:
+    """Scores 0.6 for passing hard reqs, boosts up to 1.0 for bonus equipment."""
+    bonus = sum(0.1 for e in bonus_equip if e in h_equip)
+    return min(1.0, 0.6 + bonus)
+
+
+def _eta(distance_km: float, speed_kmh: float = 40.0) -> int:
+    """Estimated time of arrival in minutes. Minimum 1 minute."""
+    return max(1, round(distance_km / speed_kmh * 60))
+
+
+def _outcome_score(hospital_id: int, condition: str, db: Optional[Session]) -> float:
+    """
+    Returns 0.5–1.0 based on historical success rate.
+    Uses 0.85 as a floor threshold for cold-starts (<5 cases).
+    """
+    if db is None:
+        return 1.0
+        
+    outcomes = db.query(Case).filter(
+        Case.assigned_hospital_id == hospital_id,
+        Case.condition == condition,
+        Case.status == "completed"
+    ).all()
     
-    if os.path.exists(_CHECKSUM_PATH):
-        with open(_CHECKSUM_PATH, "r") as f:
-            stored_hash = f.read().strip()
-        if current_hash != stored_hash:
-            print(f"[ML] ⚠ MODEL INTEGRITY FAILURE: checksum mismatch!")
-            print(f"[ML]   Expected: {stored_hash[:16]}...")
-            print(f"[ML]   Got:      {current_hash[:16]}...")
-            return False
-    else:
-        # First run — store the checksum
-        with open(_CHECKSUM_PATH, "w") as f:
-            f.write(current_hash)
-        print(f"[ML] Model checksum stored: {current_hash[:16]}...")
-    return True
-
-def _load():
-    global _model, _threshold, _features
-    if os.path.exists(_MODEL_PATH):
-        if not _verify_model_integrity(_MODEL_PATH):
-            print("[ML] REFUSING to load tampered model — using rule-based fallback")
-            return
-        data = joblib.load(_MODEL_PATH)
-        if isinstance(data, dict):
-            _model = data["model"]
-            _threshold = data.get("threshold", 0.5)
-            _features = data.get("features")
-        else:
-            _model = data
-            _threshold = 0.5
-        print(f"[ML] Model loaded (joblib). Threshold={_threshold:.2f}")
-    else:
-        print("[ML] No model file found — using rule-based fallback")
-
-_load()
+    if len(outcomes) < 5:
+        return 0.85
+        
+    success = sum(1 for c in outcomes if c.eta_minutes is not None and c.eta_minutes < 20)
+    return 0.5 + 0.5 * (success / len(outcomes))
 
 
-def _log_normalize_beds(beds: int) -> float:
-    """
-    FIX: Log-scale bed normalization so AIIMS (500 beds) doesn't
-    dominate over a 100-bed hospital that's 5x closer.
-    log(501)/log(501) = 1.0 (max), log(101)/log(501) ≈ 0.82,
-    log(51)/log(501) ≈ 0.64 — meaningful spread without runaway values.
-    """
-    return min(math.log(1 + max(beds, 0)) / math.log(502), 1.0)
+# ── Main scoring function ───────────────────────────────────────────────────
 
-
-def ml_score(features: dict) -> float:
-    """
-    Returns a float score 0-1 for a hospital candidate.
-    Falls back to rule-based if model unavailable.
-    """
-    if _model is None:
-        return _rule_fallback(features)
-
-    COLS = _features or [
-        "distance_km", "beds", "icu", "equipment_match",
-        "severity_weight", "has_ventilator", "has_defibrillator",
-        "has_ct_scan", "has_blood_bank", "has_icu_equipment",
-        "accepting", "specialist_present",
-        "hospital_load", "condition_severity",
-        "ot_available"
-    ]
-
-    row = np.array([[features.get(c, 0) for c in COLS]])
-    prob = _model.predict_proba(row)[0][1]
-
-    if prob >= _threshold:
-        score = 0.5 + 0.5 * ((prob - _threshold) / (1 - _threshold + 1e-9))
-    else:
-        score = 0.5 * (prob / (_threshold + 1e-9))
-
-    return round(float(score), 4)
-
-
-def _rule_fallback(f: dict) -> float:
-    """
-    FIX: Rebalanced weights — distance now dominates (0.45) so
-    a nearby 80-bed hospital beats a far 500-bed AIIMS.
-    Bed score is log-normalized so large hospitals don't auto-win.
-    Equipment match weight raised to reward proper kit.
-    """
-    # FIX: log-normalize so 500-bed AIIMS doesn't score 50x a 10-bed clinic
-    bed_score = _log_normalize_beds(f.get("beds", 0))
-
-    # FIX: distance score — steeper penalty for far hospitals
-    # at 5km → 0.67, at 20km → 0.33, at 50km → 0.16
-    distance_score = 1 / (1 + f.get("distance_km", 999) * 0.1)
-
-    equipment_score = f.get("equipment_match", 1.0)
-
-    # FIX: weights — distance 0.45, equipment 0.30, beds 0.25
-    # Previously: availability 0.40, distance 0.35, equipment 0.25
-    # The old weights let AIIMS win on beds alone from 80km away
-    return round(
-        distance_score * 0.45 +
-        equipment_score * 0.30 +
-        bed_score       * 0.25,
-        4
-    )
-
-
-# Severity levels for condition mapping
-SEVERITY_MAP = {
-    "cardiac arrest": 3, "cardiac_arrest": 3,
-    "stroke": 3, "respiratory": 3, "respiratory failure": 3,
-    "trauma": 3, "severe trauma": 3, "head injury": 3,
-    "internal bleeding": 3, "spinal injury": 3,
-    "chest injury": 3, "severe bleeding": 3, "chest_pain": 3,
-    "burns": 2, "anaphylaxis": 2, "kidney failure": 2,
-    "kidney_failure": 2, "pelvic injury": 2, "hypoglycemic crisis": 2,
-    "obstetric": 2, "poisoning": 1, "allergic_reaction": 2,
-    "seizure": 2, "diabetic": 2, "heat_stroke": 2,
-    "fracture": 1, "fractures": 1, "broken bone": 1,
-    "soft tissue injury": 1, "facial injury": 1, "eye_injury": 1,
-    "psychological trauma": 1, "general": 1, "infection": 1,
-    "head_injury": 3, "internal_bleeding": 3, "spinal_injury": 3,
-}
-
-CONDITION_SPECIALIST_MAP = {
-    "cardiac arrest": "cardiologist",
-    "chest pain":     "cardiologist",
-    "stroke":         "neurologist",
-    "spinal injury":  "orthopedic",
-    "trauma":         "general_surgeon",
-    "obstetric":      "gynecologist",
-    "kidney failure": "nephrologist",
-    "respiratory":    "pulmonologist",
-    "burns":          "plastic_surgeon",
-    "pediatric":      "pediatrician",
-    "seizure":        "neurologist",
-    "heart failure":  "cardiologist",
-    "head injury":          "neurologist",
-    "internal bleeding":    "general_surgeon",
-    "chest injury":         "cardiothoracic_surgeon",
-    "anaphylaxis":          "emergency_physician",
-    "allergic reaction":    "emergency_physician",
-    "poisoning":            "emergency_physician",
-    "fracture":             "orthopedic",
-    "broken bone":          "orthopedic",
-    "diabetic":             "endocrinologist",
-    "hypoglycemic crisis":  "endocrinologist",
-    "severe bleeding":      "general_surgeon",
-    "pelvic injury":        "orthopedic",
-}
-
-
-def predict_best_hospital(
-    hospitals: list,
+def score_hospitals(
+    hospitals: list[dict],
     condition: str,
-    equipment_needed: list,
+    required_equipment: list[str],
     ambulance_lat: float,
     ambulance_lng: float,
-) -> dict | None:
+    severity_override: str | None = None,
+    top_n: int = 3,
+    db: Optional[Session] = None,
+) -> tuple[list[ScoredHospital], dict]:
     """
-    Score every hospital and return the best candidate.
-    FIX: Pre-filter to nearest 30 hospitals before ML scoring
-    to avoid wasting time scoring hospitals 200km away.
-    """
-    from app.engine.haversine import calculate_distance
+    Score and rank hospitals for a dispatch.
 
-    needed = equipment_needed or []
+    Returns:
+        (ranked_list, rejection_summary)
+
+    ranked_list: Top-N ScoredHospital instances, sorted by score descending.
+    rejection_summary: Dict with counts of rejected hospitals by reason.
+    """
+    # Resolve severity
     condition_clean = condition.lower().replace("_", " ")
-    condition_severity = SEVERITY_MAP.get(condition_clean, 1)
+    if severity_override:
+        severity = Severity(severity_override.lower())
+    else:
+        severity = SEVERITY_MAP.get(condition_clean, Severity.MODERATE)
 
-    # FIX: Pre-compute distances and filter to nearest 30 accepting hospitals
-    # This prevents AIIMS winning from 100km away AND speeds up scoring
-    accepting = [h for h in hospitals if h.get("accepting", False) and h.get("beds", 0) > 0]
+    config = get_severity_config(severity.value)
+    weights = config["weights"]
+    min_beds = config["min_beds"]
+    max_dist = config["max_distance_km"]
 
-    if not accepting:
-        return None
+    # Resolve required specialists for this condition
+    required_specialists = CONDITION_SPECIALIST_MAP.get(condition_clean, [])
 
-    # Attach distance to each hospital
-    for h in accepting:
-        h["_dist"] = calculate_distance(ambulance_lat, ambulance_lng, h["lat"], h["lng"])
+    # ── Equipment name normalization ──
+    # Frontend uses "icu_equipment", seed data uses "icu". This alias map
+    # ensures both resolve to the same canonical name.
+    _EQUIP_ALIASES = {
+        "icu_equipment": "icu",
+        "icu_equip":     "icu",
+        "cardiac_mon":   "cardiac_monitor",
+        "ct":            "ct_scan",
+        "xray_machine":  "xray",
+        "x_ray":         "xray",
+    }
 
-    # Sort by distance, keep nearest 30 (enough diversity, avoids far giants)
-    accepting.sort(key=lambda h: h["_dist"])
-    candidates = accepting[:30]
+    def _normalize_equip(name: str) -> str:
+        n = name.lower().strip()
+        return _EQUIP_ALIASES.get(n, n)
 
-    import json
-    for h in candidates:
-        if isinstance(h.get('specialists'), str):
-            try:
-                h['specialists'] = json.loads(h['specialists'])
-            except:
-                h['specialists'] = {}
-        elif not isinstance(h.get('specialists'), dict):
-            h['specialists'] = {}
+    # Required equipment as normalized lowercase set
+    req_equip_lower = {_normalize_equip(e) for e in required_equipment} if required_equipment else set()
 
-    # === SPECIALIST PRE-FILTER ===
-    needed_specialist = CONDITION_SPECIALIST_MAP.get(condition_clean, '')
-    no_specialist_warning = False
-    if needed_specialist:
-        specialist_candidates = [
-            h for h in candidates
-            if h.get('specialists', {}).get(needed_specialist, 0) > 0
-        ]
-        if specialist_candidates:
-            candidates = specialist_candidates
+    # Rejection counters
+    rejected_equipment = 0
+    rejected_beds = 0
+    rejected_distance = 0
+    total_evaluated = len(hospitals)
+
+    scored: list[ScoredHospital] = []
+
+    import logging
+    logging.getLogger(__name__).info(
+        "Scoring %d hospitals for condition=%s severity=%s",
+        len(hospitals), condition, severity.value
+    )
+
+    for h in hospitals:
+        h_id = h.get("id", 0)
+        h_name = h.get("name", "Unknown")
+        h_lat = float(h.get("latitude", h.get("lat", 0)))
+        h_lng = float(h.get("longitude", h.get("lng", 0)))
+        h_beds = int(h.get("available_beds", h.get("beds", 0)))
+        h_icu = int(h.get("icu_beds", h.get("icu", 0)))
+        h_equip = {_normalize_equip(e) for e in (h.get("equipment") or [])}
+        h_specialists_raw = h.get("specialists") or []
+        h_address = h.get("address")
+        h_data_source = h.get("data_source", "live")
+        h_last_updated = h.get("last_updated")
+
+        # Normalize specialists: handle both dict and list
+        if isinstance(h_specialists_raw, dict):
+            h_specialists = [k for k, v in h_specialists_raw.items() if v and v > 0]
+        elif isinstance(h_specialists_raw, list):
+            h_specialists = h_specialists_raw
         else:
-            no_specialist_warning = True
+            h_specialists = []
 
-    results = []
+        # ── Hard filter 1: Equipment ──
+        if req_equip_lower and not req_equip_lower.issubset(h_equip):
+            rejected_equipment += 1
+            continue
 
-    for h in candidates:
-        distance_km = h["_dist"]
+        # ── Hard filter 2: Minimum beds ──
+        if h_beds < min_beds:
+            rejected_beds += 1
+            continue
 
-        eq = [e.lower() for e in (h.get("equipment", []) or [])]
-        equipment_match = (
-            len([e for e in needed if e in eq]) / len(needed)
-            if needed else 1.0
+        # ── Hard filter 3: Distance cap ──
+        dist = _haversine(ambulance_lat, ambulance_lng, h_lat, h_lng)
+        dist = round(dist, 2)
+        if dist > max_dist:
+            rejected_distance += 1
+            continue
+
+        # ── Sub-scores ──
+        d_score = _distance_score(dist, max_dist)
+        b_score = _beds_score(h_beds, h_icu, severity)
+        s_score = _specialist_score(h_specialists, required_specialists)
+        
+        # Calculate equipment bonus
+        bonus_equip = CONDITION_BONUS_EQUIPMENT_MAP.get(condition_clean, [])
+        e_score = _equipment_score(h_equip, req_equip_lower, bonus_equip)
+
+        o_score = _outcome_score(h_id, condition, db)
+
+        # ── Composite weighted score ──
+        composite = (
+            weights["distance"]   * d_score +
+            weights["beds"]       * b_score +
+            weights["specialist"] * s_score +
+            weights["equipment"]  * e_score
+        )
+        
+        # Multiply by historic self-tuning outcome score
+        composite = composite * o_score
+        
+        composite = round(min(1.0, max(0.0, composite)), 4)
+
+        breakdown = {
+            "distance":   round(d_score, 4),
+            "beds":       round(b_score, 4),
+            "specialist": round(s_score, 4),
+            "equipment":  round(e_score, 4),
+            "outcome":    round(o_score, 4),
+        }
+
+        eta = _eta(dist)
+
+        # ── Explanation ──
+        explanation = _build_explanation(
+            h_name, dist, h_beds, h_specialists,
+            required_specialists, severity, composite,
         )
 
-        specialists = h.get('specialists', {})
-        specialist_present = int(specialists.get(needed_specialist, 0) > 0)
+        # ── Pros / Cons ──
+        pros, cons = _build_pros_cons(
+            dist, h_beds, h_specialists, h_equip,
+            required_specialists, req_equip_lower,
+            max_dist, min_beds,
+        )
 
-        # FIX: pass log-normalized bed value as feature so ML model
-        # sees a sane 0-1 range instead of raw 500
-        score = ml_score({
-            "distance_km":       distance_km,
-            "beds":              _log_normalize_beds(h.get("beds", 0)),  # normalized
-            "icu":               min(h.get("icu", 0) / 50, 1.0),        # normalized
-            "equipment_match":   equipment_match,
-            "severity_weight":   condition_severity / 3.0,
-            "has_ventilator":    int("ventilator" in eq),
-            "has_defibrillator": int("defibrillator" in eq),
-            "has_ct_scan":       int("ct_scan" in eq),
-            "has_blood_bank":    int("blood_bank" in eq),
-            "has_icu_equipment": int("icu_equipment" in eq or "icu" in eq),
-            "accepting":         1,
-            "specialist_present": specialist_present,
-            "hospital_load":     min(h.get("active_cases", 0) / 20.0, 1.0),
-            "condition_severity": condition_severity,
-            "ot_available":      min(h.get("ot_available", 0) / 6.0, 1.0),
-        })
+        scored.append(ScoredHospital(
+            hospital_id=h_id,
+            name=h_name,
+            distance_km=dist,
+            available_beds=h_beds,
+            icu_beds=h_icu,
+            score=composite,
+            score_breakdown=breakdown,
+            explanation=explanation,
+            pros=pros,
+            cons=cons,
+            data_source=h_data_source,
+            last_updated=h_last_updated,
+            hospital_lat=h_lat,
+            hospital_lng=h_lng,
+            address=h_address,
+            eta_minutes=eta,
+        ))
 
-        matched = [e for e in needed if e in eq]
-        missing = [e for e in needed if e not in eq]
+    # Sort by score descending
+    scored.sort(key=lambda s: s.score, reverse=True)
 
-        results.append({
-            **h,
-            "final_score":       round(score, 4),
-            "confidence":        round(score, 4),
-            "distance_km":       round(distance_km, 2),
-            "eta_minutes":       max(round((distance_km / 40) * 60), 1),
-            "equipment_matched": matched,
-            "equipment_missing": missing,
-        })
+    total_rejected = rejected_equipment + rejected_beds + rejected_distance
+    total_passed = len(scored)
 
-    if not results:
-        return None
+    rejection_summary = {
+        "missing_equipment": rejected_equipment,
+        "insufficient_beds": rejected_beds,
+        "too_far": rejected_distance,
+        "total_rejected": total_rejected,
+        "total_evaluated": total_evaluated,
+        "total_passed": total_passed,
+    }
 
-    results.sort(key=lambda x: x["final_score"], reverse=True)
-    best = results[0]
+    return scored[:top_n], rejection_summary
 
-    reasoning = [
-        f"Distance: {best['distance_km']} km — nearest qualified hospital",
-        f"Beds: {best.get('beds', 0)}, ICU: {best.get('icu', 0)}",
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _build_explanation(
+    name: str, dist: float, beds: int,
+    h_specialists: list[str], required_specialists: list[str],
+    severity: Severity, composite: float,
+) -> list[str]:
+    """Build human-readable explanation lines."""
+    lines = [
+        f"{name} scored {round(composite * 100)}% for this {severity.value} dispatch.",
+        f"Distance: {dist} km — ETA ~{_eta(dist)} min.",
+        f"Capacity: {beds} available beds.",
     ]
+    if required_specialists:
+        matched = [s for s in required_specialists if s.lower() in {sp.lower() for sp in h_specialists}]
+        if matched:
+            lines.append(f"Specialist match: {', '.join(s.replace('_', ' ').title() for s in matched)}.")
+        else:
+            lines.append(f"No {', '.join(s.replace('_', ' ').title() for s in required_specialists)} specialist on record.")
+    return lines
 
-    # Show specialist availability
-    specialists = best.get('specialists', {})
 
-    if needed_specialist and specialists.get(needed_specialist, 0) > 0:
-        reasoning.append(f"Specialist: {needed_specialist.replace('_', ' ').title()} available ✓")
-    elif needed_specialist:
-        reasoning.append(f"Specialist: {needed_specialist.replace('_', ' ').title()} not available")
-        
-    if no_specialist_warning and needed_specialist:
-        reasoning.append(f"⚠️ No {needed_specialist.replace('_', ' ').title()} available nearby — routing to best equipped hospital")
+def _build_pros_cons(
+    dist: float, beds: int,
+    h_specialists: list[str], h_equip: set[str],
+    required_specialists: list[str], req_equip: set[str],
+    max_dist: float, min_beds: int,
+) -> tuple[list[str], list[str]]:
+    """Build pros/cons lists for a hospital."""
+    pros: list[str] = []
+    cons: list[str] = []
 
-    # Show OT availability
-    ot = best.get('ot_available', 0)
-    if ot > 0:
-        reasoning.append(f"Operation Theatres available: {ot}")
+    # Distance
+    if dist <= max_dist * 0.3:
+        pros.append(f"Very close ({dist} km)")
+    elif dist <= max_dist * 0.6:
+        pros.append(f"Moderate distance ({dist} km)")
+    else:
+        cons.append(f"Far ({dist} km)")
 
-    # Show hospital load
-    active = best.get('active_cases', 0)
-    reasoning.append(f"Current hospital load: {active} active cases")
+    # Beds
+    if beds >= 20:
+        pros.append(f"Good capacity ({beds} beds)")
+    elif beds >= min_beds:
+        cons.append(f"Limited capacity ({beds} beds)")
+    else:
+        cons.append(f"Low capacity ({beds} beds)")
 
-    if best["equipment_matched"]:
-        reasoning.append(f"Equipment matched: {', '.join(best['equipment_matched'])}")
-    if best["equipment_missing"]:
-        reasoning.append(f"Equipment missing: {', '.join(best['equipment_missing'])}")
+    # Specialists
+    if required_specialists:
+        h_spec_lower = {s.lower() for s in h_specialists}
+        matched = [s for s in required_specialists if s.lower() in h_spec_lower]
+        missing = [s for s in required_specialists if s.lower() not in h_spec_lower]
+        if matched:
+            pros.append(f"Has {', '.join(s.replace('_', ' ').title() for s in matched)}")
+        if missing:
+            cons.append(f"Missing {', '.join(s.replace('_', ' ').title() for s in missing)}")
 
-    reasoning.append(f"ML confidence score: {round(best['final_score'] * 100)}%")
-    best["ml_reasoning"] = reasoning
+    # Equipment (all matched since we hard-filter, but show it)
+    if req_equip:
+        pros.append(f"All {len(req_equip)} required equipment available")
 
-    return best
+    # Ensure at least one pro and con
+    if not pros:
+        pros.append("Meets minimum criteria")
+    if not cons:
+        cons.append("No significant concerns")
+
+    return pros, cons

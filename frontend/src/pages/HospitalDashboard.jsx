@@ -16,7 +16,12 @@ export default function HospitalDashboard() {
       const res = await api.get("/api/cases/hospital");
       const data = Array.isArray(res.data) ? res.data : (res.data.items || []);
       setCases(data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
-    } catch { } finally { setLoading(false); }
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        localStorage.clear();
+        navigate("/login");
+      }
+    } finally { setLoading(false); }
   };
 
   useEffect(() => {

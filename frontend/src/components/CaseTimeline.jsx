@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import api from "../api/axios";
 
 const getValidNextTransitionLabel = (role, currentStatus) => {
   if (role === "ambulance") {
@@ -31,16 +32,11 @@ export default function CaseTimeline({ caseId, role }) {
 
   const fetchTimeline = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/cases/${caseId}/timeline`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setEvents(data);
-        if (data.length > 0) {
-          setCurrentStatus(data[data.length - 1].status);
-        }
+      const res = await api.get(`/api/cases/${caseId}/timeline`);
+      const data = res.data;
+      setEvents(data);
+      if (data.length > 0) {
+        setCurrentStatus(data[data.length - 1].status);
       }
     } catch (err) {
       console.error("Failed to fetch timeline", err);
@@ -65,24 +61,12 @@ export default function CaseTimeline({ caseId, role }) {
 
   const updateStatus = async (newStatus) => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/cases/${caseId}/status`, {
-        method: "PUT",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-      if (res.ok) {
-        fetchTimeline();
-        setError("");
-      } else {
-        const data = await res.json();
-        setError(data.detail || "Failed to update status");
-      }
+      const res = await api.put(`/api/cases/${caseId}/status`, { status: newStatus });
+      fetchTimeline();
+      setError("");
     } catch (err) {
-      setError("Network error");
+      const detail = err?.response?.data?.detail;
+      setError(detail || "Failed to update status");
     }
   };
 

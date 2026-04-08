@@ -8,6 +8,10 @@ import HospitalDashboard from "./pages/HospitalDashboard";
 import HospitalTrack from "./pages/HospitalTrack"; // FIX #6: was ./pages/hospital/HospitalTrack
 import AdminDashboard from "./pages/AdminDashboard";
 
+// Test Firebase Initialization
+import { app } from "./firebase";
+if (import.meta.env.DEV) console.log("🔥 Firebase initialized:", app);
+
 export default function App() {
   return (
     <BrowserRouter>

@@ -2,7 +2,7 @@ import os
 import json
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-from anthropic import Anthropic
+import google.generativeai as genai
 from app.core.config import settings
 from app.core.rate_limit import limiter
 
@@ -44,16 +44,14 @@ def _non_medical_response() -> dict:
 def get_client():
     global _client
     if _client is None:
-        # FIX: Try both common .env key names
         api_key = (
-            getattr(settings, "claude_api_key", None)
-            or getattr(settings, "anthropic_api_key", None)
-            or os.getenv("ANTHROPIC_API_KEY")
-            or os.getenv("CLAUDE_API_KEY")
+            getattr(settings, "gemini_api_key", None)
+            or os.getenv("GEMINI_API_KEY")
         )
         if not api_key:
             return None
-        _client = Anthropic(api_key=api_key)
+        genai.configure(api_key=api_key)
+        _client = genai.GenerativeModel("gemini-1.5-flash")
     return _client
 
 
@@ -69,7 +67,7 @@ class CaseInput(BaseModel):
 @limiter.limit("20/minute")
 async def analyze_case(request: Request, case: CaseInput):
     if not _has_key():
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not configured in .env")
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured in .env")
 
     # GUARD: Reject non-medical input
     if not _is_medical(case.input):
@@ -97,13 +95,9 @@ Return ONLY valid JSON, no markdown:
 
 Case: {case.input}"""
 
-        response = get_client().messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=300,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        text_resp = response.content[0].text.strip()
+        model = get_client()
+        response = model.generate_content(prompt)
+        text_resp = response.text.strip()
         text_resp = text_resp.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
         try:
@@ -169,13 +163,9 @@ Respond ONLY with valid JSON (no markdown, no preamble):
   "matched_condition_id": "cardiac_arrest|chest_pain|stroke|trauma|respiratory|burns|poisoning|obstetric|pediatric|diabetic|other"
 }}"""
 
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=400,
-            messages=[{"role": "user", "content": prompt}]
-        )
+        response = client.generate_content(prompt)
 
-        text_resp = response.content[0].text.strip()
+        text_resp = response.text.strip()
         text_resp = text_resp.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         parsed = json.loads(text_resp)
         return parsed
@@ -278,3 +268,153 @@ def _rule_based_fallback(text: str) -> dict:
         "notes": f"Rule-based assessment (AI offline). Voice: {text[:80]}",
         "matched_condition_id": condition_id,
     }
+"""
+AI triage validation utilities.
+
+Provides:
+  - TriageOutput Pydantic model with strict validators
+  - parse_and_validate_ai_response() for validating Claude's JSON output
+  - rule_based_triage() deterministic fallback
+  - TRIAGE_SYSTEM_PROMPT for strict JSON-only AI output
+"""
+from pydantic import BaseModel, field_validator
+import json
+import re
+
+
+# ---------------------------------------------------------------------------
+# Strict JSON system prompt
+# ---------------------------------------------------------------------------
+TRIAGE_SYSTEM_PROMPT = """You are a medical triage AI for an emergency dispatch system.
+You MUST respond with valid JSON only — no markdown, no explanation, no preamble.
+
+Required output schema:
+{
+  "condition": "<primary medical condition string>",
+  "severity": "<exactly one of: critical | moderate | low>",
+  "priority": <integer 1-10, where 10 is most urgent>,
+  "required_equipment": ["<item1>", "<item2>"],
+  "required_specialists": ["<specialist1>"],
+  "reasoning": "<one sentence justification>"
+}
+
+Rules:
+- severity must be exactly "critical", "moderate", or "low" — no other values
+- priority must be an integer from 1 to 10 inclusive
+- required_equipment and required_specialists must be arrays (can be empty)
+- Do not include any text outside the JSON object"""
+
+
+# ---------------------------------------------------------------------------
+# Pydantic validation model
+# ---------------------------------------------------------------------------
+class TriageOutput(BaseModel):
+    condition: str
+    severity: str
+    priority: int
+    required_equipment: list[str] = []
+    required_specialists: list[str] = []
+    reasoning: str = ""
+
+    @field_validator("severity")
+    @classmethod
+    def validate_severity(cls, v: str) -> str:
+        allowed = {"critical", "moderate", "low"}
+        normalized = v.lower().strip()
+        if normalized not in allowed:
+            raise ValueError(
+                f"severity must be one of {allowed}, got '{v}'"
+            )
+        return normalized
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v: int) -> int:
+        if not (1 <= v <= 10):
+            raise ValueError(f"priority must be 1-10, got {v}")
+        return v
+
+    @field_validator("condition")
+    @classmethod
+    def validate_condition(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("condition cannot be empty")
+        return v.strip().lower()
+
+
+# ---------------------------------------------------------------------------
+# Parser
+# ---------------------------------------------------------------------------
+def parse_and_validate_ai_response(raw: str) -> tuple[TriageOutput | None, str | None]:
+    """
+    Parse Claude's raw response into a validated TriageOutput.
+
+    Returns:
+        (TriageOutput, None)         on success
+        (None, error_message)        on failure
+    """
+    # 1. Strip markdown code fences if present
+    cleaned = re.sub(r"```(?:json)?", "", raw).strip()
+
+    # 2. Extract first JSON object
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if not match:
+        return None, f"No JSON object found in AI response: {raw[:200]}"
+
+    json_str = match.group(0)
+
+    # 3. Parse JSON
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        return None, f"JSON parse error: {e} — raw: {json_str[:200]}"
+
+    # 4. Pydantic validation
+    try:
+        triage = TriageOutput(**data)
+        return triage, None
+    except Exception as e:
+        return None, f"Triage validation error: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Rule-based fallback
+# ---------------------------------------------------------------------------
+_FALLBACK_SEVERITY: dict[str, str] = {
+    "cardiac arrest": "critical",
+    "stroke": "critical",
+    "trauma": "critical",
+    "burns": "moderate",
+    "pediatric": "moderate",
+    "obstetric": "moderate",
+    "respiratory": "moderate",
+    "poisoning": "moderate",
+    "psychiatric": "low",
+    "spinal": "moderate",
+}
+
+_FALLBACK_PRIORITY: dict[str, int] = {
+    "cardiac arrest": 10,
+    "stroke": 10,
+    "trauma": 9,
+    "burns": 7,
+    "pediatric": 7,
+    "obstetric": 7,
+    "respiratory": 6,
+    "poisoning": 6,
+    "spinal": 6,
+    "psychiatric": 4,
+}
+
+
+def rule_based_triage(condition: str, equipment: list[str]) -> TriageOutput:
+    """Deterministic fallback when AI triage is unavailable."""
+    key = condition.lower().strip()
+    return TriageOutput(
+        condition=key,
+        severity=_FALLBACK_SEVERITY.get(key, "moderate"),
+        priority=_FALLBACK_PRIORITY.get(key, 5),
+        required_equipment=equipment,
+        required_specialists=[],
+        reasoning="Rule-based fallback — AI triage unavailable.",
+    )

@@ -1,296 +1,421 @@
 """
-tests/test_ml_scorer.py — ML scoring engine tests.
+test_ml_scorer.py
 
-Covers:
-- Rule-based fallback scoring
-- Edge cases (0 beds, huge distance, empty equipment)
-- Normalization behavior
-- Full predict_best_hospital pipeline
-- Specialist pre-filtering
-- Severity mapping
+Tests for the new transparent weighted scorer (ml_scorer.py).
+Replaces the previous tests that covered the RandomForest predictor.
+
+Run with:
+    cd backend
+    python -m pytest tests/test_ml_scorer.py -v
 """
 import math
 import pytest
+
 from app.engine.ml_scorer import (
-    ml_score,
-    _rule_fallback,
-    _log_normalize_beds,
-    predict_best_hospital,
-    SEVERITY_MAP,
     CONDITION_SPECIALIST_MAP,
+    SEVERITY_MAP,
+    ScoredHospital,
+    _beds_score,
+    _distance_score,
+    _eta,
+    _haversine,
+    _specialist_score,
+    score_hospitals,
 )
-from app.engine.haversine import calculate_distance
+from app.core.severity import Severity
 
 
-class TestLogNormalizeBeds:
-    """Tests for bed count normalization."""
+# ── Fixtures ─────────────────────────────────────────────────────────────────
 
-    def test_zero_beds(self):
-        """0 beds should normalize to ~0."""
-        result = _log_normalize_beds(0)
-        assert result == pytest.approx(0.0, abs=0.01)
-
-    def test_negative_beds(self):
-        """Negative beds should be clamped to 0."""
-        result = _log_normalize_beds(-10)
-        assert result == pytest.approx(0.0, abs=0.01)
-
-    def test_small_hospital(self):
-        """10-bed hospital should normalize to reasonable mid-range value."""
-        result = _log_normalize_beds(10)
-        assert 0.3 < result < 0.6
-
-    def test_medium_hospital(self):
-        """100-bed hospital should normalize higher than 10-bed."""
-        small = _log_normalize_beds(10)
-        medium = _log_normalize_beds(100)
-        assert medium > small
-
-    def test_large_hospital(self):
-        """500-bed AIIMS should normalize to ~1.0 but not dominate."""
-        result = _log_normalize_beds(500)
-        assert 0.9 < result <= 1.0
-
-    def test_normalization_spread(self):
-        """Gap between 50 and 500 beds should be compressed (not 10x)."""
-        small = _log_normalize_beds(50)
-        large = _log_normalize_beds(500)
-        ratio = large / small
-        # Log normalization should keep ratio under 2x
-        assert ratio < 2.0
-
-    def test_caps_at_one(self):
-        """Even absurdly large bed counts should cap at 1.0."""
-        result = _log_normalize_beds(10000)
-        assert result <= 1.0
+def make_hospital(
+    id_: int = 1,
+    name: str = "General Hospital",
+    lat: float = 28.65,
+    lng: float = 77.23,
+    beds: int = 10,
+    equipment: list[str] | None = None,
+    specialists: list[str] | None = None,
+) -> dict:
+    return {
+        "id": id_,
+        "name": name,
+        "latitude": lat,
+        "longitude": lng,
+        "available_beds": beds,
+        "equipment": equipment or [],
+        "specialists": specialists or [],
+        "data_source": "live",
+        "last_updated": None,
+        "address": f"Hospital {id_} Address",
+    }
 
 
-class TestRuleFallback:
-    """Tests for the rule-based scoring fallback."""
+AMB_LAT, AMB_LNG = 28.61, 77.21  # Ambulance position (New Delhi area)
 
-    def test_close_hospital_scores_high(self):
-        """Hospital 2km away should score > 0.5."""
-        score = _rule_fallback({
-            "distance_km": 2.0,
-            "beds": 20,
-            "equipment_match": 1.0,
-        })
-        assert score > 0.5
 
-    def test_far_hospital_scores_low(self):
-        """Hospital 200km away should score much lower."""
-        close = _rule_fallback({"distance_km": 2.0, "beds": 50, "equipment_match": 1.0})
-        far = _rule_fallback({"distance_km": 200.0, "beds": 50, "equipment_match": 1.0})
-        assert far < close
-        assert far < 0.5  # ML model gives ~0.48 for 200km with beds=50
+# ── Haversine ─────────────────────────────────────────────────────────────────
 
+class TestHaversine:
     def test_zero_distance(self):
-        """Hospital at same location should get max distance score."""
-        score = _rule_fallback({
-            "distance_km": 0.0,
-            "beds": 10,
-            "equipment_match": 1.0,
-        })
-        assert score > 0.8
+        assert _haversine(28.0, 77.0, 28.0, 77.0) == pytest.approx(0.0, abs=1e-6)
 
-    def test_zero_beds_doesnt_crash(self):
-        """0 beds should still return a valid score (from distance + equipment)."""
-        score = _rule_fallback({
-            "distance_km": 5.0,
-            "beds": 0,
-            "equipment_match": 1.0,
-        })
-        assert 0.0 <= score <= 1.0
+    def test_known_distance(self):
+        # Delhi (28.6139, 77.2090) to Agra (27.1767, 78.0081) ≈ 178 km
+        d = _haversine(28.6139, 77.2090, 27.1767, 78.0081)
+        assert 170 < d < 190
 
-    def test_no_equipment_match(self):
-        """0% equipment match should reduce score."""
-        full = _rule_fallback({"distance_km": 5.0, "beds": 20, "equipment_match": 1.0})
-        none = _rule_fallback({"distance_km": 5.0, "beds": 20, "equipment_match": 0.0})
-        assert none < full
+    def test_symmetry(self):
+        d1 = _haversine(28.0, 77.0, 29.0, 78.0)
+        d2 = _haversine(29.0, 78.0, 28.0, 77.0)
+        assert d1 == pytest.approx(d2, rel=1e-6)
 
-    def test_extreme_distance(self):
-        """999km away should not crash and should score very low."""
-        score = _rule_fallback({
-            "distance_km": 999.0,
-            "beds": 100,
-            "equipment_match": 1.0,
-        })
-        assert 0.0 <= score <= 1.0
-        assert score < 0.5  # ML model gives ~0.49 for 999km with beds=100
+    def test_returns_float(self):
+        assert isinstance(_haversine(0, 0, 1, 1), float)
 
-    def test_missing_keys_use_defaults(self):
-        """Missing feature keys should use defaults, not crash."""
-        score = _rule_fallback({})
-        assert 0.0 <= score <= 1.0
 
+# ── Sub-score functions ───────────────────────────────────────────────────────
+
+class TestDistanceScore:
+    def test_zero_distance_is_perfect(self):
+        assert _distance_score(0.0, 60) == pytest.approx(1.0)
+
+    def test_at_max_is_zero(self):
+        assert _distance_score(60.0, 60) == pytest.approx(0.0)
+
+    def test_beyond_max_clamped_to_zero(self):
+        assert _distance_score(100.0, 60) == 0.0
+
+    def test_exponential_decay(self):
+        # 30 is midpoint of 60, normalized is 0.5, exp(-3 * 0.5) = 0.223
+        assert _distance_score(30.0, 60) == pytest.approx(math.exp(-1.5), abs=0.01)
+
+
+class TestBedsScore:
+    def test_zero_beds(self):
+        assert _beds_score(0) == 0.0
+
+    def test_at_cap(self):
+        assert _beds_score(50) == pytest.approx(1.0)
+
+    def test_beyond_cap_clamped(self):
+        assert _beds_score(100) == pytest.approx(1.0)
+
+    def test_proportional(self):
+        assert _beds_score(25) == pytest.approx(0.5)
+
+    def test_icu_bonus_critical(self):
+        # 10 beds -> 0.2 base
+        # 2 ICU beds -> 2 * 0.15 = 0.3 bonus
+        # Total = 0.5
+        assert _beds_score(10, icu_beds=2, severity=Severity.CRITICAL) == pytest.approx(0.5)
+
+
+class TestSpecialistScore:
+    def test_no_requirements_uses_doctor_count(self):
+        # With 1 specialist, ratio is 1/20 = 0.05
+        assert _specialist_score(["cardiologist"], []) == pytest.approx(0.05)
+
+    def test_full_match(self):
+        assert _specialist_score(
+            ["cardiologist", "neurologist"],
+            ["cardiologist", "neurologist"],
+        ) == pytest.approx(1.0)
+
+    def test_partial_match(self):
+        score = _specialist_score(
+            ["cardiologist"],
+            ["cardiologist", "neurologist"],
+        )
+        assert score == pytest.approx(0.5)
+
+    def test_no_match(self):
+        assert _specialist_score(["radiologist"], ["cardiologist"]) == pytest.approx(0.0)
+
+    def test_case_insensitive(self):
+        assert _specialist_score(["CARDIOLOGIST"], ["cardiologist"]) == pytest.approx(1.0)
+
+
+# ── ETA ──────────────────────────────────────────────────────────────────────
+
+class TestEta:
+    def test_minimum_one_minute(self):
+        assert _eta(0.1) == 1
+
+    def test_10km_at_40kmh(self):
+        assert _eta(10.0) == 15   # 10/40 * 60 = 15
+
+    def test_returns_int(self):
+        assert isinstance(_eta(5.0), int)
+
+
+# ── score_hospitals — hard filter ─────────────────────────────────────────────
+
+class TestScoreHospitalsHardFilter:
+    def test_rejects_hospital_missing_any_equipment(self):
+        h = make_hospital(
+            id_=1,
+            lat=AMB_LAT + 0.05,
+            lng=AMB_LNG,
+            beds=10,
+            equipment=["defibrillator"],  # missing "ventilator"
+        )
+        ranked, summary = score_hospitals(
+            hospitals=[h],
+            condition="cardiac arrest",
+            required_equipment=["defibrillator", "ventilator"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+        )
+        assert ranked == []
+        assert summary["missing_equipment"] == 1
+
+    def test_accepts_hospital_with_all_equipment(self):
+        h = make_hospital(
+            id_=1,
+            lat=AMB_LAT + 0.05,
+            lng=AMB_LNG,
+            beds=10,
+            equipment=["defibrillator", "ventilator"],
+        )
+        ranked, summary = score_hospitals(
+            hospitals=[h],
+            condition="cardiac arrest",
+            required_equipment=["defibrillator", "ventilator"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+        )
+        assert len(ranked) == 1
+        assert summary["missing_equipment"] == 0
+
+    def test_equipment_filter_is_case_insensitive(self):
+        h = make_hospital(
+            equipment=["Defibrillator", "VENTILATOR"],
+            beds=5,
+            lat=AMB_LAT + 0.05,
+            lng=AMB_LNG,
+        )
+        ranked, _ = score_hospitals(
+            hospitals=[h],
+            condition="cardiac arrest",
+            required_equipment=["defibrillator", "ventilator"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+        )
+        assert len(ranked) == 1
+
+    def test_rejects_hospital_with_insufficient_beds_critical(self):
+        h = make_hospital(
+            equipment=["defibrillator"],
+            beds=0,
+            lat=AMB_LAT + 0.01,
+            lng=AMB_LNG,
+        )
+        ranked, summary = score_hospitals(
+            hospitals=[h],
+            condition="cardiac arrest",
+            required_equipment=["defibrillator"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+            severity_override="critical",
+        )
+        assert ranked == []
+        assert summary["insufficient_beds"] == 1
+
+    def test_no_match_returns_empty_list(self):
+        h = make_hospital(equipment=[], beds=0, lat=AMB_LAT + 5, lng=AMB_LNG)
+        ranked, summary = score_hospitals(
+            hospitals=[h],
+            condition="trauma",
+            required_equipment=["blood_bank", "icu"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+        )
+        assert ranked == []
+        assert summary["total_rejected"] >= 1
+
+
+# ── score_hospitals — ranking ─────────────────────────────────────────────────
+
+class TestScoreHospitalsRanking:
+    def _two_hospitals(self):
+        """Close hospital with fewer beds vs far hospital with more beds."""
+        close = make_hospital(
+            id_=1, name="Close", lat=AMB_LAT + 0.05, lng=AMB_LNG,
+            beds=5, equipment=["defibrillator"],
+        )
+        far = make_hospital(
+            id_=2, name="Far", lat=AMB_LAT + 0.5, lng=AMB_LNG,
+            beds=40, equipment=["defibrillator"],
+        )
+        return [close, far]
+
+    def test_returns_top_3_max(self):
+        hospitals = [
+            make_hospital(id_=i, lat=AMB_LAT + i * 0.05, lng=AMB_LNG,
+                          beds=10, equipment=["defib"])
+            for i in range(1, 7)
+        ]
+        ranked, _ = score_hospitals(
+            hospitals=hospitals,
+            condition="cardiac arrest",
+            required_equipment=["defib"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+        )
+        assert len(ranked) <= 3
+
+    def test_critical_prefers_closer_hospital(self):
+        ranked, _ = score_hospitals(
+            hospitals=self._two_hospitals(),
+            condition="cardiac arrest",
+            required_equipment=["defibrillator"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+            severity_override="critical",
+        )
+        assert ranked[0].name == "Close"
+
+    def test_low_severity_may_prefer_more_beds(self):
+        ranked, _ = score_hospitals(
+            hospitals=self._two_hospitals(),
+            condition="psychiatric",
+            required_equipment=["defibrillator"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+            severity_override="low",
+        )
+        assert len(ranked) >= 1
+
+    def test_scores_are_descending(self):
+        hospitals = [
+            make_hospital(id_=i, lat=AMB_LAT + i * 0.1, lng=AMB_LNG,
+                          beds=10, equipment=["defib"])
+            for i in range(1, 5)
+        ]
+        ranked, _ = score_hospitals(
+            hospitals=hospitals,
+            condition="cardiac arrest",
+            required_equipment=["defib"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+        )
+        scores = [h.score for h in ranked]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_score_breakdown_keys(self):
+        h = make_hospital(
+            lat=AMB_LAT + 0.05, lng=AMB_LNG, beds=10,
+            equipment=["defibrillator"],
+        )
+        ranked, _ = score_hospitals(
+            hospitals=[h],
+            condition="cardiac arrest",
+            required_equipment=["defibrillator"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+        )
+        assert set(ranked[0].score_breakdown.keys()) == {
+            "distance", "beds", "specialist", "equipment", "outcome"
+        }
+
+    def test_equipment_sub_score_richness(self):
+        h = make_hospital(
+            lat=AMB_LAT + 0.05, lng=AMB_LNG, beds=10,
+            equipment=["defibrillator", "oxygen", "ecg"],
+        )
+        ranked, _ = score_hospitals(
+            hospitals=[h],
+            condition="cardiac arrest",
+            required_equipment=["defibrillator"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+        )
+        # Base 0.6 + (0.1 * 3 bonus items from mapping) = 0.9
+        assert ranked[0].score_breakdown["equipment"] == pytest.approx(0.9)
+
+    def test_composite_score_bounds(self):
+        h = make_hospital(
+            lat=AMB_LAT + 0.05, lng=AMB_LNG, beds=10,
+            equipment=["defibrillator"],
+        )
+        ranked, _ = score_hospitals(
+            hospitals=[h],
+            condition="cardiac arrest",
+            required_equipment=["defibrillator"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+        )
+        assert 0.0 <= ranked[0].score <= 1.0
+
+
+# ── score_hospitals — explanation/pros/cons ───────────────────────────────────
+
+class TestScoreHospitalsExplanation:
+    def _rank_one(self):
+        h = make_hospital(
+            lat=AMB_LAT + 0.05, lng=AMB_LNG, beds=15,
+            equipment=["defibrillator"],
+            specialists=["cardiologist"],
+        )
+        ranked, _ = score_hospitals(
+            hospitals=[h],
+            condition="cardiac arrest",
+            required_equipment=["defibrillator"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
+        )
+        return ranked[0]
+
+    def test_explanation_is_list_of_strings(self):
+        r = self._rank_one()
+        assert isinstance(r.explanation, list)
+        assert all(isinstance(s, str) for s in r.explanation)
+        assert len(r.explanation) >= 1
+
+    def test_pros_not_empty(self):
+        r = self._rank_one()
+        assert len(r.pros) >= 1
+
+    def test_cons_not_empty(self):
+        r = self._rank_one()
+        assert len(r.cons) >= 1
+
+    def test_eta_minutes_populated(self):
+        r = self._rank_one()
+        assert r.eta_minutes is not None
+        assert r.eta_minutes >= 1
+
+
+# ── Severity/condition maps ──────
 
 class TestSeverityMapping:
-    """Tests for condition severity classification."""
-
     def test_cardiac_arrest_is_critical(self):
-        assert SEVERITY_MAP.get("cardiac arrest") == 3
+        assert SEVERITY_MAP["cardiac arrest"] == Severity.CRITICAL
 
-    def test_stroke_is_critical(self):
-        assert SEVERITY_MAP.get("stroke") == 3
-
-    def test_fracture_is_minor(self):
-        assert SEVERITY_MAP.get("fracture") == 1
+    def test_psychiatric_is_low(self):
+        assert SEVERITY_MAP["psychiatric"] == Severity.LOW
 
     def test_burns_is_moderate(self):
-        assert SEVERITY_MAP.get("burns") == 2
-
-    def test_unknown_defaults_to_none(self):
-        """Unknown condition returns None from dict.get."""
-        assert SEVERITY_MAP.get("papercut") is None
+        assert SEVERITY_MAP["burns"] == Severity.MODERATE
 
 
 class TestSpecialistMapping:
-    """Tests for condition → specialist routing."""
+    def test_cardiac_arrest_has_cardiologist(self):
+        assert "cardiologist" in CONDITION_SPECIALIST_MAP["cardiac arrest"]
 
-    def test_cardiac_maps_to_cardiologist(self):
-        assert CONDITION_SPECIALIST_MAP.get("cardiac arrest") == "cardiologist"
+    def test_stroke_has_neurologist(self):
+        assert "neurologist" in CONDITION_SPECIALIST_MAP["stroke"]
 
-    def test_stroke_maps_to_neurologist(self):
-        assert CONDITION_SPECIALIST_MAP.get("stroke") == "neurologist"
-
-    def test_trauma_maps_to_surgeon(self):
-        assert CONDITION_SPECIALIST_MAP.get("trauma") == "general_surgeon"
-
-    def test_unknown_returns_empty(self):
-        assert CONDITION_SPECIALIST_MAP.get("papercut") is None
-
-
-class TestHaversine:
-    """Tests for the haversine distance calculator."""
-
-    def test_same_point_zero_distance(self):
-        """Same coordinates should return 0 km."""
-        d = calculate_distance(29.86, 77.89, 29.86, 77.89)
-        assert d == 0.0
-
-    def test_known_distance(self):
-        """Roorkee to Haridwar is approximately 30 km."""
-        d = calculate_distance(29.8601, 77.8868, 29.9457, 78.1642)
-        assert 25.0 < d < 35.0  # approximate
-
-    def test_negative_coordinates(self):
-        """Should handle southern hemisphere coordinates."""
-        d = calculate_distance(-33.87, 151.21, -37.81, 144.96)
-        assert d > 0
-
-    def test_symmetry(self):
-        """Distance A→B should equal B→A."""
-        d1 = calculate_distance(29.86, 77.89, 30.07, 78.30)
-        d2 = calculate_distance(30.07, 78.30, 29.86, 77.89)
-        assert d1 == pytest.approx(d2, abs=0.01)
-
-
-class TestPredictBestHospital:
-    """Tests for the full hospital prediction pipeline."""
-
-    def _make_hospital(self, id, lat, lng, beds=20, icu=3, equipment=None, accepting=True, specialists=None):
-        return {
-            "id": id,
-            "name": f"Hospital {id}",
-            "address": f"Address {id}",
-            "lat": lat,
-            "lng": lng,
-            "beds": beds,
-            "icu": icu,
-            "doctors": 5,
-            "equipment": equipment or ["ecg", "ventilator"],
-            "accepting": accepting,
-            "specialists": specialists or {},
-        }
-
-    def test_returns_none_when_no_accepting(self):
-        """No accepting hospitals should return None, not crash."""
-        hospitals = [
-            self._make_hospital(1, 29.86, 77.89, accepting=False),
-            self._make_hospital(2, 29.87, 77.90, accepting=False),
-        ]
-        result = predict_best_hospital(hospitals, "trauma", ["ecg"], 29.86, 77.89)
-        assert result is None
-
-    def test_returns_none_when_no_beds(self):
-        """All hospitals with 0 beds should return None."""
-        hospitals = [
-            self._make_hospital(1, 29.86, 77.89, beds=0),
-            self._make_hospital(2, 29.87, 77.90, beds=0),
-        ]
-        result = predict_best_hospital(hospitals, "trauma", ["ecg"], 29.86, 77.89)
-        assert result is None
-
-    def test_prefers_closer_hospital_rule_fallback(self):
-        """Rule-based fallback should prefer closer hospital over farther one."""
-        # Test rule-based directly (model-independent)
-        close = _rule_fallback({"distance_km": 2.0, "beds": 20, "equipment_match": 1.0})
-        far = _rule_fallback({"distance_km": 200.0, "beds": 20, "equipment_match": 1.0})
-        assert close > far
-
-    def test_single_accepting_hospital_returned(self):
-        """When only one hospital accepts, it should always be returned."""
-        hospitals = [
-            self._make_hospital(1, 29.86, 77.89, beds=20, accepting=True),
-            self._make_hospital(2, 30.50, 78.50, beds=20, accepting=False),
-        ]
-        result = predict_best_hospital(hospitals, "fracture", [], 29.86, 77.89)
-        assert result is not None
-        assert result["id"] == 1
-
-    def test_equipment_matching(self):
-        """Hospital with matching equipment should be preferred."""
-        hospitals = [
-            self._make_hospital(1, 29.86, 77.89, equipment=["ecg"]),
-            self._make_hospital(2, 29.861, 77.891, equipment=["ecg", "defibrillator", "ventilator"]),
-        ]
-        result = predict_best_hospital(
-            hospitals, "cardiac_arrest", ["ecg", "defibrillator"], 29.86, 77.89
+    def test_unknown_condition_returns_empty_list_from_scorer(self):
+        h = make_hospital(
+            lat=AMB_LAT + 0.05, lng=AMB_LNG, beds=10,
+            equipment=["defib"],
         )
-        assert result is not None
-        # Hospital 2 has better equipment match
-        assert "defibrillator" in result.get("equipment_matched", [])
-
-    def test_result_contains_required_fields(self):
-        """Result dict should contain all required response fields."""
-        hospitals = [self._make_hospital(1, 29.86, 77.89)]
-        result = predict_best_hospital(hospitals, "trauma", ["ecg"], 29.86, 77.89)
-        
-        if result is None:
-            pytest.skip("No result returned")
-        
-        required = ["final_score", "distance_km", "eta_minutes", 
-                     "equipment_matched", "equipment_missing", "ml_reasoning"]
-        for field in required:
-            assert field in result, f"Missing field: {field}"
-
-    def test_specialist_prefilter(self):
-        """Hospital with the right specialist should be preferred."""
-        hospitals = [
-            self._make_hospital(1, 29.86, 77.89, specialists={}),
-            self._make_hospital(2, 29.861, 77.891, specialists={"cardiologist": 2}),
-        ]
-        result = predict_best_hospital(
-            hospitals, "cardiac arrest", ["ecg", "defibrillator"], 29.86, 77.89
+        ranked, _ = score_hospitals(
+            hospitals=[h],
+            condition="unknown_rare_condition",
+            required_equipment=["defib"],
+            ambulance_lat=AMB_LAT,
+            ambulance_lng=AMB_LNG,
         )
-        assert result is not None
-        assert result["id"] == 2  # has cardiologist
-
-    def test_empty_hospital_list(self):
-        """Empty input list should return None."""
-        result = predict_best_hospital([], "trauma", [], 29.86, 77.89)
-        assert result is None
-
-    def test_eta_is_at_least_one_minute(self):
-        """ETA should always be >= 1 minute, even for very close hospitals."""
-        hospitals = [self._make_hospital(1, 29.86, 77.89)]
-        result = predict_best_hospital(hospitals, "fracture", [], 29.86, 77.89)
-        if result:
-            assert result["eta_minutes"] >= 1
-
-    def test_score_between_zero_and_one(self):
-        """Final score should be in [0, 1] range."""
-        hospitals = [self._make_hospital(1, 29.86, 77.89)]
-        result = predict_best_hospital(hospitals, "trauma", [], 29.86, 77.89)
-        if result:
-            assert 0.0 <= result["final_score"] <= 1.0
+        assert isinstance(ranked, list)

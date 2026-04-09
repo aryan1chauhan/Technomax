@@ -168,3 +168,27 @@ class TestDispatchAiTriageValidation:
         result, err = parse_and_validate_ai_response("Sorry, I cannot help with that.")
         assert result is None
         assert err is not None
+
+
+class TestDispatchInternals:
+    def test_build_rejection_summary_populates_required_fields(self):
+        from app.api.endpoints.dispatch import _build_rejection_summary
+
+        hospitals = [
+            {"equipment": ["ecg"], "available_beds": 1},
+            {"equipment": [], "available_beds": 0},
+        ]
+        ranked = [{"id": 1}]
+
+        summary = _build_rejection_summary(
+            hospital_dicts=hospitals,
+            ranked=ranked,
+            required_equipment=["ecg", "defibrillator"],
+        )
+
+        assert summary.total_evaluated == 2
+        assert summary.total_passed == 1
+        assert summary.total_rejected == 1
+        assert summary.missing_equipment == 2
+        assert summary.insufficient_beds == 1
+        assert summary.too_far == 0

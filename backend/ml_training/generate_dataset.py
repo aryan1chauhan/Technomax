@@ -114,7 +114,7 @@ def build_features(hospital, needed_items, speciality_needed, case_lat, case_lng
     if isinstance(specialists, str):
         try:
             specialists = json.loads(specialists)
-        except:
+        except (TypeError, json.JSONDecodeError):
             specialists = {}
     needed_specialist = CONDITION_SPECIALIST_MAP.get(condition_clean, '')
     specialist_present = int(specialists.get(needed_specialist, 0) > 0)

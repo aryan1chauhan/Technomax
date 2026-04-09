@@ -104,10 +104,22 @@ export default function HospitalTrack() {
   const handleMarkReady = async () => {
     if (!caseData?.assigned_hospital_id) return;
     try {
+      const beds = typeof caseData.available_beds === "number"
+        ? caseData.available_beds
+        : (typeof caseData.beds === "number" ? caseData.beds : 0);
+      const icu = typeof caseData.icu_beds === "number"
+        ? caseData.icu_beds
+        : (typeof caseData.icu === "number" ? caseData.icu : 0);
+      const doctors = typeof caseData.doctors === "number" ? caseData.doctors : 0;
+      const equipment = Array.isArray(caseData.equipment_needed) ? caseData.equipment_needed : [];
+
       // Toggle hospital accepting status to signal readiness
       await api.put(`/api/hospitals/${caseData.assigned_hospital_id}/availability`, {
+        beds,
+        icu,
+        doctors,
+        equipment,
         accepting: true,
-        status_message: `Ready for case #${case_id}`,
       });
       setIsReady(true);
     } catch (err) {

@@ -4,12 +4,12 @@ from app.db.database import get_db
 from app.db.models import User
 from app.schemas.user import UserCreate, UserLogin
 from app.core.security import hash_password, verify_password, create_access_token
-from app.core.rate_limit import limiter
+from app.middleware.rate_limit import limiter, LIMIT_AUTH_LOGIN, LIMIT_AUTH_REGISTER
 
 router = APIRouter(prefix="/api/auth")
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-@limiter.limit("10/minute")
+@limiter.limit(LIMIT_AUTH_REGISTER)
 def register(request: Request, user_in: UserCreate, db: Session = Depends(get_db)):
     valid_roles = {"ambulance", "hospital", "admin"}
     if user_in.role not in valid_roles:
@@ -41,7 +41,7 @@ def register(request: Request, user_in: UserCreate, db: Session = Depends(get_db
     return {"message": "User registered successfully"}
 
 @router.post("/login")
-@limiter.limit("5/minute")
+@limiter.limit(LIMIT_AUTH_LOGIN)
 def login(request: Request, user_in: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == user_in.email).first()
     

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import func, desc, Integer
@@ -10,11 +10,14 @@ from app.core.security import get_current_user
 from app.db.models import CaseEvent
 from app.core.transitions import validate_transition, VALID_TRANSITIONS, BED_RESTORE_STATUSES
 from app.core.firebase import send_push
+from app.middleware.rate_limit import limiter, LIMIT_CASES
 
 router = APIRouter(prefix="/api/cases")
 
 @router.get("/", response_model=list[CaseOut])
+@limiter.limit(LIMIT_CASES)
 def get_cases(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -26,7 +29,9 @@ def get_cases(
     return cases
 
 @router.get("/hospital")
+@limiter.limit(LIMIT_CASES)
 def get_hospital_cases(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -45,7 +50,9 @@ def get_hospital_cases(
     return cases
 
 @router.get("/admin/stats")
+@limiter.limit(LIMIT_CASES)
 def admin_stats(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -132,7 +139,9 @@ def admin_stats(
     }
 
 @router.put("/{case_id}/status")
+@limiter.limit(LIMIT_CASES)
 def update_case_status(
+    request: Request,
     case_id: int,
     update_data: CaseStatusUpdate,
     db: Session = Depends(get_db),
@@ -205,7 +214,9 @@ def update_case_status(
     return {"status": new_status, "case_id": case.id}
 
 @router.get("/{case_id}/timeline", response_model=list[CaseEventOut])
+@limiter.limit(LIMIT_CASES)
 def get_case_timeline(
+    request: Request,
     case_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

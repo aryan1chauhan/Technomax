@@ -28,3 +28,14 @@ venv/
 # Firebase — never commit service account credentials
 firebase-service-account.json
 *-service-account.json
+
+# Local debug / output artifacts
+backend\out.txt
+backend\run_output.txt
+backend\test_api_out.txt
+backend\ai_test.json
+backend\query.sql
+backend\status.txt
+backend\error.log
+git_status_output.txt
+pytest_out.txt

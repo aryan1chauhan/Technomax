@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.db.database import engine, get_db
 from app.db import models
-from app.core.rate_limit import limiter, rate_limit_exceeded_handler
+from app.middleware.rate_limit import limiter, rate_limit_exceeded_handler
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.endpoints.auth import router as auth_router
 from app.api.endpoints.hospitals import router as hospitals_router
@@ -17,6 +18,7 @@ from app.api.endpoints import tracking
 app = FastAPI(title="MediRoute API")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

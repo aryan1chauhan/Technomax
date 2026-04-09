@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, field_validator
-from typing import Optional, Union
+from typing import Optional, Union, Any
 from datetime import datetime
 
 
@@ -40,7 +40,7 @@ class ScoredHospitalResponse(BaseModel):
     available_beds: int
     icu_beds: int = 0
     score: float
-    score_breakdown: dict[str, float]
+    score_breakdown: dict[str, Any]
     explanation: list[str]
     pros: list[str]
     cons: list[str]

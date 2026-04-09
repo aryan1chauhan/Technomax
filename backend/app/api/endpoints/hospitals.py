@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timezone
@@ -6,11 +6,13 @@ from app.db.database import get_db
 from app.db.models import Hospital, Availability, User
 from app.schemas.hospital import HospitalOut, AvailabilityUpdate
 from app.core.security import get_current_user
+from app.middleware.rate_limit import limiter, LIMIT_HOSPITALS_READ, LIMIT_HOSPITALS_WRITE
 
 router = APIRouter(prefix="/api/hospitals")
 
 @router.get("/", response_model=list[HospitalOut])
-def get_hospitals(db: Session = Depends(get_db)):
+@limiter.limit(LIMIT_HOSPITALS_READ)
+def get_hospitals(request: Request, db: Session = Depends(get_db)):
     # FIX: Single JOIN query instead of N+1 (was 189 queries, now 1)
     # Subquery: get the latest availability record per hospital
     latest_avail = db.query(
@@ -42,7 +44,9 @@ def get_hospitals(db: Session = Depends(get_db)):
     return result
 
 @router.put("/{hospital_id}/availability")
+@limiter.limit(LIMIT_HOSPITALS_WRITE)
 def update_availability(
+    request: Request,
     hospital_id: int, 
     availability_in: AvailabilityUpdate,
     db: Session = Depends(get_db),

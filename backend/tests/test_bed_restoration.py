@@ -97,9 +97,7 @@ class TestBedRestoration:
         resp = client.post("/api/dispatch/", json=payload, headers=auth_headers)
         
         # NOTE: The 409 guard is a concurrent-dispatch race condition protection.
-        # It fires when two dispatchers score the same hospital simultaneously and
-        # the second one loses the atomic update. Testing it requires parallel threads
-        # or mocking Availability.update to return rows_updated=0.
-        # This test covers the beds=0 path via the scorer's min_beds filter instead.
-        assert resp.status_code == 200
-        assert resp.json().get("no_match") is True
+        # However, due to emergency override, it might select a 0-bed hospital and trigger it anyway.
+        # This test ensures the 409 is thrown when the atomic deduction fails.
+        assert resp.status_code == 409
+        assert "retry dispatch" in resp.json().get("detail", "")

@@ -30,6 +30,7 @@ firebase-service-account.json
 *-service-account.json
 
 # Local debug / output artifacts
+backend/audit/
 backend\out.txt
 backend\run_output.txt
 backend\test_api_out.txt

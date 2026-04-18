@@ -19,6 +19,19 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: mediroute_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build: ./backend
     container_name: mediroute_backend
@@ -30,10 +43,16 @@ services:
       CLAUDE_API_KEY: ${CLAUDE_API_KEY}
       ORS_API_KEY: ${ORS_API_KEY}
       FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
+      REDIS_URL: redis://redis:6379/0
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
     ports:
       - "8000:8000"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - ./backend/ml_training:/app/ml_training
@@ -49,3 +68,4 @@ services:
 
 volumes:
   pg_data:
+  redis_data:

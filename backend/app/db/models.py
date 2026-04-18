@@ -25,6 +25,8 @@ class Hospital(Base):
     address = Column(String)
     lat = Column(Float)
     lng = Column(Float)
+    hospital_type = Column(String(20), nullable=False, server_default="both")
+    has_icu = Column(Boolean, nullable=False, server_default="false")
     specialists = Column(JSON, default=dict)
 
 class Availability(Base):
@@ -71,3 +73,23 @@ class CaseEvent(Base):
         server_default=func.now(),
         nullable=False
     )
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id                    = Column(Integer, primary_key=True, autoincrement=True)
+    case_id               = Column(String, nullable=False, index=True)
+    condition_type        = Column(String, nullable=True)
+    severity_score        = Column(Integer, nullable=True)
+    ambulance_lat         = Column(Float, nullable=True)
+    ambulance_lng         = Column(Float, nullable=True)
+    selected_hospital_id  = Column(Integer, nullable=True)
+    selected_hospital_name= Column(String, nullable=True)
+    score                 = Column(Float, default=0.0, nullable=True)
+    score_breakdown       = Column(JSONB, nullable=True)
+    vitals                = Column(JSONB, nullable=True)
+    required_equipment    = Column(ARRAY(String), nullable=True)
+    ambulance_equipment   = Column(ARRAY(String), nullable=True)
+    all_hospitals         = Column(JSONB, nullable=True)
+    timestamp             = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+

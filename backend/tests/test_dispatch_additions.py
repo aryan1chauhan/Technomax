@@ -8,9 +8,6 @@ Run with:
     cd backend
     python -m pytest tests/test_dispatch_additions.py -v
 """
-import pytest
-
-
 class TestDispatchEnrichedResponse:
     """Tests for the new enriched DispatchResponse fields."""
 
@@ -69,8 +66,8 @@ class TestDispatchEnrichedResponse:
             assert "total_rejected" in rh
             assert "total_evaluated" in rh
 
-    def test_dispatch_no_match_when_equipment_unavailable(self, client, auth_headers):
-        """Requesting nonexistent equipment should trigger no_match."""
+    def test_dispatch_uses_emergency_override_when_equipment_unavailable(self, client, auth_headers):
+        """Non-critical mismatches should degrade to emergency override instead of hard no-match."""
         payload = {
             **self.BASE_PAYLOAD,
             "equipment_needed": ["hyperbaric_chamber_xyz_nonexistent"],
@@ -78,12 +75,15 @@ class TestDispatchEnrichedResponse:
         resp = client.post("/api/dispatch/", json=payload, headers=auth_headers)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["no_match"] is True
-        assert data["no_match_reason"] is not None
-        assert isinstance(data["fallback_options"], list)
+        assert data["no_match"] is False
+        assert data["decision_type"] in {"direct", "stabilize_first", "emergency_override"}
+        if data["decision_type"] == "emergency_override":
+            reasoning = data.get("reasoning") or {}
+            assert reasoning.get("emergency_override") is True
+            assert "partial equipment match" in str(reasoning.get("override_message", "")).lower()
 
     def test_dispatch_no_match_has_fallback_options(self, client, auth_headers):
-        """no_match response should include partial-match fallback suggestions."""
+        """If a true no-match occurs, fallback options should still be strings."""
         payload = {
             **self.BASE_PAYLOAD,
             "equipment_needed": ["hyperbaric_chamber_xyz_nonexistent"],
@@ -137,6 +137,24 @@ class TestDispatchAiTriageValidation:
         assert result.severity == "critical"
         assert result.priority == 10
 
+    def test_parses_categorized_equipment_schema(self):
+        from app.api.endpoints.ai import parse_and_validate_ai_response
+
+        raw = (
+            '{"condition": "cardiac arrest", "severity": "critical", "priority": 10, '
+            '"critical_equipment": ["ventilator", "defibrillator"], '
+            '"important_equipment": ["icu_equipment"], '
+            '"optional_equipment": ["ct_scan"], '
+            '"reasoning": "Life threatening"}'
+        )
+        result, err = parse_and_validate_ai_response(raw)
+        assert err is None
+        assert result is not None
+        assert result.critical_equipment == ["ventilator", "defibrillator"]
+        assert result.important_equipment == ["icu"]
+        assert result.optional_equipment == ["xray"]
+        assert "ventilator" in result.required_equipment
+
     def test_strips_markdown_fences(self):
         from app.api.endpoints.ai import parse_and_validate_ai_response
 
@@ -169,10 +187,18 @@ class TestDispatchAiTriageValidation:
         assert result is None
         assert err is not None
 
+    def test_non_string_response_returns_error(self):
+        from app.api.endpoints.ai import parse_and_validate_ai_response
+
+        result, err = parse_and_validate_ai_response(None)
+        assert result is None
+        assert err is not None
+        assert "not a string" in err.lower()
+
 
 class TestDispatchInternals:
     def test_build_rejection_summary_populates_required_fields(self):
-        from app.api.endpoints.dispatch import _build_rejection_summary
+        from app.services.dispatch_service import _build_rejection_summary
 
         hospitals = [
             {"equipment": ["ecg"], "available_beds": 1},

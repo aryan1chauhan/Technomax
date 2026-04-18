@@ -1,0 +1,818 @@
+{
+  "summary": {
+    "total": 40,
+    "passed": 31,
+    "failed": 9,
+    "pass_rate": 0.775
+  },
+  "distribution": {
+    "S_survival": {
+      "mean": 0.95,
+      "stdev": 0.22072142786315224,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "S_treatment": {
+      "mean": 0.7725,
+      "stdev": 0.2717346933862947,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "S_equipment": {
+      "mean": 0.66625,
+      "stdev": 0.23270634626013875,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "S_eta": {
+      "mean": 0.9468650000000001,
+      "stdev": 0.21999304715120385,
+      "min": 0.0,
+      "max": 0.9967
+    },
+    "S_load": {
+      "mean": 0.95,
+      "stdev": 0.22072142786315224,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "final_score": {
+      "mean": 0.81772,
+      "stdev": 0.2134948797800727,
+      "min": 0.0,
+      "max": 0.9995
+    }
+  },
+  "dominance": {
+    "S_survival": {
+      "gap": 0.11609625000000001,
+      "dominates": false
+    },
+    "S_treatment": {
+      "gap": 0.10577875000000003,
+      "dominates": false
+    },
+    "S_equipment": {
+      "gap": 0.23859125000000003,
+      "dominates": true
+    },
+    "S_eta": {
+      "gap": 0.11217750000000004,
+      "dominates": false
+    },
+    "S_load": {
+      "gap": 0.11609625000000001,
+      "dominates": false
+    }
+  },
+  "oscillations": {
+    "0cf84475992c831ee62f97dded852ea5": {
+      "decision_types": [
+        "direct"
+      ],
+      "primary_destinations": [
+        "stroke_center_busy",
+        "stroke_center_far"
+      ],
+      "count": 2
+    },
+    "4b5d3e0b2eb8ec8de2ba4fbb236f470c": {
+      "decision_types": [
+        "direct"
+      ],
+      "primary_destinations": [
+        "general_sec_11",
+        "general_sec_18"
+      ],
+      "count": 2
+    }
+  },
+  "results": [
+    {
+      "case_id": "CRITICAL-01-cardiac-nearby-full",
+      "passed": false,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": false,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_1",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.5,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.694
+      },
+      "issues": [
+        "Chose forbidden hospital: general_sec_1"
+      ]
+    },
+    {
+      "case_id": "CRITICAL-02-stroke-severe-time",
+      "passed": false,
+      "decision_type_match": false,
+      "priority_match": false,
+      "forbidden_hospital_avoided": false,
+      "decision_type_actual": "direct",
+      "primary_destination": "stroke_center_1",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 0.8,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9595
+      },
+      "issues": [
+        "Decision type mismatch: expected stabilize_first, got direct",
+        "Chose forbidden hospital: stroke_center_1"
+      ]
+    },
+    {
+      "case_id": "CRITICAL-03-trauma-major-bleed",
+      "passed": false,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": false,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_3",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.9,
+        "S_equipment": 0.3,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.7132
+      },
+      "issues": [
+        "Chose forbidden hospital: general_sec_3"
+      ]
+    },
+    {
+      "case_id": "CRITICAL-04-respiratory-acute",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "cardiac_hub_vent",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.9,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.8
+      },
+      "issues": []
+    },
+    {
+      "case_id": "CRITICAL-05-cardiac-stroke-combo",
+      "passed": false,
+      "decision_type_match": false,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_4",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.5,
+        "S_equipment": 0.5,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.6751
+      },
+      "issues": [
+        "Decision type mismatch: expected stabilize_first, got direct"
+      ]
+    },
+    {
+      "case_id": "CRITICAL-06-trauma-no-ideal",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_5",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.9,
+        "S_equipment": 0.5,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.781
+      },
+      "issues": []
+    },
+    {
+      "case_id": "CRITICAL-07-stroke-near-death",
+      "passed": false,
+      "decision_type_match": false,
+      "priority_match": false,
+      "forbidden_hospital_avoided": false,
+      "decision_type_actual": "direct",
+      "primary_destination": "stroke_center_advanced",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 0.75,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.948
+      },
+      "issues": [
+        "Decision type mismatch: expected stabilize_first, got direct",
+        "Chose forbidden hospital: stroke_center_advanced"
+      ]
+    },
+    {
+      "case_id": "CRITICAL-08-cardiac-all-busy",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_7",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.5,
+        "S_equipment": 1.0,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.8369
+      },
+      "issues": []
+    },
+    {
+      "case_id": "CRITICAL-09-respiratory-arrest",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "cardiac_hub_resp",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.9,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.8
+      },
+      "issues": []
+    },
+    {
+      "case_id": "CRITICAL-10-trauma-massive",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "trauma_hub_surg",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.9,
+        "S_equipment": 0.75,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9005
+      },
+      "issues": []
+    },
+    {
+      "case_id": "BORDERLINE-01-survival-eq-eta",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "cardiac_hub_test",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 1.0,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9995
+      },
+      "issues": []
+    },
+    {
+      "case_id": "BORDERLINE-02-tight-margin-survival",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "stroke_center_tight",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 0.75,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9495
+      },
+      "issues": []
+    },
+    {
+      "case_id": "BORDERLINE-03-survival-slightly-tight",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "cardiac_hub_margin",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 1.0,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9995
+      },
+      "issues": []
+    },
+    {
+      "case_id": "BORDERLINE-04-mixed-capability",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "stroke_center_far",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 0.75,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9495
+      },
+      "issues": []
+    },
+    {
+      "case_id": "BORDERLINE-05-tied-options",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "cardiac_hub_resp_eq",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.8,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.8695
+      },
+      "issues": []
+    },
+    {
+      "case_id": "BORDERLINE-06-specialty-far",
+      "passed": false,
+      "decision_type_match": false,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_10",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.5,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.694
+      },
+      "issues": [
+        "Decision type mismatch: expected stabilize_first, got direct"
+      ]
+    },
+    {
+      "case_id": "BORDERLINE-07-all-overloaded",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "stroke_center_busy",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 0.75,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9495
+      },
+      "issues": []
+    },
+    {
+      "case_id": "BORDERLINE-08-stabilize-vs-direct",
+      "passed": false,
+      "decision_type_match": false,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "stroke_center_advanced_far",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 0.75,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.948
+      },
+      "issues": [
+        "Decision type mismatch: expected stabilize_first, got direct"
+      ]
+    },
+    {
+      "case_id": "BORDERLINE-09-equipment-gaps",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_no_trauma",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.8,
+        "S_equipment": 0.4,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.797
+      },
+      "issues": []
+    },
+    {
+      "case_id": "BORDERLINE-10-ambulance-critical",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "cardiac_hub_backup",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.9,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.8
+      },
+      "issues": []
+    },
+    {
+      "case_id": "STABLE-01-fracture-simple",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_11",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.8,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.8695
+      },
+      "issues": []
+    },
+    {
+      "case_id": "STABLE-02-respiratory-mild",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_12",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.8,
+        "S_equipment": 1.0,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9495
+      },
+      "issues": []
+    },
+    {
+      "case_id": "STABLE-03-angina-stable",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "cardiac_hub_stable",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9195
+      },
+      "issues": []
+    },
+    {
+      "case_id": "STABLE-04-tia-transient",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "stroke_center_tia",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 0.75,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9495
+      },
+      "issues": []
+    },
+    {
+      "case_id": "STABLE-05-bleeding-minor",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "rural_7",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.8,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.8695
+      },
+      "issues": []
+    },
+    {
+      "case_id": "STABLE-06-cold-symptoms",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_16",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.8,
+        "S_equipment": 1.0,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9495
+      },
+      "issues": []
+    },
+    {
+      "case_id": "STABLE-07-cardiac-monitoring",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "cardiac_hub_routine",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9195
+      },
+      "issues": []
+    },
+    {
+      "case_id": "STABLE-08-burn-light",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_18",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.8,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.8695
+      },
+      "issues": []
+    },
+    {
+      "case_id": "STABLE-09-dehydration",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_19",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.8,
+        "S_equipment": 1.0,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9495
+      },
+      "issues": []
+    },
+    {
+      "case_id": "STABLE-10-chest-pain-msk",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "cardiac_hub_msk",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 1.0,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9995
+      },
+      "issues": []
+    },
+    {
+      "case_id": "NO_MATCH-01-trauma-no-surgery",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_21",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.8,
+        "S_equipment": 0.5,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.8495
+      },
+      "issues": []
+    },
+    {
+      "case_id": "NO_MATCH-02-stroke-no-neuro",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "rural_10",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.3,
+        "S_equipment": 0.75,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.7745
+      },
+      "issues": []
+    },
+    {
+      "case_id": "NO_MATCH-03-cardiac-no-cath",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_22",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.5,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.694
+      },
+      "issues": []
+    },
+    {
+      "case_id": "NO_MATCH-04-all-full",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "cardiac_hub_full_2",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.9,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.7641
+      },
+      "issues": []
+    },
+    {
+      "case_id": "NO_MATCH-05-single-poor-option",
+      "passed": false,
+      "decision_type_match": false,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "no_viable_hospital",
+      "primary_destination": null,
+      "score_breakdown": {},
+      "issues": [
+        "Decision type mismatch: expected direct, got no_viable_hospital"
+      ]
+    },
+    {
+      "case_id": "NO_MATCH-06-specialized-gap",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_23",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.3,
+        "S_equipment": 0.75,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.7745
+      },
+      "issues": []
+    },
+    {
+      "case_id": "NO_MATCH-07-weak-equipment-available",
+      "passed": false,
+      "decision_type_match": false,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "no_viable_hospital",
+      "primary_destination": null,
+      "score_breakdown": {},
+      "issues": [
+        "Decision type mismatch: expected direct, got no_viable_hospital"
+      ]
+    },
+    {
+      "case_id": "NO_MATCH-08-all-far",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "stroke_center_too_far",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 1.0,
+        "S_equipment": 0.75,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.9495
+      },
+      "issues": []
+    },
+    {
+      "case_id": "NO_MATCH-09-equipment-vs-proximity",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "trauma_hub_far",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.8,
+        "S_equipment": 0.75,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.8995
+      },
+      "issues": []
+    },
+    {
+      "case_id": "NO_MATCH-10-perfect-but-full",
+      "passed": true,
+      "decision_type_match": true,
+      "priority_match": false,
+      "forbidden_hospital_avoided": true,
+      "decision_type_actual": "direct",
+      "primary_destination": "general_sec_backup_nm",
+      "score_breakdown": {
+        "S_survival": 1.0,
+        "S_treatment": 0.5,
+        "S_equipment": 0.6,
+        "S_eta": 0.9967,
+        "S_load": 1.0,
+        "final_score": 0.694
+      },
+      "issues": []
+    }
+  ]
+}

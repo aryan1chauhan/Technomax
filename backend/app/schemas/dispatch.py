@@ -9,6 +9,11 @@ class DispatchRequest(BaseModel):
     equipment_needed: list[str] = []
     # Alias for new scorer field name — accepts both frontend conventions
     required_equipment: list[str] = []
+    critical_equipment: list[str] = []
+    important_equipment: list[str] = []
+    optional_equipment: list[str] = []
+    ambulance_equipment: list[str] = []
+    vitals: dict[str, Any] = {}
     ambulance_lat: float
     ambulance_lng: float
     severity: Optional[Union[str, int]] = None
@@ -27,11 +32,49 @@ class DispatchRequest(BaseModel):
         return str(v).lower().strip()
 
     def get_equipment(self) -> list[str]:
-        """Return whichever equipment list was populated."""
-        return self.required_equipment or self.equipment_needed
+        """Return deduplicated equipment from flat and categorized inputs."""
+        ordered: list[str] = []
+        for item in (
+            self.required_equipment
+            + self.equipment_needed
+            + self.critical_equipment
+            + self.important_equipment
+            + self.optional_equipment
+        ):
+            normalized = str(item or "").strip().lower()
+            if normalized and normalized not in ordered:
+                ordered.append(normalized)
+        return ordered
+
+    def get_severity_score(self) -> int:
+        """Normalize severity into 1–10 scale for dispatch stage logic."""
+        if self.severity is None:
+            return 5
+
+        if isinstance(self.severity, int):
+            value = self.severity
+        else:
+            text = str(self.severity).strip().lower()
+            if text.isdigit():
+                value = int(text)
+            else:
+                value = {
+                    "minor": 3,
+                    "low": 3,
+                    "moderate": 6,
+                    "medium": 6,
+                    "critical": 9,
+                    "high": 9,
+                }.get(text, 5)
+
+        if value <= 3:
+            return 3
+        if value >= 8:
+            return 9
+        return 6
 
 
-# ── Enriched response schemas ────────────────────────────────────────────────
+# ── Enriched response schemas ─────
 
 class ScoredHospitalResponse(BaseModel):
     hospital_id: int
@@ -63,6 +106,10 @@ class RejectionSummary(BaseModel):
 
 class DispatchResponse(BaseModel):
     # ── New enriched fields ──
+    decision_type: Optional[str] = None
+    primary_destination: Optional[dict[str, Any]] = None
+    secondary_destination: Optional[dict[str, Any]] = None
+    reasoning: Optional[dict[str, Any]] = None
     case_id: Optional[int] = None
     status: Optional[str] = None
     triage: Optional[dict] = None

@@ -277,18 +277,18 @@ export default function Dispatch() {
     : null;
 
   return (
-    <div className="min-h-screen bg-[#F7F7FC] font-['Inter',sans-serif]">
+    <div className="min-h-screen bg-[#F7F7FC] font-['Inter',sans-serif] pb-10">
 
       {/* Nav */}
-      <nav className="bg-white border-b border-[#F0F2F7] h-16 flex items-center px-8">
+      <nav className="glass-panel sticky top-0 z-50 h-16 flex items-center px-8 mb-4">
         <div className="flex items-center gap-3 flex-1">
           <div className="relative w-9 h-9 bg-[#EE3B3B] rounded-lg flex items-center justify-center">
             <div className="absolute w-4 h-1.5 bg-white rounded-sm" />
             <div className="absolute w-1.5 h-4 bg-white rounded-sm" />
           </div>
           <div>
-            <p className="text-[16px] font-bold text-[#1A1E2E] leading-none">MediRoute</p>
-            <p className="text-[11px] text-[#737A8F]">Dispatch Console</p>
+            <p className="text-[16px] font-bold premium-gradient-text leading-none">MediRoute</p>
+            <p className="text-[11px] text-[#737A8F]">Premium Dispatch</p>
           </div>
         </div>
         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-medium ${gpsReady ? "bg-[#E8FDF2] text-[#17B86B]" : "bg-[#FFF8E0] text-[#FFB21A]"}`}>
@@ -300,7 +300,7 @@ export default function Dispatch() {
       <div className="max-w-[960px] mx-auto px-8 py-8">
 
         {/* VOICE PANEL */}
-        <div className={`rounded-xl border-[1.5px] p-5 mb-6 transition-all ${showVoicePanel ? "bg-[#EBF3FF] border-[#1A78F2]" : "bg-white border-[#F0F2F7]"}`}>
+        <div className={`glass-card rounded-xl border-[1.5px] p-5 mb-6 transition-all ${showVoicePanel ? "bg-white/80 border-[#1A78F2] shadow-[0_4px_20px_rgba(26,120,242,0.15)]" : "border-transparent"}`}>
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -413,7 +413,7 @@ export default function Dispatch() {
         </div>
 
         {/* CONDITION GRID */}
-        <div className="bg-white border border-[#F0F2F7] rounded-xl p-5 mb-6">
+        <div className="glass-card rounded-xl p-5 mb-6">
           <h3 className="text-[13px] font-semibold text-[#404454] uppercase tracking-wider mb-4">Patient Condition</h3>
           <div className="grid grid-cols-5 gap-3">
             {CONDITIONS.map(c => (
@@ -438,7 +438,7 @@ export default function Dispatch() {
 
         {/* EQUIPMENT PANEL */}
         {(selectedCondition || aiResult) && (
-          <div className="bg-white border-[1.5px] border-[#1A78F2] rounded-xl p-5 mb-6 animate-[fadeIn_0.3s_ease]">
+          <div className="glass-card border-[1.5px] border-[#1A78F2]/50 shadow-[0_4px_20px_rgba(26,120,242,0.1)] rounded-xl p-5 mb-6 animate-[fadeIn_0.3s_ease]">
             <style>{`@keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}`}</style>
             <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
               <div className="flex items-center gap-2">
@@ -515,7 +515,7 @@ export default function Dispatch() {
         <button
           onClick={handleSubmit}
           disabled={loading || !gpsReady}
-          className="w-full h-[60px] bg-[#EE3B3B] hover:bg-[#D02F2F] disabled:opacity-60 text-white font-bold text-[16px] rounded-xl transition flex items-center justify-center gap-3"
+          className="w-full h-[60px] bg-gradient-to-r from-[#EE3B3B] to-[#FF6B35] hover:to-[#EE3B3B] disabled:opacity-60 text-white font-bold text-[16px] rounded-xl shadow-[0_8px_20px_rgba(238,59,59,0.25)] transition-all flex items-center justify-center gap-3 transform hover:-translate-y-1"
         >
           {loading
             ? <><span className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> Scanning 188 hospitals...</>

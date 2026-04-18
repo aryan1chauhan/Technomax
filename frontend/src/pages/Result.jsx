@@ -18,6 +18,21 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import CaseTimeline from "../components/CaseTimeline";
 
+// ── Constraint failure reason humanizer ─────────────────────────────────────
+const NO_MATCH_REASON_LABELS = {
+  no_viable_hospital_after_constraints: "No hospital met all required criteria",
+  missing_critical_equipment:           "No hospital has the required equipment",
+  eta_too_high:                         "All hospitals are too far for safe transport",
+  survival_below_threshold:             "Patient condition too critical for available options",
+  corrupted_input_detected:             "Dispatch data could not be verified",
+  no_hospitals_available:               "No hospitals are currently in the system",
+};
+
+function humanizeReason(raw) {
+  if (!raw) return "No viable hospital found";
+  return NO_MATCH_REASON_LABELS[raw] ?? "No viable hospital found";
+}
+
 // ── Severity badge config (mirrors backend severity.py) ──────────────────────
 const SEVERITY_BADGE = {
   critical: { label: "CRITICAL", bg: "#7f1d1d", text: "#fecaca", border: "#ef4444", dot: "#f87171" },
@@ -147,22 +162,42 @@ function AlternativeCard({ hospital, onOverride, index }) {
 
 // ── No-match state ────────────────────────────────────────────────────────────
 function NoMatchView({ result, onNewDispatch }) {
+  const rawReason = result.no_match_reason || result.failure_reason || "";
+  const humanReason = humanizeReason(rawReason);
+  // Detect hard-constraint failures vs soft no-match
+  const isConstraintFailure = rawReason in NO_MATCH_REASON_LABELS;
+  const rh = result.rejected_hospitals;
+
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px", fontFamily: "system-ui, sans-serif" }}>
       <div style={{
         background: "rgba(127,29,29,0.15)", border: "1px solid rgba(239,68,68,0.3)",
         borderRadius: 12, padding: 24, textAlign: "center", marginBottom: 24,
       }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+        <div style={{ fontSize: 36, marginBottom: 12 }}>{isConstraintFailure ? "🚫" : "⚠️"}</div>
         <div style={{ color: "#fca5a5", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
           No Eligible Hospital Found
         </div>
-        <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.6 }}>
-          {result.no_match_reason}
+        {/* Human-readable reason — never raw snake_case */}
+        <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.6, marginBottom: isConstraintFailure ? 10 : 0 }}>
+          {humanReason}
         </div>
+        {/* Constraint badge — shows the technical code discreetly for ops staff */}
+        {isConstraintFailure && (
+          <div style={{
+            display: "inline-block", marginTop: 8,
+            padding: "2px 10px", borderRadius: 20,
+            fontSize: 10, fontFamily: "monospace", letterSpacing: "0.08em",
+            background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
+            color: "#f87171",
+          }}>
+            {rawReason}
+          </div>
+        )}
       </div>
 
-      {result.rejected_hospitals && (
+      {/* Rejection breakdown — graceful when rejected_hospitals is absent */}
+      {rh ? (
         <div style={{
           background: "rgba(15,23,42,0.8)", border: "1px solid #1e293b",
           borderRadius: 10, padding: 16, marginBottom: 20,
@@ -171,15 +206,30 @@ function NoMatchView({ result, onNewDispatch }) {
             Rejection Breakdown
           </div>
           {[
-            ["Missing equipment", result.rejected_hospitals.missing_equipment],
-            ["Insufficient beds", result.rejected_hospitals.insufficient_beds],
-            ["Too far", result.rejected_hospitals.too_far],
-          ].map(([label, count]) => count > 0 && (
+            ["Missing equipment", rh.missing_equipment],
+            ["Insufficient beds", rh.insufficient_beds],
+            ["Too far",           rh.too_far],
+          ].map(([label, count]) => (count ?? 0) > 0 && (
             <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid #0f172a" }}>
               <span style={{ color: "#94a3b8", fontSize: 13 }}>{label}</span>
               <span style={{ color: "#f87171", fontFamily: "monospace", fontWeight: 700 }}>{count}</span>
             </div>
           ))}
+          {(rh.total_evaluated ?? 0) > 0 && (
+            <div style={{ fontSize: 11, color: "#334155", marginTop: 8, textAlign: "right" }}>
+              {rh.total_evaluated} hospitals evaluated
+            </div>
+          )}
+        </div>
+      ) : isConstraintFailure && (
+        // Hard-constraint failure with no breakdown — show informational note
+        <div style={{
+          background: "rgba(15,23,42,0.6)", border: "1px solid #1e293b",
+          borderRadius: 10, padding: "12px 16px", marginBottom: 20,
+          fontSize: 12, color: "#64748b", lineHeight: 1.6,
+        }}>
+          All hospitals in range were evaluated and excluded by capability constraints.
+          No trauma-capable facility was available at the time of dispatch.
         </div>
       )}
 
@@ -238,10 +288,38 @@ export default function Result() {
   }
 
   const sh = result.selected_hospital;
+
+  // Fix 3: null-guard — engine may return no_match:false but sh:null
+  // when no_viable_hospital_after_constraints fires (hard-gated failure).
+  // Synthesize a no-match view rather than rendering a blank header.
+  if (!sh) {
+    const syntheticResult = {
+      ...result,
+      no_match_reason: result.failure_reason || result.no_match_reason || "no_viable_hospital_after_constraints",
+    };
+    return <NoMatchView result={syntheticResult} onNewDispatch={() => navigate("/dispatch")} />;
+  }
   const triage = result.triage || {};
   const severity = (triage.severity || "moderate").toLowerCase();
   const badge = SEVERITY_BADGE[severity] || SEVERITY_BADGE.moderate;
   const breakdown = sh?.score_breakdown || {};
+  const decisionType = result.decision_type || triage.decision_type || "direct";
+  const isStabilizeFirst = decisionType === "stabilize_first";
+  const routePrimary = result.primary_destination || sh;
+  const routeSecondary = result.secondary_destination;
+  const routingReasoning = result.reasoning || {};
+  const stabilityScore = Number(routingReasoning.stability_score || 0);
+  const diversionReasons = [
+    ...(routingReasoning.missing_equipment || []).map((item) => `Missing ambulance equipment: ${item}`),
+    ...(routingReasoning.vitals_flags || []).map((flag) => `Critical vitals flag: ${flag.replaceAll("_", " ")}`),
+  ];
+  const diversionText = diversionReasons.length > 0
+    ? diversionReasons.join("; ")
+    : "Stability constraints required immediate stabilization before final transfer.";
+
+  const destinationName = (destination) => destination?.name || destination?.hospital_name || "Unknown";
+  const destinationEta = (destination) => destination?.eta_minutes ?? "-";
+  const destinationDistance = (destination) => destination?.distance_km ?? "-";
 
   const handleOverride = (altHospital) => {
     navigate("/map", {
@@ -271,13 +349,7 @@ export default function Result() {
       color: "#e2e8f0",
     }}>
       {/* ── Top bar ── */}
-      <div style={{
-        borderBottom: "1px solid #0f172a",
-        padding: "12px 24px",
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        background: "rgba(6,13,26,0.95)",
-        position: "sticky", top: 0, zIndex: 10,
-      }}>
+      <div className="sticky top-0 z-50 flex justify-between items-center px-6 py-3 border-b border-[#0f172a] bg-[#060d1a]/80 backdrop-blur-md">
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ color: "#f87171", fontSize: 16 }}>🚑</span>
           <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", color: "#94a3b8" }}>
@@ -287,21 +359,13 @@ export default function Result() {
         <div style={{ display: "flex", gap: 10 }}>
           <button
             onClick={() => navigate("/map", { state })}
-            style={{
-              padding: "6px 16px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-              background: "rgba(96,165,250,0.1)", border: "1px solid rgba(96,165,250,0.25)",
-              color: "#60a5fa", cursor: "pointer", letterSpacing: "0.08em",
-            }}
+            className="px-4 py-1.5 rounded-md text-[11px] font-bold tracking-wider text-[#60a5fa] bg-blue-500/10 border border-blue-500/25 hover:bg-blue-500/20 transition-all flex items-center gap-1"
           >
             VIEW MAP →
           </button>
           <button
             onClick={() => navigate("/dispatch")}
-            style={{
-              padding: "6px 16px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-              background: "rgba(100,116,139,0.1)", border: "1px solid #1e293b",
-              color: "#64748b", cursor: "pointer", letterSpacing: "0.08em",
-            }}
+            className="px-4 py-1.5 rounded-md text-[11px] font-bold tracking-wider text-[#94a3b8] bg-slate-500/10 border border-[#1e293b] hover:bg-slate-500/20 transition-all"
           >
             NEW DISPATCH
           </button>
@@ -311,14 +375,12 @@ export default function Result() {
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "28px 20px" }}>
 
         {/* ── Severity + hospital header ── */}
-        <div style={{
-          opacity: mounted ? 1 : 0, transform: mounted ? "translateY(0)" : "translateY(12px)",
-          transition: "all 0.4s ease",
-          background: "rgba(15,23,42,0.7)", border: "1px solid #1e293b",
-          borderRadius: 14, padding: "20px 24px", marginBottom: 20,
-          display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-          flexWrap: "wrap", gap: 16,
-        }}>
+        <div 
+          className="flex justify-between items-start flex-wrap gap-4 mb-5 p-6 rounded-2xl border border-[#1e293b] bg-slate-900/50 backdrop-blur-sm shadow-xl"
+          style={{
+            opacity: mounted ? 1 : 0, transform: mounted ? "translateY(0)" : "translateY(12px)",
+            transition: "all 0.4s ease",
+          }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
               <span style={{
@@ -350,6 +412,40 @@ export default function Result() {
             </div>
           </div>
         </div>
+
+        {/* ── Two-hop route (stabilize first only) ── */}
+        {isStabilizeFirst && (
+          <div style={{
+            opacity: mounted ? 1 : 0, transform: mounted ? "translateY(0)" : "translateY(12px)",
+            transition: "all 0.45s ease 0.06s",
+            background: "rgba(15,23,42,0.7)", border: "1px solid #1e293b",
+            borderRadius: 14, padding: "18px 20px", marginBottom: 20,
+          }}>
+            <div style={{ fontSize: 10, color: "#475569", letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
+              Two-Step Route
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div style={{ background: "rgba(10,15,30,0.6)", border: "1px solid #1e293b", borderRadius: 10, padding: 12 }}>
+                <div style={{ fontSize: 11, color: "#fbbf24", marginBottom: 6, letterSpacing: "0.08em" }}>STEP 1: STABILIZATION HOSPITAL</div>
+                <div style={{ color: "#e2e8f0", fontWeight: 700, marginBottom: 4 }}>{destinationName(routePrimary)}</div>
+                <div style={{ fontSize: 12, color: "#94a3b8" }}>ETA: {destinationEta(routePrimary)} min</div>
+                <div style={{ fontSize: 12, color: "#64748b" }}>Distance: {destinationDistance(routePrimary)} km</div>
+              </div>
+              <div style={{ background: "rgba(10,15,30,0.6)", border: "1px solid #1e293b", borderRadius: 10, padding: 12 }}>
+                <div style={{ fontSize: 11, color: "#60a5fa", marginBottom: 6, letterSpacing: "0.08em" }}>STEP 2: FINAL HOSPITAL</div>
+                <div style={{ color: "#e2e8f0", fontWeight: 700, marginBottom: 4 }}>{destinationName(routeSecondary)}</div>
+                <div style={{ fontSize: 12, color: "#94a3b8" }}>ETA: {destinationEta(routeSecondary)} min</div>
+                <div style={{ fontSize: 12, color: "#64748b" }}>Distance: {destinationDistance(routeSecondary)} km</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontSize: 12 }}>
+              <span style={{ color: "#93c5fd" }}>
+                Stability Score: <strong style={{ color: scoreColor(stabilityScore) }}>{Math.round(stabilityScore * 100)}%</strong>
+              </span>
+              <span style={{ color: "#fca5a5" }}>Reason for diversion: {diversionText}</span>
+            </div>
+          </div>
+        )}
 
         {/* ── Score breakdown rings ── */}
         <div style={{

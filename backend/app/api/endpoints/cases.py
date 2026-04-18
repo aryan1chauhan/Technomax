@@ -1,8 +1,10 @@
+import asyncio
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import func, desc, Integer
-from app.db.database import get_db
+from app.db.database import SessionLocal, get_db
 from app.db.models import Case, User, Hospital, Availability
 from app.schemas.dispatch import CaseOut
 from app.schemas.case import CaseStatusUpdate, CaseEventOut
@@ -10,17 +12,35 @@ from app.core.security import get_current_user
 from app.db.models import CaseEvent
 from app.core.transitions import validate_transition, VALID_TRANSITIONS, BED_RESTORE_STATUSES
 from app.core.firebase import send_push
+from app.engine.dispatch_engine import reevaluate_routing
 from app.middleware.rate_limit import limiter, LIMIT_CASES
 
 router = APIRouter(prefix="/api/cases")
+logger = logging.getLogger(__name__)
+
+
+async def _trigger_reevaluation(case_id: int, vitals: dict | None, severity_score: int | None) -> None:
+    db = SessionLocal()
+    try:
+        await reevaluate_routing(
+            db=db,
+            case_id=case_id,
+            updated_vitals=vitals,
+            updated_severity_score=severity_score,
+        )
+    except (ValueError, RuntimeError, KeyError, TypeError, OSError) as exc:
+        logger.warning("Secondary reevaluation failed for case %s: %s", case_id, exc)
+    finally:
+        db.close()
 
 @router.get("/", response_model=list[CaseOut])
 @limiter.limit(LIMIT_CASES)
 def get_cases(
-    request: Request,
+    request: Request,  # noqa: ARG001
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    _ = request
     cases = db.query(Case)\
         .filter(Case.user_id == current_user.id)\
         .order_by(Case.created_at.desc())\
@@ -31,10 +51,11 @@ def get_cases(
 @router.get("/hospital")
 @limiter.limit(LIMIT_CASES)
 def get_hospital_cases(
-    request: Request,
+    request: Request,  # noqa: ARG001
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    _ = request
     if current_user.role != "hospital":
         raise HTTPException(status_code=403, detail="Not a hospital account")
     
@@ -52,10 +73,11 @@ def get_hospital_cases(
 @router.get("/admin/stats")
 @limiter.limit(LIMIT_CASES)
 def admin_stats(
-    request: Request,
+    request: Request,  # noqa: ARG001
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    _ = request
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -140,13 +162,14 @@ def admin_stats(
 
 @router.put("/{case_id}/status")
 @limiter.limit(LIMIT_CASES)
-def update_case_status(
-    request: Request,
+async def update_case_status(
+    request: Request,  # noqa: ARG001
     case_id: int,
     update_data: CaseStatusUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    _ = request
     case = db.query(Case).filter(Case.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
@@ -210,17 +233,31 @@ def update_case_status(
                 body=f"Ambulance for case #{case.id} has arrived at your hospital.",
                 data={"case_id": str(case.id), "status": "arrived"}
             )
+
+    response_payload = {"status": new_status, "case_id": case.id}
+    if new_status == "stabilized":
+        try:
+            asyncio.create_task(
+                _trigger_reevaluation(
+                    case_id=case.id,
+                    vitals=update_data.vitals,
+                    severity_score=update_data.severity_score,
+                )
+            )
+        except RuntimeError:
+            response_payload["reroute_warning"] = "Secondary routing could not be scheduled. Please retry manually."
     
-    return {"status": new_status, "case_id": case.id}
+    return response_payload
 
 @router.get("/{case_id}/timeline", response_model=list[CaseEventOut])
 @limiter.limit(LIMIT_CASES)
 def get_case_timeline(
-    request: Request,
+    request: Request,  # noqa: ARG001
     case_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    _ = request
     case = db.query(Case).filter(Case.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")

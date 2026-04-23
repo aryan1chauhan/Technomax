@@ -11,9 +11,10 @@ from app.schemas.case import CaseStatusUpdate, CaseEventOut
 from app.core.security import get_current_user
 from app.db.models import CaseEvent
 from app.core.transitions import validate_transition, VALID_TRANSITIONS, BED_RESTORE_STATUSES
-from app.core.firebase import send_push
 from app.engine.dispatch_engine import reevaluate_routing
 from app.middleware.rate_limit import limiter, LIMIT_CASES
+from app.services.notification_service import send_arrival_notifications
+from app.services.webhook_service import enqueue_case_status_webhook, process_webhook_delivery
 
 router = APIRouter(prefix="/api/cases")
 logger = logging.getLogger(__name__)
@@ -105,32 +106,23 @@ def admin_stats(
     # Total cases all time
     total_cases = db.query(Case).count()
 
-    # District breakdown — group hospitals by lat ranges
-    # (approximate district mapping using hospital IDs)
-    district_map = [
-        {"name": "Dehradun",   "id_min": 93,  "id_max": 132},
-        {"name": "Rishikesh",  "id_min": 133, "id_max": 157},
-        {"name": "Haridwar",   "id_min": 66,  "id_max": 92},
-        {"name": "Roorkee",    "id_min": 25,  "id_max": 65},
-        {"name": "Haldwani",   "id_min": 158, "id_max": 187},
-        {"name": "Nainital",   "id_min": 188, "id_max": 212},
-    ]
+    # District breakdown — group hospitals by district column
+    rows = db.query(
+        Hospital.district.label("district"),
+        func.sum(Availability.beds).label("beds"),
+        func.sum(Availability.icu).label("icu"),
+        func.count(Availability.id).label("hospitals"),
+        func.sum(func.cast(Availability.accepting, Integer)).label("accepting"),
+    ).join(
+        Hospital, Availability.hospital_id == Hospital.id
+    ).group_by(
+        Hospital.district
+    ).all()
 
     districts = []
-    for d in district_map:
-        row = db.query(
-            func.sum(Availability.beds).label("beds"),
-            func.sum(Availability.icu).label("icu"),
-            func.count(Availability.id).label("hospitals"),
-            func.sum(func.cast(Availability.accepting, Integer)).label("accepting"),
-        ).join(Hospital, Availability.hospital_id == Hospital.id
-        ).filter(
-            Hospital.id >= d["id_min"],
-            Hospital.id <= d["id_max"]
-        ).first()
-
+    for row in rows:
         districts.append({
-            "name": d["name"],
+            "name": row.district or "Unknown",
             "hospitals": row.hospitals or 0,
             "beds": row.beds or 0,
             "icu": row.icu or 0,
@@ -216,23 +208,38 @@ async def update_case_status(
         actor_id=current_user.id,
         actor_role=current_user.role,
         note=update_data.note,
+        actual_eta_minutes=update_data.actual_eta_minutes,
     )
     db.add(event)
+
+    webhook_delivery_id: int | None = None
+    try:
+        webhook_delivery_id = enqueue_case_status_webhook(
+            case=case,
+            status=new_status,
+            actor_role=current_user.role,
+            note=update_data.note,
+            db=db,
+        )
+    except Exception as exc:
+        # Keep status transition non-blocking while migrations roll out.
+        logger.warning("Webhook enqueue skipped for case %s: %s", case.id, exc)
+
     db.commit()
 
+    if webhook_delivery_id is not None:
+        try:
+            asyncio.create_task(process_webhook_delivery(webhook_delivery_id))
+        except RuntimeError:
+            logger.warning("Webhook background delivery could not be scheduled for case %s", case.id)
+
     if new_status == "arrived":
-        # Notify hospital staff via FCM
+        # Notify hospital staff with push + DLQ fallback handling.
         hospital_users = db.query(User).filter(
             User.hospital_id == case.assigned_hospital_id,
             User.fcm_token.is_not(None)
         ).all()
-        for user in hospital_users:
-            send_push(
-                token=user.fcm_token,
-                title="Ambulance Arrived",
-                body=f"Ambulance for case #{case.id} has arrived at your hospital.",
-                data={"case_id": str(case.id), "status": "arrived"}
-            )
+        await send_arrival_notifications(db=db, case=case, hospital_users=hospital_users)
 
     response_payload = {"status": new_status, "case_id": case.id}
     if new_status == "stabilized":

@@ -10,6 +10,7 @@ hospitals = [
         "address": "Civil Lines, Roorkee, Uttarakhand 247667",
         "lat": 29.8601,
         "lng": 77.8868,
+        "district": "Roorkee",
         "beds": 12, "icu": 3, "doctors": 6,
         "equipment": ["ecg", "ventilator", "xray", "blood_bank"],
         "accepting": True
@@ -19,6 +20,7 @@ hospitals = [
         "address": "Haridwar Road, Roorkee, Uttarakhand 247667",
         "lat": 29.8450,
         "lng": 77.8950,
+        "district": "Roorkee",
         "beds": 8, "icu": 2, "doctors": 4,
         "equipment": ["ecg", "defibrillator", "ventilator"],
         "accepting": True
@@ -28,6 +30,7 @@ hospitals = [
         "address": "Jwalapur, Haridwar, Uttarakhand 249407",
         "lat": 29.9295,
         "lng": 78.1350,
+        "district": "Haridwar",
         "beds": 20, "icu": 5, "doctors": 10,
         "equipment": ["ecg", "ventilator", "defibrillator", "xray", "icu", "blood_bank"],
         "accepting": True
@@ -37,6 +40,7 @@ hospitals = [
         "address": "Virbhadra Road, Rishikesh, Uttarakhand 249203",
         "lat": 30.0689,
         "lng": 78.3001,
+        "district": "Rishikesh",
         "beds": 50, "icu": 15, "doctors": 30,
         "equipment": ["ecg", "ventilator", "defibrillator", "xray", "icu", "blood_bank"],
         "accepting": True
@@ -53,7 +57,8 @@ for h_data in hospitals:
         name=h_data["name"],
         address=h_data["address"],
         lat=h_data["lat"],
-        lng=h_data["lng"]
+        lng=h_data["lng"],
+        district=h_data.get("district")
     )
     db.add(hospital)
     db.flush()

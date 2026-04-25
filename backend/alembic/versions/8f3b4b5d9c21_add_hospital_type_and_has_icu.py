@@ -19,16 +19,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "hospitals",
-        sa.Column("hospital_type", sa.String(length=20), server_default="both", nullable=False),
-    )
-    op.add_column(
-        "hospitals",
-        sa.Column("has_icu", sa.Boolean(), server_default=sa.text("false"), nullable=False),
-    )
+    """No-op: baseline revision already includes this schema."""
+    pass
 
 
 def downgrade() -> None:
-    op.drop_column("hospitals", "has_icu")
-    op.drop_column("hospitals", "hospital_type")
+    """No-op: schema is managed by the baseline revision."""
+    pass

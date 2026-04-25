@@ -40,3 +40,15 @@ backend\status.txt
 backend\error.log
 git_status_output.txt
 pytest_out.txt
+pytest_out2.txt
+
+# Graphify
+graphify-out/
+
+# Local scripts and temporary files
+backend/*.txt
+backend/scripts/diagnose_*.py
+backend/scripts/patch_*.py
+backend/scripts/probe_*.py
+backend/scripts/trace_*.py
+backend/tests/trace_*.py

@@ -1,5 +1,7 @@
 VALID_TRANSITIONS = {
-    "dispatched":   ["en_route",     "cancelled"],
+    "dispatched":   ["accepted", "declined", "en_route", "cancelled"],
+    "accepted":     ["en_route",     "cancelled"],
+    "declined":     [],   # terminal for this hospital assignment; admin/re-dispatch must follow
     "en_route":     ["on_scene",     "cancelled"],
     "on_scene":     ["transporting", "cancelled"],
     "transporting": ["arrived",      "cancelled"],
@@ -9,8 +11,8 @@ VALID_TRANSITIONS = {
     "cancelled":    [],   # terminal — no further transitions
 }
 
-TERMINAL_STATUSES = {"completed", "cancelled"}
-BED_RESTORE_STATUSES = {"stabilized", "completed", "cancelled"}
+TERMINAL_STATUSES = {"completed", "cancelled", "declined"}
+BED_RESTORE_STATUSES = {"stabilized", "completed", "cancelled", "declined"}
 
 def validate_transition(current: str, next_status: str) -> bool:
     return next_status in VALID_TRANSITIONS.get(current, [])

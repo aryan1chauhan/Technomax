@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import api from "../api/axios";
 
 const getValidNextTransitionLabel = (role, currentStatus) => {
@@ -30,7 +30,7 @@ export default function CaseTimeline({ caseId, role }) {
   const [currentStatus, setCurrentStatus] = useState("dispatched");
   const [error, setError] = useState("");
 
-  const fetchTimeline = async () => {
+  const fetchTimeline = useCallback(async () => {
     try {
       const res = await api.get(`/api/cases/${caseId}/timeline`);
       const data = res.data;
@@ -41,13 +41,15 @@ export default function CaseTimeline({ caseId, role }) {
     } catch (err) {
       console.error("Failed to fetch timeline", err);
     }
-  };
+  }, [caseId]);
 
   useEffect(() => {
-    fetchTimeline();
-    
+    const initialFetchTimer = setTimeout(() => {
+      fetchTimeline();
+    }, 0);
+
     if (currentStatus === "completed" || currentStatus === "cancelled") {
-      return;
+      return () => clearTimeout(initialFetchTimer);
     }
 
     const interval = setInterval(() => {
@@ -56,12 +58,24 @@ export default function CaseTimeline({ caseId, role }) {
       }
     }, 15000);
 
-    return () => clearInterval(interval);
-  }, [caseId, currentStatus]);
+    return () => {
+      clearTimeout(initialFetchTimer);
+      clearInterval(interval);
+    };
+  }, [currentStatus, fetchTimeline]);
 
   const updateStatus = async (newStatus) => {
     try {
-      const res = await api.put(`/api/cases/${caseId}/status`, { status: newStatus });
+      const payload = { status: newStatus };
+      
+      if (newStatus === "arrived" && events.length > 0) {
+        const dispatchEvent = events.find(e => e.status === "dispatched");
+        if (dispatchEvent) {
+          payload.actual_eta_minutes = Math.round((Date.now() - new Date(dispatchEvent.timestamp).getTime()) / 60000);
+        }
+      }
+
+      await api.put(`/api/cases/${caseId}/status`, payload);
       fetchTimeline();
       setError("");
     } catch (err) {

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from typing import Any, Optional
 
@@ -17,3 +17,7 @@ class CaseStatusUpdate(BaseModel):
     note: Optional[str] = None
     vitals: Optional[dict[str, Any]] = None
     severity_score: Optional[int] = None
+    actual_eta_minutes: Optional[int] = None
+
+class CaseDeclineRequest(BaseModel):
+    reason: str = Field(..., min_length=1)

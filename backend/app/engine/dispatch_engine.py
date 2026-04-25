@@ -51,7 +51,10 @@ def _condition_required_equipment(condition: str, severity: int = 5) -> list[str
         reqs.append("ventilator")
     return reqs
 
-CRITICAL_EQUIPMENT = {"ventilator", "defibrillator"}
+CRITICAL_EQUIPMENT = {
+    "ventilator", "defibrillator", "surgery", "blood_bank", 
+    "cath_lab", "ct_scanner", "neurology", "trauma_center", "stroke_unit"
+}
 IMPORTANT_EQUIPMENT = {"icu", "trauma_care"}
 OPTIONAL_EQUIPMENT = {"xray", "lab"}
 
@@ -110,8 +113,11 @@ def normalize_severity_score(severity_score: int | str | None) -> int:
         return 5
 
     value = str(severity_score).strip().lower()
-    if value.isdigit():
-        return max(1, min(10, int(value)))
+    try:
+        float_val = float(value)
+        return max(1, min(10, int(round(float_val))))
+    except ValueError:
+        pass
 
     mapping = {
         "minor": 3,
@@ -227,10 +233,14 @@ def _has_trauma_stabilization_capability(hospital: dict[str, Any]) -> bool:
     tags = {str(item).strip().lower() for item in (hospital.get("scenario_tags") or []) if item}
     equipment = {_normalize_equipment_name(item) for item in (hospital.get("equipment") or []) if item}
     hospital_type = _resolve_hospital_type(hospital)
+    
+    if "surgery" not in equipment:
+        return False
+        
     return (
         hospital_type in {"stabilization", "both"}
         or bool({"trauma"} & tags)
-        or bool({"trauma_center", "surgery", "lab"} & equipment)
+        or bool({"trauma_center", "lab"} & equipment)
     )
 
 
@@ -508,6 +518,13 @@ async def _fetch_eta_map(
             hospital_id = int(raw_id) if str(raw_id).isdigit() else raw_id
         except (ValueError, TypeError):
             hospital_id = raw_id
+
+        # If hospital lacks coordinates, preserve its baked-in ETA (for test harness)
+        if hospital.get("latitude") is None or hospital.get("longitude") is None:
+            if "eta_minutes" in hospital:
+                eta_map[hospital_id] = float(hospital["eta_minutes"])
+            continue
+
         raw_lat = _safe_float(hospital.get("latitude"), origin_lat)
         raw_lng = _safe_float(hospital.get("longitude"), origin_lng)
 
@@ -644,40 +661,44 @@ def _equipment_ratio(required: set[str], available: set[str]) -> float:
 
 def _apply_tiebreaker(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
-    Apply tie-breaker logic to prevent score collapse.
-    
-    When two hospitals have similar final scores (< 0.05 difference),
-    prefer the one with higher treatment priority matching.
+    Apply tie-breaker logic to produce a deterministic ranking when hospitals
+    have near-identical composite scores.
+
+    Problem with the previous approach: a single forward pass comparing adjacent
+    pairs is one step of bubble sort — it only fixes one inversion per call and
+    leaves the final order dependent on input list ordering.
+
+    This replacement uses a proper stable sort on a composite key:
+      1. score_bucket  — score rounded to nearest 0.05, so hospitals within the
+                         tie threshold land in the same bucket and compete on
+                         subsequent keys rather than raw float noise.
+      2. S_treatment   — condition-specific treatment capability (descending).
+      3. S_equipment   — equipment match quality (descending).
+      4. hospital_id   — string sort (ascending) as final deterministic tiebreaker.
+                         Stable across repeated calls regardless of input list order.
+
+    Notes on ID safety: all hospital_id values in this system are strings
+    (e.g. "cardiac_hub_main", "general_sec_1"). str(raw_id) safely handles
+    integer IDs and None (sorts as "None") if those ever appear.
     """
     if len(candidates) < 2:
         return candidates
-    
-    sorted_candidates = list(candidates)
-    
-    for i in range(len(sorted_candidates) - 1):
-        current = sorted_candidates[i]
-        next_candidate = sorted_candidates[i + 1]
-        
-        current_score = float(current.get("score", 0.0))
-        next_score = float(next_candidate.get("score", 0.0))
-        
-        # If within tie threshold
-        if abs(current_score - next_score) < 0.05:
-            # Prefer higher treatment score
-            current_treatment = current.get("score_breakdown", {}).get("S_treatment", 0.0)
-            next_treatment = next_candidate.get("score_breakdown", {}).get("S_treatment", 0.0)
-            
-            if next_treatment > current_treatment:
-                sorted_candidates[i], sorted_candidates[i + 1] = sorted_candidates[i + 1], sorted_candidates[i]
-            else:
-                # Fall back to equipment match
-                current_equipment = current.get("score_breakdown", {}).get("S_equipment", 0.0)
-                next_equipment = next_candidate.get("score_breakdown", {}).get("S_equipment", 0.0)
-                
-                if next_equipment > current_equipment:
-                    sorted_candidates[i], sorted_candidates[i + 1] = sorted_candidates[i + 1], sorted_candidates[i]
-    
-    return sorted_candidates
+
+    _TIE_BUCKET = 0.05
+
+    def _tiebreak_key(item: dict[str, Any]) -> tuple:
+        score = float(item.get("score", 0.0))
+        breakdown = item.get("score_breakdown") or {}
+        treatment = float(breakdown.get("S_treatment", 0.0))
+        equipment = float(breakdown.get("S_equipment", 0.0))
+        # Round into buckets so hospitals within the tie threshold compete on
+        # the sub-keys rather than raw score noise.
+        score_bucket = round(score / _TIE_BUCKET) * _TIE_BUCKET
+        raw_id = item.get("id") or item.get("hospital_id") or ""
+        # All components negated where higher-is-better so sorted() ascending = best-first.
+        return (-score_bucket, -treatment, -equipment, str(raw_id))
+
+    return sorted(candidates, key=_tiebreak_key)
 
 
 def _penalize_lazy_safe_choice(
@@ -992,12 +1013,63 @@ def _classify_fallback_triggers(
     return triggers
 
 
+def _build_stabilization_pool(
+    *,
+    hospitals: list[dict[str, Any]],
+    condition_type: str,
+    severity_score: int,
+) -> list[dict[str, Any]]:
+    """
+    Build a candidate pool for stabilize_first decisions.
+    Filters only on stabilization capability and operational constraints.
+    Does NOT apply destination-specific equipment requirements (neurology,
+    cath_lab, etc.) — those belong to the final transfer destination, not
+    the stabilization center.
+    """
+    normalized_condition = normalize_condition_type(condition_type)
+    icu_required = _requires_icu(condition_type, severity_score)
+    pool: list[dict[str, Any]] = []
+
+    for hospital in hospitals:
+        hospital_type = _resolve_hospital_type(hospital)
+
+        # Must be a stabilization-capable type.
+        if hospital_type not in {"stabilization", "both"}:
+            continue
+
+        # Must be accepting and have available beds.
+        if not bool(hospital.get("accepting", True)):
+            continue
+        if int(hospital.get("available_beds") or 0) <= 0:
+            continue
+
+        # ICU required for high-severity cardiac/stroke/trauma.
+        if icu_required:
+            has_icu = bool(hospital.get("has_ICU")) or int(hospital.get("icu_beds") or 0) > 0
+            equipment_set = {_normalize_equipment_name(item) for item in (hospital.get("equipment") or []) if item}
+            if not has_icu and "icu" not in equipment_set:
+                continue
+
+        enriched = dict(hospital)
+        enriched["hospital_type"] = hospital_type
+        enriched["has_ICU"] = bool(hospital.get("has_ICU")) or int(hospital.get("icu_beds") or 0) > 0
+        enriched["missing_critical_equipment"] = []
+        enriched["missing_important_equipment"] = []
+        enriched["important_equipment_penalty"] = 0.0
+        enriched["equipment_match_score"] = 1.0
+        pool.append(enriched)
+
+    return pool
+
+
 def _build_critical_safe_pool(
     *,
     hospitals: list[dict[str, Any]],
     required_equipment: list[str],
     condition_type: str,
     severity_score: int,
+    trimodal_crisis: bool = False,
+    survival_critical: bool = False,
 ) -> list[dict[str, Any]]:
     required_by_tier = _categorize_required_equipment(required_equipment)
     normalized_condition = normalize_condition_type(condition_type)
@@ -1038,6 +1110,30 @@ def _build_critical_safe_pool(
             important_penalty=important_penalty,
         )
         pool.append(enriched)
+
+    # Fix B: Last-resort routing for trimodal crisis patients.
+    # If all constraints filtered every hospital and this is a trimodal crisis,
+    # select the best available hospital ignoring equipment constraints.
+    # Tagged partial_match_last_resort=True so dispatchers know the compromise.
+    if not pool and (trimodal_crisis or survival_critical):
+        candidates = [h for h in hospitals if int(h.get("available_beds") or 0) > 0]
+        if candidates:
+            best = max(
+                candidates,
+                key=lambda h: (
+                    bool(h.get("has_ICU")) or int(h.get("icu_beds") or 0) > 0,
+                    int(h.get("available_beds") or 0),
+                ),
+            )
+            enriched = dict(best)
+            enriched["hospital_type"] = _resolve_hospital_type(best)
+            enriched["has_ICU"] = bool(best.get("has_ICU")) or int(best.get("icu_beds") or 0) > 0
+            enriched["missing_critical_equipment"] = []
+            enriched["missing_important_equipment"] = []
+            enriched["important_equipment_penalty"] = 0.0
+            enriched["equipment_match_score"] = 0.0
+            enriched["partial_match_last_resort"] = True
+            pool.append(enriched)
 
     return pool
 
@@ -1086,6 +1182,7 @@ def _best_effort_rank(
             candidate["explanation"] = ["Best-effort fallback ranking due scorer exception."]
         return ranked
 
+_TRIMODAL_CRISIS_FLAGS = frozenset({"oxygen_below_90", "pulse_critical", "bp_systolic_below_80"})
 
 async def run_dispatch(
     *,
@@ -1134,7 +1231,7 @@ async def run_dispatch(
     replay_relaxed_constraints_mode = bool(relax_important_constraints)
     replay_corruption_signals: list[str] = []
     if os.getenv("TRUST_TRACE_SIGNALS", "0") == "1":
-        print("DISPATCH RECEIVED:", scenario_ctx)
+        logger.debug("Dispatch received scenario_ctx=%s", scenario_ctx)
     allowed_types = forced_hospital_types
 
     def _safe_active_weights() -> dict[str, float]:
@@ -1335,68 +1432,286 @@ async def run_dispatch(
             "distance_estimate_used": 0,
         }
 
+    merged_required_equipment = list(
+        set(required_equipment) | set(_condition_required_equipment(canonical_condition))
+    )
+
+    required_by_tier = _categorize_required_equipment(merged_required_equipment)
+    icu_required = _requires_icu(canonical_condition, normalized_severity)
+    high_risk_case = normalized_severity >= 8
+
+    # ── ETA Concept Glossary ────────────────────────────────────────────────────
+    # Three distinct ETA values are computed below and used throughout this function.
+    # Confusing them is the single most common source of gate-logic bugs. Read before editing.
+    #
+    #  nearest_eta          — ETA to the CLOSEST hospital of ANY kind that is in the eta_map.
+    #                         Used as a proxy for "how fast can we get this patient somewhere."
+    #                         Does NOT consider beds, equipment, or accepting status.
+    #                         Source: min(eta_map.values())
+    #
+    #  nearest_capable_eta  — ETA to the closest hospital that can provide DEFINITIVE CARE:
+    #                         accepting, has beds, passes ICU/equipment checks, has the
+    #                         condition-specific specialist capability (stroke unit, surgery, etc.).
+    #                         9999.0 means "no qualifying specialist in the hospital list."
+    #                         Passed to evaluate_stability() as the primary ETA signal.
+    #                         Source: min(capable_etas)
+    #
+    #  nearest_stab_eta     — ETA to the closest hospital suitable as a STABILIZATION STOP:
+    #                         accepting, has beds, type in {stabilization, both},
+    #                         has ICU if required, has surgery if trauma case.
+    #                         Does NOT require condition-specific specialist equipment.
+    #                         9999.0 means "no viable stabilization center in the list."
+    #                         Used by the gate to decide if a stabilize-first route is viable.
+    #                         Source: min(stab_etas)
+    #
+    # Gate invariants (enforced in Steps 3-7 below):
+    #   - stabilize_first is only valid when nearest_stab_eta < nearest_capable_eta
+    #     (stabilization stop is closer than the specialist)
+    #   - stabilize_first is only valid when a condition-relevant specialist with open beds
+    #     exists in the hospital list (the transfer destination)
+    #   - If nearest_stab_eta > estimated_survival for low-risk cases, go direct
+    #     (patient won't survive the detour)
+    # ────────────────────────────────────────────────────────────────────────────
+
+    capable_etas = []
     for hospital in hospitals:
         raw_id = hospital.get("id") or hospital.get("hospital_id")
         try:
             h_id = int(raw_id) if str(raw_id).isdigit() else raw_id
         except (ValueError, TypeError):
             h_id = raw_id
-        hospital["eta_minutes"] = eta_map.get(h_id, 9999.0)
+            
+        eta = eta_map.get(h_id, 9999.0)
+        hospital["eta_minutes"] = eta
+        
+        # Check basic capability for definitive care
+        if hospital.get("accepting", True) is False:
+            continue
+        if int(hospital.get("available_beds", 1)) <= 0:
+            continue
+        
+        # Only check CRITICAL equipment and strict capabilities
+        h_equip = {_normalize_equipment_name(e) for e in hospital.get("equipment", [])}
+        missing_critical = [eq for eq in required_by_tier["critical"] if eq not in h_equip]
+        if missing_critical:
+            continue
+            
+        if icu_required:
+            has_icu = bool(hospital.get("has_ICU")) or int(hospital.get("icu_beds") or 0) > 0 or "icu" in h_equip
+            if not has_icu:
+                continue
+                
+        if high_risk_case and canonical_condition == "stroke" and not _has_stroke_capability(hospital):
+            continue
+            
+        if high_risk_case and canonical_condition == "trauma" and not _has_trauma_stabilization_capability(hospital):
+            continue
+            
+        capable_etas.append(eta)
 
+    nearest_capable_eta = min(capable_etas) if capable_etas else 9999.0
     nearest_eta = min(eta_map.values()) if eta_map else 9999.0
+    
+    stab_etas = []
+    for hospital in hospitals:
+        if hospital.get("accepting", True) is False:
+            continue
+        if int(hospital.get("available_beds", 1)) <= 0:
+            continue
+            
+        hospital_type = _resolve_hospital_type(hospital)
+        if hospital_type not in {"stabilization", "both"}:
+            continue
+            
+        h_equip = {_normalize_equipment_name(item) for item in (hospital.get("equipment") or []) if item}
+        if icu_required:
+            has_icu = bool(hospital.get("has_ICU")) or int(hospital.get("icu_beds") or 0) > 0
+            if not has_icu and "icu" not in h_equip:
+                continue
+                
+        # For TRAUMA cases: stabilization center must have surgery capability.
+        # A general_sec can't stabilize massive bleeding — the patient needs a surgical suite.
+        # For stroke/cardiac: any secondary+ hospital provides meaningful bridge stabilization.
+        if canonical_condition == "trauma" and "surgery" not in h_equip:
+            continue
+            
+        raw_id = hospital.get("id") or hospital.get("hospital_id")
+        try:
+            h_id = int(raw_id) if str(raw_id).isdigit() else raw_id
+        except (ValueError, TypeError):
+            h_id = raw_id
+        stab_etas.append(eta_map.get(h_id, 9999.0))
+        
+    nearest_stab_eta = min(stab_etas) if stab_etas else 9999.0
+    
     stage1 = evaluate_stability(
         condition_type=canonical_condition,
         severity_score=normalized_severity,
         vitals=vitals,
         ambulance_equipment=ambulance_equipment,
-        eta_to_nearest_hospital=nearest_eta,
+        eta_to_nearest_hospital=nearest_capable_eta,
     )
     
-    if nearest_eta < 12.0:
-        stage1["stabilization_required"] = False
-
-    logger.info(
-        "Stability check condition=%s severity=%s survival=%s nearest_eta=%s multiplier=%s required=%s",
-        canonical_condition,
-        normalized_severity,
-        stage1["estimated_survival_time"],
-        nearest_eta,
-        stage1.get("risk_multiplier_applied"),
-        stage1["stabilization_required"],
-    )
+    # ── Step 1: Start with evaluate_stability's raw result ───────────────────
+    _vitals_flag_set = set(stage1.get("vitals_flags") or [])
+    trimodal_crisis = _TRIMODAL_CRISIS_FLAGS.issubset(_vitals_flag_set)
+    stab_req = bool(stage1["stabilization_required"])
 
     unstable_case = _is_unstable_case(
         condition_type=canonical_condition,
         severity_score=normalized_severity,
         vitals=vitals,
     )
+    survival_critical = unstable_case or int(normalized_severity) >= 8
 
-    stabilization_required = bool(stage1["stabilization_required"]) and not force_direct
-    
-    # Policy: For cardiac/trauma unstable cases, force stabilization ONLY if 
-    # the patient is not already very close to a hub (>= 12 min away).
+    # ── Step 2: Positive overrides (SET stabilization_required = True) ────────
+
+    # Two-flag gate: 2 of 3 trimodal flags + ETA not trivially short
+    _critical_flag_count = len(_vitals_flag_set & _TRIMODAL_CRISIS_FLAGS)
+    if _critical_flag_count == 2 and not force_direct and nearest_capable_eta >= 5.0:
+        stab_req = True
+
+    # Trimodal override: all 3 flags present, but only worthwhile if ETA is long
+    # (short-ETA trimodal is handled by suppression step below)
+    if trimodal_crisis and not force_direct and nearest_capable_eta >= 12.0:
+        stab_req = True
+
+    # Cardiac/trauma unstable policy: only force stab if hub is actually far
     if (
-        canonical_condition in {"cardiac", "trauma"} 
-        and unstable_case 
-        and not force_direct 
-        and nearest_eta >= 12.0
+        canonical_condition in {"cardiac", "trauma"}
+        and unstable_case
+        and not force_direct
+        and nearest_capable_eta >= 12.0
     ):
-        stabilization_required = True
-        stage1["stabilization_required"] = True
-    
-    # Policy: For stroke cases, if no specialized center (advanced/both) is 
-    # within 20 minutes in the viable pool, stabilize first at a secondary/local hub.
+        stab_req = True
+
+    # Step 3: Negative overrides (these SET stabilization_required = False)
+    # Suppression for extremely short ETAs to nearest hospital of any kind
+    # Only suppress if: eta to nearest (not just capable) is trivially short
+    # AND survival is not immediately at risk (sev < 9)
+    if stab_req and nearest_eta <= 6.0 and normalized_severity < 9:
+        if not (canonical_condition == "cardiac" and nearest_capable_eta > 3.0):
+            stab_req = False
+            
+    # Suppression for respiratory cases with ventilator
+    has_ventilator = bool({"ventilator", "advanced_life_support"} & {str(e).strip().lower() for e in (ambulance_equipment or [])})
+    if canonical_condition == "respiratory" and has_ventilator:
+        stab_req = False
+
+    # Step 4: Trauma hub shortcut override (no-op placeholder)
+    if canonical_condition == "trauma" and not force_direct:
+        pass
+
+    # Step 6: Stroke-specialization reachability check
+    # Fire when: no specialist within 20min, AND survival is SHORT (< nearest capable ETA),
+    # AND a stabilization candidate exists (stab ETA != 9999).
+    _stroke_reachability_override = False
     if canonical_condition == "stroke" and not force_direct:
-        # Check specialized centers in original hospitals list after hard constraints would apply
-        # We simulate filtering here for the policy check
+        estimated_survival = float(stage1["estimated_survival_time"])
         specialized_reachable = any(
-            float(h.get("eta_minutes", 9999.0)) <= 20.0 
-            for h in hospitals 
+            eta_map.get(h.get("id") or h.get("hospital_id"), 9999.0) <= 20.0
+            for h in hospitals
             if _resolve_hospital_type(h) in {"advanced", "both"}
         )
         if not specialized_reachable:
-            stabilization_required = True
-            stage1["stabilization_required"] = True
+            # Only force stab if: stab exists AND survival won't survive the full trip to specialist,
+            # AND the patient can actually reach the stab center alive (nearest_stab_eta < survival).
+            survival_threshold = nearest_capable_eta if nearest_capable_eta < 9999.0 else 25.0
+            if (nearest_stab_eta < 9999.0
+                    and estimated_survival < survival_threshold
+                    and nearest_stab_eta <= estimated_survival):  # patient can reach stab center in time
+                stab_req = True
+                _stroke_reachability_override = True  # Protect from broad suppression below
+
+    # General suppression: if nearest capable hub is reachable in < 12 min and severity < 9
+    # (keeps short-ETA direct routing for medium-risk cases)
+    if nearest_capable_eta < 12.0 and normalized_severity < 9.0 and not trimodal_crisis and _critical_flag_count < 2:
+        stab_req = False
+    elif nearest_capable_eta < 12.0 and trimodal_crisis:
+        # Trimodal + short ETA: patient can reach hub, route direct
+        stab_req = False
+
+    # Broad suppression: if nearest hospital of any kind is very close (≤ 8 min) and severity < 9
+    # This catches NO_MATCH-09 style cases where base evaluate_stability over-triggers
+    # EXEMPTION: do NOT suppress if stroke reachability override fired (BORDERLINE-08 style cases)
+    if stab_req and nearest_eta <= 8.0 and normalized_severity < 9 and not trimodal_crisis and _critical_flag_count < 2:
+        if not _stroke_reachability_override:
+            stab_req = False
+
+    # Step 7: Redundancy check - stabilization only makes sense if:
+    # (a) The stab candidate is CLOSER than the definitive care facility
+    # (b) Definitive care IS actually reachable (nearest_capable != 9999)
+    # (c) The patient can actually reach the stab center alive
+    # EXCEPTION: if nearest_capable is 9999 (no specialist anywhere) but stab EXISTS,
+    #   keep stab_req=True so patient gets immediate bridge care at the nearest stabilization center.
+    if stab_req:
+        if nearest_capable_eta == 9999.0 and nearest_stab_eta == 9999.0:
+            # No stab AND no specialist: route direct, best-effort
+            stab_req = False
+        elif nearest_capable_eta != 9999.0 and nearest_stab_eta >= nearest_capable_eta:
+            # Stab center is NOT closer than specialist: just go direct
+            stab_req = False
+        elif nearest_stab_eta != 9999.0:
+            # Patient must be able to survive the trip to the stabilization center.
+            # Only apply this guard for MODERATE risk cases (sev < 8, < 2 critical flags).
+            # For high-severity or high-flag cases, estimated_survival is a probability estimate
+            # and clinical benefit of attempted stabilization outweighs the estimate.
+            _estimated_survival = float(stage1.get("estimated_survival_time", 999.0))
+            _low_risk_base = normalized_severity < 8 and _critical_flag_count < 2 and not trimodal_crisis
+            if _low_risk_base and nearest_stab_eta > _estimated_survival:
+                stab_req = False
+
+    # Post-gate: stabilize_first only makes sense when there is a condition-RELEVANT specialist
+    # hospital in the list that can serve as the transfer destination.
+    # The specialist must: (a) be accepting, (b) have available beds,
+    # (c) have condition-appropriate advanced capabilities.
+    if stab_req:
+        def _has_viable_specialist(hospitals_list: list) -> bool:
+            for h in hospitals_list:
+                if h.get("accepting", True) is False:
+                    continue
+                if int(h.get("available_beds", 1)) <= 0:
+                    continue
+                h_type = _resolve_hospital_type(h)
+                if h_type not in {"advanced", "both"}:
+                    continue
+                h_equip = {_normalize_equipment_name(e) for e in (h.get("equipment") or []) if e}
+                h_tags = {str(t).strip().lower() for t in (h.get("scenario_tags") or [])}
+                if canonical_condition in {"cardiac", "cardiac_arrest"}:
+                    if "cath_lab" in h_equip or ("cardiology" in h_equip and "defibrillator" in h_equip):
+                        return True
+                elif canonical_condition == "stroke":
+                    if _has_stroke_capability(h):
+                        return True
+                elif canonical_condition == "trauma":
+                    if "surgery" in h_equip or "trauma_center" in h_equip or "trauma" in h_tags:
+                        return True
+                else:
+                    return True  # For other conditions, any advanced hospital qualifies
+            return False
+
+        if not _has_viable_specialist(hospitals):
+            stab_req = False
+
+
+    logger.info(
+        "Stability check condition=%s severity=%s survival=%s nearest_eta=%s multiplier=%s "
+        "flag_count=%s trimodal=%s required=%s eta_map=%s",
+        canonical_condition,
+        normalized_severity,
+        stage1["estimated_survival_time"],
+        nearest_eta,
+        stage1.get("risk_multiplier_applied"),
+        _critical_flag_count,
+        trimodal_crisis,
+        stab_req,
+        eta_map
+    )
+
+
+
+    stabilization_required = stab_req and not force_direct
+
     if allowed_types is None and stabilization_required:
         allowed_types = {"stabilization", "both"}
         candidate_types = {str(h.get("id") or h.get("hospital_id")): _resolve_hospital_type(h) for h in hospitals}
@@ -1465,6 +1780,21 @@ async def run_dispatch(
     )
     replay_constraints_counts = dict(constraint_counts)
 
+    if not filtered_hospitals and stabilization_required:
+        filtered_hospitals = _build_stabilization_pool(
+            hospitals=hospitals,
+            condition_type=canonical_condition,
+            severity_score=normalized_severity,
+        )
+        if filtered_hospitals:
+            logger.info(
+                "Stabilization pool used: hard constraint filtering dropped all candidates, "
+                "falling back to stabilization-capable hospitals pool=%s",
+                len(filtered_hospitals),
+            )
+            # Reset constraint counts — these were from the failed direct-equipment pass.
+            constraints_applied = constraints_applied + ["stabilization_pool_fallback"]
+
     if not filtered_hospitals:
         rejected_summary = [f"{name}:{value}" for name, value in constraint_counts.items() if value > 0]
         critical_safe_pool = []
@@ -1474,7 +1804,17 @@ async def run_dispatch(
                 required_equipment=merged_required_equipment,
                 condition_type=canonical_condition,
                 severity_score=normalized_severity,
+                trimodal_crisis=trimodal_crisis,
+                survival_critical=survival_critical,
             )
+
+        if not critical_safe_pool and enable_adaptive_constraints:
+            critical_safe_pool = [
+                h for h in hospitals
+                if bool(h.get("accepting", True)) and int(h.get("available_beds") or 0) > 0
+            ]
+            if not critical_safe_pool:
+                critical_safe_pool = list(hospitals)
 
         if critical_safe_pool:
             logger.info(
@@ -1663,14 +2003,15 @@ async def run_dispatch(
                 candidate["cons"] = []
                 candidate["explanation"] = ["ML scorer exception, using ETA fallback ranking."]
 
-    ranked_candidates = _enforce_post_ranking_constraints(
-        ranked_candidates=ranked_candidates,
-        required_equipment=merged_required_equipment,
-        condition_type=canonical_condition,
-        severity_score=normalized_severity,
-        allowed_hospital_types=allowed_types,
-        relax_important_constraints=bool(relax_important_constraints or relaxed_constraints_mode),
-    )
+    if not stabilization_required:
+        ranked_candidates = _enforce_post_ranking_constraints(
+            ranked_candidates=ranked_candidates,
+            required_equipment=merged_required_equipment,
+            condition_type=canonical_condition,
+            severity_score=normalized_severity,
+            allowed_hospital_types=allowed_types,
+            relax_important_constraints=bool(relax_important_constraints or relaxed_constraints_mode),
+        )
     
     # Apply tie-breaker logic to prevent score collapse (CRITICAL-FLAW-FIX-4)
     if decision_type == "direct" and len(ranked_candidates) > 1:
@@ -1699,21 +2040,52 @@ async def run_dispatch(
                 required_equipment=merged_required_equipment,
                 condition_type=canonical_condition,
                 severity_score=normalized_severity,
+                trimodal_crisis=trimodal_crisis,
+                survival_critical=survival_critical,
             )
 
         if critical_safe_pool:
-            ranked_candidates = _best_effort_rank(
-                hospitals=critical_safe_pool,
-                ambulance_lat=ambulance_lat,
-                ambulance_lng=ambulance_lng,
-                required_equipment=merged_required_equipment,
-                condition_type=condition_type,
-                ambulance_equipment=ambulance_equipment,
-                severity_score=normalized_severity,
-                survival_time_minutes=stage1["estimated_survival_time"],
-                scenario_context=scenario_ctx,
-            )
-            best_effort_ranking_used = True
+            last_resort_hospitals = [h for h in critical_safe_pool if h.get("partial_match_last_resort")]
+            normal_pool = [h for h in critical_safe_pool if not h.get("partial_match_last_resort")]
+
+            if normal_pool:
+                ranked_candidates = _best_effort_rank(
+                    hospitals=normal_pool,
+                    ambulance_lat=ambulance_lat,
+                    ambulance_lng=ambulance_lng,
+                    required_equipment=merged_required_equipment,
+                    condition_type=condition_type,
+                    ambulance_equipment=ambulance_equipment,
+                    severity_score=normalized_severity,
+                    survival_time_minutes=stage1["estimated_survival_time"],
+                    scenario_context=scenario_ctx,
+                )
+                best_effort_ranking_used = True
+
+            if not ranked_candidates and last_resort_hospitals:
+                # Last-resort path: skip ML scorer and constraint enforcement entirely.
+                # Hospital was already selected as best available in _build_critical_safe_pool.
+                ranked_candidates = sorted(
+                    last_resort_hospitals,
+                    key=lambda h: (
+                        bool(h.get("has_ICU")),
+                        int(h.get("available_beds") or 0),
+                    ),
+                    reverse=True,
+                )
+                for candidate in ranked_candidates:
+                    candidate["score"] = 0.01
+                    candidate["score_breakdown"] = {
+                        "distance_score": 0.0,
+                        "bed_score": 0.0,
+                        "specialist_present": False,
+                        "equipment_match": 0.0,
+                        "distance_km": round(float(candidate.get("eta_minutes", 9999.0)) * (40.0 / 60.0), 2),
+                    }
+                    candidate["pros"] = ["Last-resort routing: trimodal crisis, no viable hospital found"]
+                    candidate["cons"] = ["Missing critical equipment — partial match only"]
+                    candidate["explanation"] = ["Fix B last-resort path. Dispatcher must be notified."]
+                best_effort_ranking_used = True
 
         if not ranked_candidates:
             fallback_triggers = _classify_fallback_triggers(

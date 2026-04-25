@@ -10,6 +10,8 @@ jobs:
   backend-tests:
     name: Backend Pytest
     runs-on: ubuntu-latest
+    env:
+      MODEL_SHA256: a46ae388b1fdc321edd355a3ae431d0eb5cd85f109227563d39c6edd8ee776b7
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.12

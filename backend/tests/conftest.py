@@ -10,12 +10,17 @@ from sqlalchemy.orm import sessionmaker
 
 # Override env before importing app modules
 os.environ["TESTING"] = "true"  # Disables rate limiting
+# On local Windows shells, pytest's default capture can hit a closed tmpfile
+# teardown error after collection; run full suites with `-s` if that appears.
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/mediroute")
 os.environ.setdefault("SECRET_KEY", "test_secret_key_not_for_production")
 os.environ.setdefault("ALGORITHM", "HS256")
+os.environ.setdefault("MODEL_SHA256", "a46ae388b1fdc321edd355a3ae431d0eb5cd85f109227563d39c6edd8ee776b7")
 
 from app.main import app
 from app.db.database import Base, get_db
+from app.core.security import hash_password
+from app.db.models import User
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 engine = create_engine(TEST_DATABASE_URL)
@@ -75,15 +80,16 @@ def auth_headers(client):
 
 
 @pytest.fixture
-def admin_headers(client):
+def admin_headers(client, db_session):
     """Register an admin user and return auth headers."""
     email = f"test_admin_{os.urandom(4).hex()}@test.com"
-    
-    client.post("/api/auth/register", json={
-        "email": email,
-        "password": "admin123",
-        "role": "admin",
-    })
+
+    db_session.add(User(
+        email=email,
+        password_hash=hash_password("admin123"),
+        role="admin",
+    ))
+    db_session.commit()
     
     res = client.post("/api/auth/login", json={
         "email": email,

@@ -12,7 +12,12 @@ router = APIRouter(prefix="/api/hospitals")
 
 @router.get("/", response_model=list[HospitalOut])
 @limiter.limit(LIMIT_HOSPITALS_READ)
-def get_hospitals(request: Request, db: Session = Depends(get_db)):
+def get_hospitals(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    _ = current_user
     # FIX: Single JOIN query instead of N+1 (was 189 queries, now 1)
     # Subquery: get the latest availability record per hospital
     latest_avail = db.query(

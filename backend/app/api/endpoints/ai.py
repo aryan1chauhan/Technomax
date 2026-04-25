@@ -1,10 +1,12 @@
 import os
 import json
 import re
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ValidationError, field_validator
 import google.generativeai as genai
 from app.core.config import settings
+from app.core.security import get_current_user
+from app.db.models import User
 from app.middleware.rate_limit import limiter, LIMIT_AI
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
@@ -105,7 +107,12 @@ class CaseInput(BaseModel):
 
 @router.post("/analyze")
 @limiter.limit(LIMIT_AI)
-async def analyze_case(request: Request, case: CaseInput):
+async def analyze_case(
+    request: Request,
+    case: CaseInput,
+    current_user: User = Depends(get_current_user),
+):
+    _ = current_user
     if not _has_key():
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured in .env")
 
@@ -172,7 +179,12 @@ class VoiceInput(BaseModel):
 # Route name matches what the frontend posts to: /api/ai/equipment-recommend
 @router.post("/equipment-recommend")
 @limiter.limit(LIMIT_AI)
-async def recommend_equipment(request: Request, body: VoiceInput):
+async def recommend_equipment(
+    request: Request,
+    body: VoiceInput,
+    current_user: User = Depends(get_current_user),
+):
+    _ = current_user
     """
     Analyze voice transcript → return condition + recommended equipment.
     Called by Dispatch.jsx after the paramedic speaks.

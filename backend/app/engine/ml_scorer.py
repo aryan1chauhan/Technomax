@@ -15,25 +15,27 @@ Compatibility guarantees:
 
 import hashlib
 import importlib
+import io
 import json
 import logging
 import math
 import os
-import pickle
 from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 # Default fallback weights (used when ACTIVE_WEIGHTS is unavailable).
-_DEFAULT_WEIGHTS: dict[str, float] = {
-    "w_survival": 0.30,
-    "w_treatment": 0.25,
-    "w_equipment": 0.20,
-    "w_eta": 0.15,
-    "w_load": 0.10,
+# ──────────────────────────────────────────────────────────────────────
+_DEFAULT_WEIGHTS: dict[str, float] = {    
+    "w_survival": 0.22,
+    "w_treatment": 0.10,
+    "w_equipment": 0.13,
+    "w_eta": 0.35,
+    "w_load": 0.20,
 }
 
 _PRIORITY_TO_WEIGHT_KEYS: dict[str, tuple[str, ...]] = {
@@ -66,8 +68,17 @@ except (ImportError, RuntimeError, ValueError, TypeError, OSError):
 
 
 def _get_active_weights() -> dict[str, float]:
-    """Return normalized weight map, falling back to defaults when unavailable."""
-    source = _ACTIVE_WEIGHTS if isinstance(_ACTIVE_WEIGHTS, dict) else _DEFAULT_WEIGHTS
+    """
+    Return normalized weight map.
+
+    Uses persisted trust-layer tuning only when learning is enabled. Validation
+    and test runs with DISABLE_LEARNING_UPDATE=1 should stay on the default
+    baseline so historical tuning data cannot silently skew expectations.
+    """
+    if os.getenv("DISABLE_LEARNING_UPDATE", "0") == "1":
+        source = _DEFAULT_WEIGHTS
+    else:
+        source = _ACTIVE_WEIGHTS if isinstance(_ACTIVE_WEIGHTS, dict) else _DEFAULT_WEIGHTS
     weights = {
         key: float(source.get(key, _DEFAULT_WEIGHTS[key]))
         for key in _DEFAULT_WEIGHTS
@@ -266,19 +277,41 @@ _ml_model = None
 _ML_AVAILABLE = False
 _MODEL_SHA256 = os.getenv("MODEL_SHA256", "").strip().lower()
 _ML_FALLBACK_WARNING_EMITTED = False
+_ML_DISABLED = os.getenv("DISABLE_ML_MODEL", "0") == "1"
+
+
+def _extract_model(loaded_artifact: Any) -> Any:
+    if isinstance(loaded_artifact, dict) and "model" in loaded_artifact:
+        return loaded_artifact["model"]
+    return loaded_artifact
+
+if not _ML_DISABLED and not _MODEL_SHA256:
+    raise RuntimeError(
+        "MODEL_SHA256 env var is required for safe model loading. "
+        "Set it to the SHA256 hash of the model file."
+    )
 
 try:
-    if _MODEL_SHA256:
-        digest = hashlib.sha256(_MODEL_PATH.read_bytes()).hexdigest()
-        if digest != _MODEL_SHA256:
-            raise RuntimeError("Model checksum mismatch")
-    with open(_MODEL_PATH, "rb") as f:
-        _ml_model = pickle.load(f)
-    _ML_AVAILABLE = True
-    logger.info("ML model loaded successfully from %s", _MODEL_PATH)
+    if _ML_DISABLED:
+        logger.info("ML model disabled by DISABLE_ML_MODEL=1 — using fallback scorer.")
+    else:
+        with open(_MODEL_PATH, "rb") as f:
+            raw = f.read()
+        actual_sha = hashlib.sha256(raw).hexdigest()
+        if actual_sha != _MODEL_SHA256:
+            raise RuntimeError(
+                f"Model file integrity check failed. Expected {_MODEL_SHA256}, got {actual_sha}."
+            )
+
+        _ml_model = _extract_model(joblib.load(io.BytesIO(raw)))
+        _ML_AVAILABLE = True
+        logger.info("ML model loaded successfully from %s", _MODEL_PATH)
 except FileNotFoundError:
     logger.warning("hospital_model.pkl not found at %s — using fallback scorer.", _MODEL_PATH)
-except (OSError, RuntimeError, ValueError, pickle.UnpicklingError) as exc:
+except RuntimeError:
+    # Integrity failures must crash startup.
+    raise
+except (OSError, ValueError) as exc:
     logger.warning(
         "Failed to load hospital_model.pkl (%s: %s) — using fallback scorer.",
         type(exc).__name__,
@@ -505,37 +538,36 @@ def _survival_score(
 
 
 def _eta_relative_score(eta_minutes: float, max_eta_minutes: float | None) -> float:
-    eta = max(0.0, _as_float(eta_minutes, 0.0))
-    max_eta = _as_float(max_eta_minutes, 0.0)
-    if max_eta <= 0.0:
-        return normalize_eta(eta)
-    # In degenerate/single-candidate windows, relative ETA collapses to zero.
-    # Fall back to absolute ETA normalization to preserve meaningful scoring.
-    if max_eta <= (eta + 1e-6):
-        return normalize_eta(eta)
-    return _clamp(1.0 - (eta / max_eta), 0.0, 1.0)
+    """Hyperbolic proximity score (closer = higher)."""
+    return normalize_eta(eta_minutes)
 
 
-def _treatment_priority_score(condition: str, hospital_equipment_set: set[str], specialist_count: int) -> float:
+def _treatment_priority_score(
+    condition: str, 
+    hospital_equipment_set: set[str], 
+    specialist_count: int,
+    severity_score: float | None = None
+) -> float:
     cond = str(condition or "").strip().lower()
     normalized_equipment = {_normalize_equipment_name(item) for item in hospital_equipment_set}
-
+    
+    # Severity-aware dampening: stable cases shouldn't be forced to far hubs
+    is_critical = severity_score is not None and severity_score >= 7.0
+    base_mismatch = 0.3 if is_critical else 0.90
+    
     specialist_bonus = 0.05 if specialist_count > 0 else 0.0
 
     if cond in {"stroke"}:
         has_target = bool(normalized_equipment & _TREATMENT_ALIASES["neuro"])
-        base = 1.0 if has_target else 0.3
+        base = 1.0 if has_target else base_mismatch
     elif cond in {"cardiac_arrest", "heart_attack"}:
         has_target = bool(normalized_equipment & _TREATMENT_ALIASES["cardiac"])
-        base = 1.0 if has_target else 0.4
-    elif cond in {"multi_trauma", "head_injury", "severe_bleeding", "fracture"}:
+        base = 1.0 if has_target else base_mismatch
+    elif cond in {"trauma"}:
         has_target = bool(normalized_equipment & _TREATMENT_ALIASES["trauma"])
-        base = 1.0 if has_target else 0.4
-    elif cond in {"respiratory_distress"}:
-        has_target = bool(normalized_equipment & _TREATMENT_ALIASES["respiratory"])
-        base = 1.0 if has_target else 0.5
+        base = 1.0 if has_target else base_mismatch
     else:
-        base = 0.8
+        base = 0.8  # Default high base for non-specialty conditions
 
     return _clamp(base + specialist_bonus, 0.0, 1.0)
 
@@ -726,11 +758,7 @@ def _fallback_rule_based_score(
     effective_set = {_normalize_equipment_name(item) for item in hosp_set} | ambulance_set
     normalized_required = {_normalize_equipment_name(item) for item in req_set}
 
-    equipment_match_score = (
-        (len(normalized_required & effective_set) / len(normalized_required))
-        if normalized_required
-        else 1.0
-    )
+    equipment_match_score = (len(normalized_required & effective_set) / len(normalized_required)) if normalized_required else 1.0
     if equipment_match_score_override is not None:
         equipment_match_score = _clamp(_as_float(equipment_match_score_override, equipment_match_score), 0.0, 1.0)
 
@@ -754,7 +782,12 @@ def _fallback_rule_based_score(
         cond,
         stabilization_possible,
     )
-    s_treatment = _treatment_priority_score(cond, hosp_set, specialist_count)
+    s_treatment = _treatment_priority_score(
+        condition=str(condition or "").strip().lower(),
+        hospital_equipment_set=hosp_set,
+        specialist_count=specialist_count,
+        severity_score=severity_score
+    )
     s_equipment = _clamp(equipment_match_score, 0.0, 1.0)
     s_eta = _eta_relative_score(eta_minutes, max_eta_minutes)
     s_load = _load_threshold_score(normalize_hospital_load(hospital_load))
@@ -947,7 +980,12 @@ def score_hospital(
         condition_key,
         stabilization_possible,
     )
-    s_treatment = _treatment_priority_score(condition_key, normalized_hospital_set, specialist_count)
+    s_treatment = _treatment_priority_score(
+        condition=condition_key,
+        hospital_equipment_set=normalized_hospital_set,
+        specialist_count=specialist_count,
+        severity_score=severity_score
+    )
     uncertainty_value = _as_float((scenario_context or {}).get("uncertainty", 0.0), 0.0)
     uncertainty_high = bool((scenario_context or {}).get("uncertainty_high", False)) or (uncertainty_value >= 0.6)
     if uncertainty_high:

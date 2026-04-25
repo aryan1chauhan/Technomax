@@ -69,6 +69,91 @@ const SEVERITY_LEVELS = [
   { value: 4, label: "Critical", color: "#EE3B3B", bg: "#FFF0F0" },
 ];
 
+const AMBULANCE_EQUIPMENT_LABELS = {
+  oxygen: "Oxygen",
+  ventilator: "Ventilator",
+  defibrillator: "Defibrillator",
+  ecg: "ECG Monitor",
+};
+
+const ALL_AMBULANCE_EQUIPMENT = Object.keys(AMBULANCE_EQUIPMENT_LABELS);
+
+const SEVERITY_PAYLOAD_LABELS = {
+  1: "low",
+  2: "moderate",
+  3: "high",
+  4: "critical",
+};
+
+const VITAL_FIELDS = [
+  { key: "oxygen", label: "SpO2 %", placeholder: "92", min: 0, max: 100 },
+  { key: "pulse", label: "Pulse", placeholder: "110", min: 0, max: 260 },
+  { key: "systolic", label: "Systolic BP", placeholder: "90", min: 0, max: 300 },
+];
+
+function toNumberOrNull(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function normalizeVitals(vitalsInput) {
+  return Object.fromEntries(
+    Object.entries(vitalsInput)
+      .map(([key, value]) => [key, toNumberOrNull(value)])
+      .filter(([, value]) => value !== null)
+  );
+}
+
+export function extractVitalsFromText(text) {
+  const source = String(text || "").toLowerCase();
+  const vitals = {};
+  const oxygenMatch =
+    source.match(/\b(?:spo2|sp02|oxygen|o2)\s*(?:is|at|:)?\s*(\d{2,3})\b/) ||
+    source.match(/\b(\d{2,3})\s*(?:percent|%)\s*(?:spo2|sp02|oxygen|o2)\b/);
+  const pulseMatch =
+    source.match(/\b(?:pulse|heart rate|hr)\s*(?:is|at|:)?\s*(\d{1,3})\b/) ||
+    source.match(/\b(\d{1,3})\s*(?:pulse|heart rate|bpm)\b/);
+  const bpMatch =
+    source.match(/\b(?:bp|blood pressure)\s*(?:is|at|:)?\s*(\d{2,3})\s*\/\s*\d{2,3}\b/) ||
+    source.match(/\bsystolic\s*(?:is|at|:)?\s*(\d{2,3})\b/);
+
+  if (oxygenMatch) vitals.oxygen = oxygenMatch[1];
+  if (pulseMatch) vitals.pulse = pulseMatch[1];
+  if (bpMatch) vitals.systolic = bpMatch[1];
+
+  return vitals;
+}
+
+export function buildDispatchPayload({
+  selectedCondition,
+  aiResult,
+  checkedEquipment,
+  ambulanceEquipment,
+  vitals,
+  selectedSeverity,
+  lat,
+  lng,
+  notes,
+}) {
+  const requiredEquipment = [...new Set(checkedEquipment)];
+  return {
+    condition: selectedCondition,
+    custom_condition: aiResult?.condition_label || null,
+    equipment_needed: requiredEquipment,
+    required_equipment: requiredEquipment,
+    critical_equipment: aiResult?.critical_equipment || [],
+    important_equipment: aiResult?.important_equipment || [],
+    optional_equipment: aiResult?.optional_equipment || [],
+    ambulance_equipment: ambulanceEquipment,
+    vitals: normalizeVitals(vitals),
+    ambulance_lat: lat,
+    ambulance_lng: lng,
+    severity: SEVERITY_PAYLOAD_LABELS[selectedSeverity] || "moderate",
+    notes: (notes && !isInternalNote(notes)) ? notes : null,
+  };
+}
+
 // FIX: Filter out internal fallback notes — never show "Rule-based assessment (AI offline)" to user
 function isInternalNote(text) {
   if (!text) return false;
@@ -113,10 +198,12 @@ export default function Dispatch() {
 
   const [selectedCondition, setSelectedCondition] = useState(null);
   const [checkedEquipment, setCheckedEquipment] = useState([]);
+  const [ambulanceEquipment, setAmbulanceEquipment] = useState(["oxygen"]);
+  const [selectedSeverity, setSelectedSeverity] = useState(2);
+  const [vitals, setVitals] = useState({ oxygen: "", pulse: "", systolic: "" });
   const [notes, setNotes] = useState("");
   const [lat, setLat] = useState(null);
   const [lng, setLng] = useState(null);
-  const [gpsLabel, setGpsLabel] = useState("Acquiring GPS...");
   const [gpsReady, setGpsReady] = useState(false);
 
   const [isListening, setIsListening] = useState(false);
@@ -136,18 +223,15 @@ export default function Dispatch() {
   useEffect(() => {
     if (!navigator.geolocation) {
       setLat(30.3165); setLng(78.0322);
-      setGpsLabel("Dehradun, Uttarakhand (default)");
       setGpsReady(true); return;
     }
     navigator.geolocation.getCurrentPosition(
       pos => {
         setLat(pos.coords.latitude); setLng(pos.coords.longitude);
-        setGpsLabel(`${pos.coords.latitude.toFixed(4)}°N  ${pos.coords.longitude.toFixed(4)}°E`);
         setGpsReady(true);
       },
       () => {
         setLat(30.3165); setLng(78.0322);
-        setGpsLabel("Dehradun, Uttarakhand (default)");
         setGpsReady(true);
       },
       { enableHighAccuracy: true }
@@ -207,6 +291,12 @@ export default function Dispatch() {
         return;
       }
       setAiResult(result);
+      if (result.severity) {
+        const nextSeverity = Number(result.severity);
+        if (Number.isInteger(nextSeverity) && nextSeverity >= 1 && nextSeverity <= 4) {
+          setSelectedSeverity(nextSeverity);
+        }
+      }
 
       // FIX: Only set notes if it's a real AI note, not the internal fallback message
       if (result.notes && !isInternalNote(result.notes)) {
@@ -239,6 +329,11 @@ export default function Dispatch() {
         setCheckedEquipment(merged);
         setAiSuggestedItems(aiExtra);
       }
+
+      const extractedVitals = extractVitalsFromText(voiceTranscript);
+      if (Object.keys(extractedVitals).length) {
+        setVitals(prev => ({ ...prev, ...extractedVitals }));
+      }
     } else {
       // Complete failure — don't pollute notes, just show error
       setError("Could not analyze voice. Please select condition manually.");
@@ -252,19 +347,31 @@ export default function Dispatch() {
     );
   };
 
+  const toggleAmbulanceEquipment = (item) => {
+    setAmbulanceEquipment(prev =>
+      prev.includes(item) ? prev.filter(e => e !== item) : [...prev, item]
+    );
+  };
+
+  const updateVital = (key, value) => {
+    setVitals(prev => ({ ...prev, [key]: value }));
+  };
+
   const handleSubmit = async () => {
     if (!selectedCondition) { setError("Please select a patient condition."); return; }
     setLoading(true); setError("");
     try {
-      const res = await api.post("/api/dispatch/", {
-        condition: selectedCondition,
-        custom_condition: aiResult?.condition_label || null,
-        equipment_needed: checkedEquipment,
-        ambulance_lat: lat,
-        ambulance_lng: lng,
-        // FIX: Only send notes if they're real (not internal fallback text)
-        notes: (notes && !isInternalNote(notes)) ? notes : null,
-      });
+      const res = await api.post("/api/dispatch/", buildDispatchPayload({
+        selectedCondition,
+        aiResult,
+        checkedEquipment,
+        ambulanceEquipment,
+        vitals,
+        selectedSeverity,
+        lat,
+        lng,
+        notes,
+      }));
       // Pass full enriched response — Result.jsx reads selected_hospital, alternatives, etc.
       navigate("/result", { state: { result: res.data, ambLat: lat, ambLng: lng } });
     } catch (e) {
@@ -435,6 +542,90 @@ export default function Dispatch() {
             ))}
           </div>
         </div>
+
+        {/* CLINICAL SIGNALS */}
+        {(selectedCondition || aiResult) && (
+          <div className="glass-card rounded-xl p-5 mb-6">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+              <div>
+                <h3 className="text-[13px] font-semibold text-[#404454] uppercase tracking-wider">Clinical Signals</h3>
+                <p className="text-[12px] text-[#737A8F] mt-1">Sent to the stabilize-first dispatch engine.</p>
+              </div>
+              <span className="text-[12px] text-[#737A8F] bg-[#F7F7FC] border border-[#E2E6F0] rounded-md px-[10px] py-1">
+                {SEVERITY_LEVELS.find(s => s.value === selectedSeverity)?.label || "Moderate"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {SEVERITY_LEVELS.map(level => {
+                const isSelected = selectedSeverity === level.value;
+                return (
+                  <button
+                    key={level.value}
+                    onClick={() => setSelectedSeverity(level.value)}
+                    className="py-2 px-3 rounded-lg border-[1.5px] text-[12px] font-semibold cursor-pointer transition-all"
+                    style={{
+                      borderColor: isSelected ? level.color : "#E2E6F0",
+                      background: isSelected ? level.bg : "#FAFBFF",
+                      color: isSelected ? level.color : "#4A5068",
+                    }}
+                  >
+                    {level.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              {VITAL_FIELDS.map(field => (
+                <label key={field.key} className="block">
+                  <span className="text-[12px] text-[#737A8F] block mb-1">{field.label}</span>
+                  <input
+                    type="number"
+                    min={field.min}
+                    max={field.max}
+                    value={vitals[field.key]}
+                    onChange={e => updateVital(field.key, e.target.value)}
+                    placeholder={field.placeholder}
+                    className="w-full px-3 py-2 border border-[#E2E6F0] rounded-lg text-[13px] outline-none text-[#1A1E2E] bg-white"
+                  />
+                </label>
+              ))}
+            </div>
+
+            <div>
+              <div className="text-[12px] text-[#737A8F] mb-2">Ambulance equipment available now</div>
+              <div className="flex flex-wrap gap-2">
+                {ALL_AMBULANCE_EQUIPMENT.map(item => {
+                  const isChecked = ambulanceEquipment.includes(item);
+                  return (
+                    <button
+                      key={item}
+                      onClick={() => toggleAmbulanceEquipment(item)}
+                      className="flex items-center gap-2 px-[12px] py-2 rounded-lg border-[1.5px] cursor-pointer transition-all text-[13px]"
+                      style={{
+                        borderColor: isChecked ? "#17B86B" : "#E2E6F0",
+                        background: isChecked ? "#E8FDF4" : "#FAFBFF",
+                        color: isChecked ? "#148A52" : "#4A5068",
+                        fontWeight: isChecked ? 500 : 400,
+                      }}
+                    >
+                      <span className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border-[1.5px]"
+                        style={{
+                          borderColor: isChecked ? "#17B86B" : "#C5CBDC",
+                          background: isChecked ? "#17B86B" : "transparent",
+                        }}
+                      >
+                        {isChecked && <span className="text-white text-[10px]">✓</span>}
+                      </span>
+                      {AMBULANCE_EQUIPMENT_LABELS[item]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* EQUIPMENT PANEL */}
         {(selectedCondition || aiResult) && (

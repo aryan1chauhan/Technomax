@@ -16,6 +16,9 @@ import math
 import sys
 import types
 import pytest
+from pathlib import Path
+
+import joblib
 
 # ---------------------------------------------------------------------------
 # Inline the module under test so the suite runs without a full FastAPI stack.
@@ -572,3 +575,8 @@ class TestMlPath:
         assert r["ml_used"] is False
         assert 0.0 <= r["score"] <= 1.0
         assert "ml_confidence" not in r["score_breakdown"]
+
+    def test_trained_model_smoke_has_predict_interfaces(self):
+        model_path = Path(__file__).resolve().parent.parent / "ml_training" / "hospital_model.pkl"
+        model = scorer._extract_model(joblib.load(model_path))
+        assert hasattr(model, "predict") and hasattr(model, "predict_proba")

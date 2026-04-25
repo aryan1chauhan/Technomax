@@ -13,6 +13,7 @@ from app.api.endpoints.hospitals import router as hospitals_router
 from app.api.endpoints.dispatch import router as dispatch_router
 from app.api.endpoints.cases import router as cases_router
 from app.api.endpoints.ai import router as ai_router
+from app.api.endpoints.users import router as users_router
 from app.api.endpoints import tracking
 
 app = FastAPI(title="MediRoute API")
@@ -39,6 +40,7 @@ app.include_router(hospitals_router)
 app.include_router(dispatch_router)
 app.include_router(cases_router)
 app.include_router(ai_router)
+app.include_router(users_router)
 app.include_router(tracking.router)
 
 @app.get("/")
@@ -53,4 +55,3 @@ def health_check(db: Session = Depends(get_db)):
         return {"status": "ok", "database": "connected"}
     except Exception as e:
         return {"status": "degraded", "database": str(e)}
-

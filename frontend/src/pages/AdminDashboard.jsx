@@ -18,7 +18,11 @@ export default function AdminDashboard() {
     try {
       const res = await api.get("/api/cases/admin/stats");
       setData(res.data);
-    } catch { } finally { setLoading(false); }
+    } catch (err) {
+      console.error("Failed to fetch admin stats", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

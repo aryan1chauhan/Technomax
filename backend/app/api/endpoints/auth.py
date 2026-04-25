@@ -3,42 +3,67 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models import User
 from app.schemas.user import UserCreate, UserLogin
-from app.core.security import hash_password, verify_password, create_access_token
+from app.core.security import hash_password, verify_password, create_access_token, get_current_user
 from app.middleware.rate_limit import limiter, LIMIT_AUTH_LOGIN, LIMIT_AUTH_REGISTER
 
 router = APIRouter(prefix="/api/auth")
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
-@limiter.limit(LIMIT_AUTH_REGISTER)
-def register(request: Request, user_in: UserCreate, db: Session = Depends(get_db)):
-    valid_roles = {"ambulance", "hospital", "admin"}
-    if user_in.role not in valid_roles:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid role. Must be one of: {valid_roles}"
-        )
-    
+def _create_user(user_in: UserCreate, db: Session):
     user = db.query(User).filter(User.email == user_in.email).first()
     if user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
-    
+
     hashed_password = hash_password(user_in.password)
-    
+
     new_user = User(
         email=user_in.email,
         password_hash=hashed_password,
         role=user_in.role,
         hospital_id=user_in.hospital_id
     )
-    
+
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    
+
     return {"message": "User registered successfully"}
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+@limiter.limit(LIMIT_AUTH_REGISTER)
+def register(request: Request, user_in: UserCreate, db: Session = Depends(get_db)):
+    valid_roles = {"ambulance", "hospital"}
+    if user_in.role not in valid_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role. Must be one of: {valid_roles}"
+        )
+
+    return _create_user(user_in, db)
+
+@router.post("/admin/create-user", status_code=status.HTTP_201_CREATED)
+@limiter.limit(LIMIT_AUTH_REGISTER)
+def admin_create_user(
+    request: Request,
+    user_in: UserCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    valid_roles = {"ambulance", "hospital", "admin"}
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    if user_in.role not in valid_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role. Must be one of: {valid_roles}"
+        )
+
+    return _create_user(user_in, db)
 
 @router.post("/login")
 @limiter.limit(LIMIT_AUTH_LOGIN)

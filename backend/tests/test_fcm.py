@@ -89,7 +89,7 @@ def test_arrived_transition_triggers_fcm(client, auth_headers, db_session, dispa
     hospital_user.hospital_id = case.assigned_hospital_id
     db_session.commit()
 
-    with patch("app.api.endpoints.cases.send_push") as mock_send:
+    with patch("app.services.notification_service.send_push") as mock_send:
         for s in ["en_route", "on_scene", "transporting"]:
             client.put(f"/api/cases/{case_id}/status", json={"status": s}, headers=auth_headers)
             
@@ -115,7 +115,7 @@ def test_arrived_transition_multiple_hospital_tokens(client, auth_headers, db_se
     db_session.add_all([u1, u2])
     db_session.commit()
     
-    with patch("app.api.endpoints.cases.send_push") as mock_send:
+    with patch("app.services.notification_service.send_push") as mock_send:
         for s in ["en_route", "on_scene", "transporting", "arrived"]:
             client.put(f"/api/cases/{case_id}/status", json={"status": s}, headers=auth_headers)
         

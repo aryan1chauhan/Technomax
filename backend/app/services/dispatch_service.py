@@ -2,17 +2,18 @@
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 
 import httpx
 from fastapi import HTTPException
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.models import Availability, Case, CaseEvent, User
+from app.db.models import Case, CaseEvent, DecisionCandidate, User
 from app.engine import dispatch_engine
 from app.engine.stability_engine import evaluate_stability
 from app.schemas.dispatch import DispatchRequest, DispatchResponse, RejectionSummary, ScoredHospitalResponse
+from app.services.notification_service import send_dispatch_notifications
 
 STABILIZATION_DELAY_MINUTES = 18.0
 
@@ -360,9 +361,121 @@ async def execute_dispatch(dispatch_request: DispatchRequest, db: Session, curre
                 },
             )
 
-        best = ranked[0]
+        ranked_for_response = [dict(item) for item in ranked]
+        selected_hospital = dict(ranked_for_response[0])
+        new_case: Case | None = None
+
+        def save_case_with_atomic_reservation():
+            nonlocal ranked_for_response, selected_hospital, new_case
+
+            selected_idx = -1
+            remaining_beds_after_reserve = None
+
+            for idx, candidate in enumerate(ranked_for_response):
+                reservation = db.execute(
+                    text(
+                        """
+                        UPDATE availabilities
+                        SET beds = beds - 1,
+                            updated_at = NOW()
+                        WHERE hospital_id = :hospital_id
+                          AND beds > 0
+                        RETURNING beds
+                        """
+                    ),
+                    {"hospital_id": int(candidate["id"])},
+                ).first()
+                if reservation is not None:
+                    selected_idx = idx
+                    remaining_beds_after_reserve = int(reservation[0])
+                    break
+
+            if selected_idx < 0:
+                db.rollback()
+                raise HTTPException(status_code=409, detail="Hospital at capacity, retry dispatch")
+
+            selected_hospital = dict(ranked_for_response[selected_idx])
+            selected_hospital["available_beds"] = remaining_beds_after_reserve
+
+            if selected_idx > 0:
+                # Race-safe rerank: promote the first successfully reserved candidate.
+                ranked_for_response = [selected_hospital] + [
+                    dict(item)
+                    for i, item in enumerate(ranked_for_response)
+                    if i != selected_idx
+                ]
+
+            selected_response = _candidate_to_response(selected_hospital)
+            new_case = Case(
+                user_id=current_user.id,
+                condition=dispatch_request.condition,
+                custom_condition=getattr(dispatch_request, "custom_condition", None),
+                equipment_needed=equip,
+                ambulance_lat=dispatch_request.ambulance_lat,
+                ambulance_lng=dispatch_request.ambulance_lng,
+                assigned_hospital_id=int(selected_hospital["id"]),
+                final_score=float(selected_hospital.get("score") or 0.0),
+                distance_km=selected_response.distance_km,
+                eta_minutes=selected_response.eta_minutes,
+                notes=getattr(dispatch_request, "notes", None),
+            )
+            db.add(new_case)
+            db.flush()
+
+            initial_event = CaseEvent(
+                case_id=new_case.id,
+                status="dispatched",
+                actor_id=current_user.id,
+                actor_role=current_user.role,
+                note="Case dispatched by system",
+            )
+            db.add(initial_event)
+            db.commit()
+            db.refresh(new_case)
+
+            try:
+                candidate_rows: list[DecisionCandidate] = []
+                for position, candidate in enumerate(ranked_for_response, start=1):
+                    breakdown = candidate.get("score_breakdown")
+                    distance_km = None
+                    if isinstance(breakdown, dict):
+                        distance_km = breakdown.get("distance_km")
+
+                    candidate_rows.append(
+                        DecisionCandidate(
+                            case_id=new_case.id,
+                            hospital_id=int(candidate["id"]),
+                            rank_position=position,
+                            score=float(candidate.get("score") or 0.0),
+                            eta_minutes=float(candidate.get("eta_minutes") or 0.0),
+                            distance_km=float(distance_km) if distance_km is not None else None,
+                            available_beds_snapshot=int(candidate.get("available_beds") or 0),
+                            icu_beds_snapshot=int(candidate.get("icu_beds") or 0),
+                            is_selected=position == 1,
+                            score_breakdown=breakdown if isinstance(breakdown, dict) else None,
+                        )
+                    )
+                db.add_all(candidate_rows)
+                db.commit()
+            except Exception:
+                # Backward-compatible behavior for environments pending migration rollout.
+                db.rollback()
+                logging.getLogger(__name__).warning(
+                    "decision_candidates logging skipped; table unavailable or write failed",
+                    exc_info=True,
+                )
+
+        await loop.run_in_executor(None, save_case_with_atomic_reservation)
+
+        if new_case is None:
+            raise HTTPException(status_code=500, detail="Dispatch persistence failed")
+
+        hospital_users = db.query(User).filter(User.hospital_id == new_case.assigned_hospital_id).all()
+        await send_dispatch_notifications(db=db, case=new_case, hospital_users=hospital_users)
+
+        best = selected_hospital
         best_response = _candidate_to_response(best)
-        alternatives = [_candidate_to_response(item) for item in ranked[1:4]]
+        alternatives = [_candidate_to_response(item) for item in ranked_for_response[1:4]]
         primary_destination = best_response.model_dump()
 
         secondary_destination: dict | None = None
@@ -399,51 +512,10 @@ async def execute_dispatch(dispatch_request: DispatchRequest, db: Session, curre
             decision_reasoning["post_stabilization_routing"] = second_leg_decision.get("reasoning") or {}
             decision["reasoning"] = decision_reasoning
 
-        new_case = Case(
-            user_id=current_user.id,
-            condition=dispatch_request.condition,
-            custom_condition=getattr(dispatch_request, "custom_condition", None),
-            equipment_needed=equip,
-            ambulance_lat=dispatch_request.ambulance_lat,
-            ambulance_lng=dispatch_request.ambulance_lng,
-            assigned_hospital_id=best["id"],
-            final_score=float(best.get("score") or 0.0),
-            distance_km=best_response.distance_km,
-            eta_minutes=best_response.eta_minutes,
-            notes=getattr(dispatch_request, "notes", None),
-        )
-
-        def save_case_and_decrement():
-            rows_updated = db.query(Availability).filter(
-                Availability.hospital_id == best["id"],
-                Availability.beds > 0
-            ).update(
-                {
-                    Availability.beds: Availability.beds - 1,
-                    Availability.updated_at: datetime.now(timezone.utc)
-                },
-                synchronize_session=False
-            )
-
-            if rows_updated == 0:
-                db.rollback()
-                raise HTTPException(status_code=409, detail="Hospital at capacity, retry dispatch")
-
-            db.add(new_case)
-            db.commit()
-            db.refresh(new_case)
-
-            initial_event = CaseEvent(
-                case_id=new_case.id,
-                status="dispatched",
-                actor_id=current_user.id,
-                actor_role=current_user.role,
-                note="Case dispatched by system",
-            )
-            db.add(initial_event)
-            db.commit()
-
-        await loop.run_in_executor(None, save_case_and_decrement)
+        if int(best.get("id") or -1) != int(ranked[0].get("id") or -1):
+            reasoning_after_rerank = decision.get("reasoning") or {}
+            reasoning_after_rerank["capacity_rerank_applied"] = True
+            decision["reasoning"] = reasoning_after_rerank
 
         decision_type = decision.get("decision_type", "direct")
 

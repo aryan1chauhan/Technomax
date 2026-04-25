@@ -29,12 +29,14 @@ import json
 import time
 from typing import Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
 
 from app.core.config import settings
 from app.db.database import SessionLocal
-from app.db.models import Case, Hospital
+from app.db.models import Case, Hospital, User
+from app.schemas.case import CaseStatusUpdate
+from app.services.case_status_service import apply_case_status_update
 from app.services.routing_service import eta_predictor
 
 router = APIRouter()
@@ -56,6 +58,23 @@ def _validate_ws_token(token: str | None) -> dict | None:
         return payload
     except JWTError:
         return None
+
+
+def _user_can_access_case(user: User, case: Case) -> bool:
+    if user.role == "admin":
+        return True
+    if user.role == "ambulance":
+        return case.user_id == user.id
+    if user.role == "hospital":
+        return case.assigned_hospital_id == user.hospital_id
+    return False
+
+
+def _get_ws_user(db, payload: dict) -> User | None:
+    email = payload.get("sub")
+    if not email:
+        return None
+    return db.query(User).filter(User.email == email).first()
 
 
 async def _send(ws: WebSocket, payload: dict) -> None:
@@ -80,11 +99,20 @@ async def track_case(
         await websocket.close(code=4001, reason="Missing or invalid token")
         return
 
-    await websocket.accept()
-
     db = SessionLocal()
     try:
+        current_user = _get_ws_user(db, payload)
+        if not current_user:
+            await websocket.close(code=4001, reason="Missing or invalid token")
+            return
+
         case = db.query(Case).filter(Case.id == case_id).first()
+        if case and not _user_can_access_case(current_user, case):
+            await websocket.close(code=4003, reason="Not authorized for this case")
+            return
+
+        await websocket.accept()
+
         if not case:
             await _send(websocket, {"type": "error", "message": "Case not found"})
             await websocket.close()
@@ -183,10 +211,22 @@ async def track_case(
             elif msg_type == "status":
                 new_status = msg.get("status")
                 if new_status:
-                    # Refresh the case object before updating
-                    db.refresh(case)
-                    case.status = new_status
-                    db.commit()
+                    try:
+                        # Keep WebSocket status changes on the same service path
+                        # as HTTP so transition rules cannot be bypassed here.
+                        status_payload = await apply_case_status_update(
+                            db=db,
+                            case_id=case_id,
+                            update_data=CaseStatusUpdate(status=new_status),
+                            current_user=current_user,
+                        )
+                    except HTTPException as exc:
+                        await _send(websocket, {
+                            "type": "error",
+                            "message": exc.detail,
+                            "status_code": exc.status_code,
+                        })
+                        continue
 
                     # Clear predictor state when case is done
                     if new_status in ("arrived", "completed", "cancelled"):
@@ -195,7 +235,7 @@ async def track_case(
 
                     await _send(websocket, {
                         "type": "status_change",
-                        "status": new_status,
+                        "status": status_payload["status"],
                     })
 
     finally:
@@ -242,6 +282,19 @@ async def websocket_ambulance(websocket: WebSocket, case_id: int):
     if not payload:
         await websocket.close(code=1008, reason="Authentication required")
         return
+
+    db = SessionLocal()
+    try:
+        current_user = _get_ws_user(db, payload)
+        case = db.query(Case).filter(Case.id == case_id).first()
+        if not current_user or not case:
+            await websocket.close(code=1008, reason="Authentication required")
+            return
+        if not _user_can_access_case(current_user, case):
+            await websocket.close(code=4003, reason="Not authorized for this case")
+            return
+    finally:
+        db.close()
 
     await _legacy_manager.connect_ambulance(case_id, websocket)
     last_eta_calc = 0.0
@@ -291,6 +344,19 @@ async def websocket_hospital(websocket: WebSocket, case_id: int):
     if not payload:
         await websocket.close(code=1008, reason="Authentication required")
         return
+
+    db = SessionLocal()
+    try:
+        current_user = _get_ws_user(db, payload)
+        case = db.query(Case).filter(Case.id == case_id).first()
+        if not current_user or not case:
+            await websocket.close(code=1008, reason="Authentication required")
+            return
+        if not _user_can_access_case(current_user, case):
+            await websocket.close(code=4003, reason="Not authorized for this case")
+            return
+    finally:
+        db.close()
 
     await _legacy_manager.connect_hospital(case_id, websocket)
     try:

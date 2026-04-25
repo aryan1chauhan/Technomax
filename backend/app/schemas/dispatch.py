@@ -143,6 +143,7 @@ class CaseOut(BaseModel):
     id: int
     status: str
     condition: str
+    custom_condition: Optional[str] = None
     equipment_needed: list[str]
     ambulance_lat: float
     ambulance_lng: float
@@ -150,6 +151,8 @@ class CaseOut(BaseModel):
     final_score: Optional[float]
     distance_km: Optional[float]
     eta_minutes: Optional[int]
+    severity_score: Optional[int] = None
+    notes: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

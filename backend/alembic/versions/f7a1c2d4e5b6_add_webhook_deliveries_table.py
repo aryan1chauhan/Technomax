@@ -20,36 +20,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "webhook_deliveries",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("case_id", sa.Integer(), nullable=False),
-        sa.Column("event_type", sa.String(), nullable=False),
-        sa.Column("target_url", sa.String(), nullable=False),
-        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column("signature", sa.String(), nullable=True),
-        sa.Column("status", sa.String(), nullable=False, server_default="pending"),
-        sa.Column("attempt_count", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("max_attempts", sa.Integer(), nullable=False, server_default="4"),
-        sa.Column("next_attempt_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.Column("last_attempt_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("last_status_code", sa.Integer(), nullable=True),
-        sa.Column("last_error", sa.String(), nullable=True),
-        sa.Column("response_body", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.ForeignKeyConstraint(["case_id"], ["cases.id"]),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(op.f("ix_webhook_deliveries_case_id"), "webhook_deliveries", ["case_id"], unique=False)
-    op.create_index(op.f("ix_webhook_deliveries_event_type"), "webhook_deliveries", ["event_type"], unique=False)
-    op.create_index(op.f("ix_webhook_deliveries_id"), "webhook_deliveries", ["id"], unique=False)
-    op.create_index(op.f("ix_webhook_deliveries_status"), "webhook_deliveries", ["status"], unique=False)
+    """No-op: baseline revision already includes this schema."""
+    pass
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_webhook_deliveries_status"), table_name="webhook_deliveries")
-    op.drop_index(op.f("ix_webhook_deliveries_id"), table_name="webhook_deliveries")
-    op.drop_index(op.f("ix_webhook_deliveries_event_type"), table_name="webhook_deliveries")
-    op.drop_index(op.f("ix_webhook_deliveries_case_id"), table_name="webhook_deliveries")
-    op.drop_table("webhook_deliveries")
+    """No-op: schema is managed by the baseline revision."""
+    pass

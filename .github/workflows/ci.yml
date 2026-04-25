@@ -10,7 +10,24 @@ jobs:
   backend-tests:
     name: Backend Pytest
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: mediroute
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d mediroute"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mediroute
+      SECRET_KEY: test_secret_key_not_for_production
+      ALGORITHM: HS256
       MODEL_SHA256: a46ae388b1fdc321edd355a3ae431d0eb5cd85f109227563d39c6edd8ee776b7
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +41,14 @@ jobs:
           cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Run Alembic migrations
+        run: |
+          cd backend
+          alembic upgrade head
+      - name: Seed baseline hospital data
+        run: |
+          cd backend
+          python seed_db.py
       - name: Run Pytest
         run: |
           cd backend

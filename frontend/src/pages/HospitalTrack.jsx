@@ -1,33 +1,10 @@
-import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/axios";
 import CaseTimeline from "../components/CaseTimeline";
+import RouteFallback from "../components/RouteFallback";
 
-// Fix leaflet default icon paths broken by Vite
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-});
-
-const ambulanceIcon = L.divIcon({
-  className: "",
-  html: `<div style="width:18px;height:18px;border-radius:50%;background:#ef4444;border:2px solid #fff;box-shadow:0 0 0 0 rgba(239,68,68,0.7);animation:amb-pulse 1.2s infinite;"></div>
-  <style>@keyframes amb-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,0.7)}70%{box-shadow:0 0 0 10px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}</style>`,
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
-});
-
-const hospitalIcon = L.divIcon({
-  className: "",
-  html: `<div style="width:28px;height:28px;border-radius:6px;background:#10b981;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;font-weight:bold;box-shadow:0 2px 8px rgba(16,185,129,0.5);">+</div>`,
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
-});
+const MapWidget = lazy(() => import("../components/MapWidget"));
 
 export default function HospitalTrack() {
   const { case_id } = useParams();
@@ -42,14 +19,12 @@ export default function HospitalTrack() {
   const [error, setError] = useState("");
   const [isReady, setIsReady] = useState(false);
 
-  // Fetch case data on mount
   useEffect(() => {
     const fetchCase = async () => {
       try {
-        // /api/cases/hospital returns cases assigned to this hospital
         const res = await api.get("/api/cases/hospital");
-        const cases = Array.isArray(res.data) ? res.data : (res.data.items || []);
-        const found = cases.find((c) => String(c.id) === String(case_id));
+        const cases = Array.isArray(res.data) ? res.data : res.data.items || [];
+        const found = cases.find((entry) => String(entry.id) === String(case_id));
         if (!found) {
           setError("Case not found or not assigned to your hospital.");
           setLoading(false);
@@ -57,10 +32,6 @@ export default function HospitalTrack() {
         }
         setCaseData(found);
         setEta(found.eta_minutes);
-
-        // FIX #8: Use hospital lat/lng from case data instead of hardcoded position
-        // The backend returns hospital_lat/hospital_lng in dispatch response
-        // which is stored on the case record
       } catch (err) {
         setError("Failed to load case data.");
         console.error(err);
@@ -68,17 +39,18 @@ export default function HospitalTrack() {
         setLoading(false);
       }
     };
+
     fetchCase();
   }, [case_id]);
 
-  // WebSocket for live ambulance GPS
   useEffect(() => {
-    if (!case_id) return;
+    if (!case_id) return undefined;
     let reconnectTimer;
+
     const connect = () => {
-      const token = localStorage.getItem('token');
-      const apiUrl = import.meta.env.VITE_API_URL || '';
-      const wsBase = apiUrl ? apiUrl.replace(/^http/, 'ws') : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+      const token = localStorage.getItem("token");
+      const apiUrl = import.meta.env.VITE_API_URL || "";
+      const wsBase = apiUrl ? apiUrl.replace(/^http/, "ws") : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
       const ws = new WebSocket(`${wsBase}/ws/hospital/${case_id}?token=${token}`);
       ws.onmessage = (e) => {
         try {
@@ -88,32 +60,35 @@ export default function HospitalTrack() {
             setEta(msg.eta_minutes);
             if (msg.eta_minutes === 0) setArrived(true);
           }
-        } catch { /* ignore malformed messages */ }
+        } catch {
+          // Ignore malformed payloads from the live tracker.
+        }
       };
       ws.onerror = (e) => console.error("WS error", e);
-      ws.onclose = () => { reconnectTimer = setTimeout(connect, 2000); };
+      ws.onclose = () => {
+        reconnectTimer = setTimeout(connect, 2000);
+      };
       wsRef.current = ws;
     };
+
     connect();
     return () => {
       clearTimeout(reconnectTimer);
-      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+      }
     };
   }, [case_id]);
 
   const handleMarkReady = async () => {
     if (!caseData?.assigned_hospital_id) return;
     try {
-      const beds = typeof caseData.available_beds === "number"
-        ? caseData.available_beds
-        : (typeof caseData.beds === "number" ? caseData.beds : 0);
-      const icu = typeof caseData.icu_beds === "number"
-        ? caseData.icu_beds
-        : (typeof caseData.icu === "number" ? caseData.icu : 0);
+      const beds = typeof caseData.available_beds === "number" ? caseData.available_beds : typeof caseData.beds === "number" ? caseData.beds : 0;
+      const icu = typeof caseData.icu_beds === "number" ? caseData.icu_beds : typeof caseData.icu === "number" ? caseData.icu : 0;
       const doctors = typeof caseData.doctors === "number" ? caseData.doctors : 0;
       const equipment = Array.isArray(caseData.equipment_needed) ? caseData.equipment_needed : [];
 
-      // Toggle hospital accepting status to signal readiness
       await api.put(`/api/hospitals/${caseData.assigned_hospital_id}/availability`, {
         beds,
         icu,
@@ -156,22 +131,10 @@ export default function HospitalTrack() {
     );
   }
 
-  // FIX #8: Get hospital position from case data (hospital_lat/hospital_lng)
-  // Fallback chain: case data fields → Dehradun centre if completely missing
   const hospLat = caseData.hospital_lat ?? caseData.assigned_hospital_lat ?? 30.3165;
   const hospLng = caseData.hospital_lng ?? caseData.assigned_hospital_lng ?? 78.0322;
   const hospPos = [hospLat, hospLng];
-
-  // Ambulance: use live WS position, else fall back to case's recorded ambulance coords
-  const ambPos = ambulancePos ?? (
-    caseData.ambulance_lat && caseData.ambulance_lng
-      ? [caseData.ambulance_lat, caseData.ambulance_lng]
-      : null
-  );
-
-  const mapCenter = ambPos
-    ? [(ambPos[0] + hospLat) / 2, (ambPos[1] + hospLng) / 2]
-    : hospPos;
+  const ambPos = ambulancePos ?? (caseData.ambulance_lat && caseData.ambulance_lng ? [caseData.ambulance_lat, caseData.ambulance_lng] : null);
 
   const scorePercent = Math.round((caseData.final_score || 0) * 100);
   const scoreColor = scorePercent > 70 ? GREEN : scorePercent > 40 ? YELLOW : RED;
@@ -181,21 +144,16 @@ export default function HospitalTrack() {
     <div style={styles.root}>
       <div style={styles.scanlines} />
       <div style={styles.container}>
-
-        {/* Header */}
         <div style={styles.header}>
           <div style={{ color: DIM, fontSize: 13 }}>╔══════════════════════════════════════════════════════╗</div>
           <div style={{ color: arrived ? GREEN : YELLOW, fontSize: 14, fontWeight: "bold" }}>
             ║&nbsp;&nbsp;🏥 HOSPITAL TRACKING CONSOLE &nbsp;•&nbsp;
-            <span style={{ color: arrived ? GREEN : RED }}>
-              {arrived ? "● ARRIVED" : "● INCOMING"}
-            </span>
+            <span style={{ color: arrived ? GREEN : RED }}>{arrived ? "● ARRIVED" : "● INCOMING"}</span>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;║
           </div>
           <div style={{ color: DIM, fontSize: 13 }}>╚══════════════════════════════════════════════════════╝</div>
         </div>
 
-        {/* Case info panel */}
         <div style={styles.infoPanel}>
           <div style={styles.infoPanelHeader}>┌─── CASE #{caseData.id} ────────────────────────────────┐</div>
           <div style={styles.infoGrid}>
@@ -205,9 +163,7 @@ export default function HospitalTrack() {
             </div>
             <div style={styles.infoItem}>
               <span style={styles.infoLabel}>ETA</span>
-              <span style={{ ...styles.infoValue, color: arrived ? GREEN : YELLOW, fontSize: 18 }}>
-                {arrived ? "ARRIVED" : `${eta ?? "--"} MIN`}
-              </span>
+              <span style={{ ...styles.infoValue, color: arrived ? GREEN : YELLOW, fontSize: 18 }}>{arrived ? "ARRIVED" : `${eta ?? "--"} MIN`}</span>
             </div>
             <div style={styles.infoItem}>
               <span style={styles.infoLabel}>DISTANCE</span>
@@ -229,51 +185,19 @@ export default function HospitalTrack() {
           <div style={styles.infoPanelFooter}>└────────────────────────────────────────────────────┘</div>
         </div>
 
-        {/* Map */}
-        <div style={styles.mapWrap}>
-          <MapContainer center={mapCenter} zoom={13} style={{ width: "100%", height: "100%" }} zoomControl={true}>
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            />
-            {/* FIX #8: Hospital marker at correct dynamic position */}
-            <Marker position={hospPos} icon={hospitalIcon}>
-              <Popup>{caseData.hospital_name || "Your Hospital"}</Popup>
-            </Marker>
-            {ambPos && (
-              <>
-                <Marker position={ambPos} icon={ambulanceIcon}>
-                  <Popup>Ambulance — ETA {eta} min</Popup>
-                </Marker>
-                <Polyline positions={[ambPos, hospPos]} color="#ef4444" weight={2} dashArray="6,6" opacity={0.7} />
-              </>
-            )}
-            {!ambPos && (
-              <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", color: YELLOW, fontFamily: MONO, fontSize: 12, background: "rgba(0,0,0,0.7)", padding: "8px 12px", borderRadius: 4, zIndex: 1000, pointerEvents: "none" }}>
-                Waiting for ambulance GPS...
-              </div>
-            )}
-          </MapContainer>
-        </div>
+        <Suspense fallback={<RouteFallback label="Loading hospital tracker map..." />}>
+          <MapWidget variant="hospital" hospitalPosition={hospPos} ambulancePosition={ambPos} caseData={caseData} eta={eta} />
+        </Suspense>
 
-        {/* Timeline Component - Note: Match existing HospitalTrack terminal-green design system slightly by wrapping it or just putting it below */}
         <div style={{ marginBottom: "1rem" }}>
           <CaseTimeline caseId={case_id} role="hospital" />
         </div>
 
-        {/* Action buttons */}
         <div style={styles.actions}>
-          <button
-            onClick={handleMarkReady}
-            disabled={isReady}
-            style={isReady ? styles.btnDone : styles.btnGreen}
-          >
+          <button onClick={handleMarkReady} disabled={isReady} style={isReady ? styles.btnDone : styles.btnGreen}>
             {isReady ? "[ ✓ MARKED READY ]" : "[ MARK HOSPITAL READY ]"}
           </button>
-          <button
-            onClick={() => { window.location.href = `tel:112`; }}
-            style={styles.btnRed}
-          >
+          <button onClick={() => { window.location.href = "tel:112"; }} style={styles.btnRed}>
             [ 📞 CALL AMBULANCE — 112 ]
           </button>
           <button onClick={() => navigate("/hospital/dashboard")} style={styles.btn}>
@@ -283,15 +207,17 @@ export default function HospitalTrack() {
             [ LOGOUT ]
           </button>
         </div>
-
       </div>
     </div>
   );
 }
 
-const GREEN = "#00ff41"; const DIM = "#00aa2a";
-const RED = "#ff4444"; const YELLOW = "#ffff00";
-const BG = "#0a0a0a"; const MONO = "'Courier New', monospace";
+const GREEN = "#00ff41";
+const DIM = "#00aa2a";
+const RED = "#ff4444";
+const YELLOW = "#ffff00";
+const BG = "#0a0a0a";
+const MONO = "'Courier New', monospace";
 
 const styles = {
   root: { minHeight: "100vh", background: BG, fontFamily: MONO, padding: "1rem", position: "relative" },
@@ -305,11 +231,10 @@ const styles = {
   infoItem: { display: "flex", flexDirection: "column", gap: 3 },
   infoLabel: { color: DIM, fontSize: 10, letterSpacing: 1 },
   infoValue: { color: GREEN, fontSize: 14, fontWeight: "bold" },
-  mapWrap: { height: 360, borderRadius: 4, overflow: "hidden", border: `1px solid ${DIM}`, marginBottom: "1rem" },
   actions: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
   btn: { background: "transparent", border: `1px solid ${DIM}`, color: DIM, fontFamily: MONO, fontSize: 12, padding: "10px", cursor: "pointer", letterSpacing: 1 },
   btnGreen: { background: "#001a00", border: `1px solid ${GREEN}`, color: GREEN, fontFamily: MONO, fontSize: 12, padding: "10px", cursor: "pointer", letterSpacing: 1, fontWeight: "bold" },
   btnDone: { background: "#001a00", border: `1px solid ${DIM}`, color: DIM, fontFamily: MONO, fontSize: 12, padding: "10px", cursor: "not-allowed", letterSpacing: 1 },
   btnRed: { background: "#1a0000", border: `1px solid ${RED}`, color: RED, fontFamily: MONO, fontSize: 12, padding: "10px", cursor: "pointer", letterSpacing: 1, fontWeight: "bold" },
-  btnLogout: { background: "transparent", border: `1px solid #333`, color: "#333", fontFamily: MONO, fontSize: 11, padding: "10px", cursor: "pointer", letterSpacing: 1 },
+  btnLogout: { background: "transparent", border: "1px solid #333", color: "#333", fontFamily: MONO, fontSize: 11, padding: "10px", cursor: "pointer", letterSpacing: 1 },
 };

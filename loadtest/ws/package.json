@@ -1,0 +1,15 @@
+{
+  "name": "technomax-loadtest-ws",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "ws:baseline": "node ws-track-load.mjs --profile baseline",
+    "ws:peak": "node ws-track-load.mjs --profile peak",
+    "ws:spike": "node ws-track-load.mjs --profile spike",
+    "ws:soak": "node ws-track-load.mjs --profile soak"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

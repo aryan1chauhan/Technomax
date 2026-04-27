@@ -78,6 +78,7 @@ def test_hospitals_list_requires_authentication(client):
 @pytest.mark.parametrize("path,payload", [
     ("/api/ai/analyze", {"input": "cardiac arrest with chest pain"}),
     ("/api/ai/equipment-recommend", {"voice_text": "cardiac arrest with chest pain"}),
+    ("/api/voice/parse", {"transcript": "SpO2 is 91, pulse 120"}),
 ])
 def test_ai_endpoints_require_authentication(client, path, payload):
     """SEC-AI-AUTH-001 @api @security @regression anonymous AI calls are blocked before analysis."""

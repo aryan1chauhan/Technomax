@@ -153,3 +153,13 @@ class NotificationDelivery(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
+
+class CaseMessage(Base):
+    __tablename__ = "case_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, ForeignKey("cases.id"), nullable=False, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    body = Column(String, nullable=False)
+    sent_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+

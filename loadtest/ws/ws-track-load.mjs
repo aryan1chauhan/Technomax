@@ -4,12 +4,64 @@ import path from "node:path";
 import process from "node:process";
 import { WebSocket } from "ws";
 
+const currentFile = fileURLToPath(import.meta.url);
+const wsDir = path.dirname(currentFile);
+
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+
+  const content = fs.readFileSync(filePath, "utf8");
+  for (const lineRaw of content.split(/\r?\n/)) {
+    const line = lineRaw.trim();
+    if (!line || line.startsWith("#") || !line.includes("=")) continue;
+
+    const idx = line.indexOf("=");
+    const key = line.slice(0, idx).trim();
+    let value = line.slice(idx + 1).trim();
+
+    if (!key || process.env[key] !== undefined) continue;
+
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+}
+
+function boolFromEnv(name, fallback = false) {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  return ["1", "true", "yes", "on"].includes(String(raw).trim().toLowerCase());
+}
+
+function numberFromEnv(name, fallback) {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function requiredEnv(name) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required env var ${name}. Set it in loadtest/ws/.env.`);
+  }
+  return value;
+}
+
+loadEnvFile(path.join(wsDir, ".env"));
+
 const argv = process.argv.slice(2);
 const profileArgIndex = argv.indexOf("--profile");
 const profile = profileArgIndex >= 0 ? argv[profileArgIndex + 1] : (process.env.PROFILE || "baseline");
-const seed = Number(process.env.SEED || 424242);
+const seed = numberFromEnv("SEED", 424242);
+const reuseSeedUsers = argv.includes("--reuse-users") || boolFromEnv("REUSE_SEED_USERS", false);
+const SEED_DELAY_MS = Math.max(0, numberFromEnv("SEED_DELAY_MS", 300));
+const REGISTER_RETRY_DELAY_MS = 2000;
+const REGISTER_MAX_RETRIES = 3;
 
-const currentFile = fileURLToPath(import.meta.url);
 const rootDir = path.resolve(path.join(path.dirname(currentFile), "..", ".."));
 const profilesPath = path.join(rootDir, "loadtest", "config", "profiles.json");
 const profiles = JSON.parse(fs.readFileSync(profilesPath, "utf8"));
@@ -56,11 +108,19 @@ async function postJson(url, body, token = null) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    return {
+      status: 599,
+      data: { error: "fetch_failed", message: error instanceof Error ? error.message : String(error) },
+    };
+  }
 
   const text = await res.text();
   let data = null;
@@ -73,7 +133,33 @@ async function postJson(url, body, token = null) {
   return { status: res.status, data };
 }
 
-async function ensureUserAndToken({ email, password, role, hospitalId = null }) {
+async function registerUserWithRetry(email, registerPayload) {
+  let attempts = 0;
+
+  while (attempts <= REGISTER_MAX_RETRIES) {
+    const reg = await postJson(`${apiBase}/api/auth/register`, registerPayload);
+
+    if (reg.status === 429) {
+      if (attempts === REGISTER_MAX_RETRIES) {
+        throw new Error(
+          `Register rate-limited for ${email} after ${REGISTER_MAX_RETRIES} retries (429). ` +
+          "Use REUSE_SEED_USERS=true for repeated baseline runs."
+        );
+      }
+      attempts += 1;
+      await sleep(REGISTER_RETRY_DELAY_MS);
+      continue;
+    }
+
+    if (![201, 400].includes(reg.status)) {
+      throw new Error(`Register failed for ${email}: ${reg.status}`);
+    }
+
+    return;
+  }
+}
+
+async function ensureUserAndToken({ email, password, role, hospitalId = null, skipRegister = false }) {
   const registerPayload = {
     email,
     password,
@@ -81,9 +167,8 @@ async function ensureUserAndToken({ email, password, role, hospitalId = null }) 
   };
   if (hospitalId) registerPayload.hospital_id = hospitalId;
 
-  const reg = await postJson(`${apiBase}/api/auth/register`, registerPayload);
-  if (![201, 400].includes(reg.status)) {
-    throw new Error(`Register failed for ${email}: ${reg.status}`);
+  if (!skipRegister) {
+    await registerUserWithRetry(email, registerPayload);
   }
 
   const login = await postJson(`${apiBase}/api/auth/login`, { email, password });
@@ -294,31 +379,61 @@ async function run() {
   const metrics = makeMetrics();
   const sequenceState = makeSequenceEncoder();
 
-  const ambulanceAuthUsers = Math.max(20, wsProfile.seedCaseCount);
   const ambulanceTokens = [];
+  const reusableAmbUser = reuseSeedUsers ? requiredEnv("SEED_AMB_USER") : null;
+  const reusableAmbPass = reuseSeedUsers ? requiredEnv("SEED_AMB_PASS") : null;
+  const reusableHospUser = reuseSeedUsers ? requiredEnv("SEED_HOSP_USER") : null;
+  const reusableHospPass = reuseSeedUsers ? requiredEnv("SEED_HOSP_PASS") : null;
 
-  for (let i = 0; i < ambulanceAuthUsers; i += 1) {
+  if (reuseSeedUsers) {
     const token = await ensureUserAndToken({
-      email: `loadtest.ws.amb.${profile}.${i}@example.com`,
-      password: "Pass123!load",
+      email: reusableAmbUser,
+      password: reusableAmbPass,
       role: "ambulance",
+      skipRegister: true,
     });
     ambulanceTokens.push(token);
+  } else {
+    const ambulanceAuthUsers = Math.max(20, wsProfile.seedCaseCount);
+
+    for (let i = 0; i < ambulanceAuthUsers; i += 1) {
+      const token = await ensureUserAndToken({
+        email: `loadtest.ws.amb.${profile}.${i}@example.com`,
+        password: "Pass123!load",
+        role: "ambulance",
+      });
+      ambulanceTokens.push(token);
+      await sleep(SEED_DELAY_MS);
+    }
   }
 
   const cases = await seedDispatchCases(wsProfile.seedCaseCount, ambulanceTokens);
 
   const hospitalTokenById = new Map();
-  for (let i = 0; i < cases.length; i += 1) {
-    const hospitalId = cases[i].hospitalId;
-    if (!hospitalTokenById.has(hospitalId)) {
-      const token = await ensureUserAndToken({
-        email: `loadtest.ws.hosp.${profile}.${hospitalId}@example.com`,
-        password: "Pass123!load",
-        role: "hospital",
-        hospitalId,
-      });
-      hospitalTokenById.set(hospitalId, token);
+
+  if (reuseSeedUsers) {
+    const token = await ensureUserAndToken({
+      email: reusableHospUser,
+      password: reusableHospPass,
+      role: "hospital",
+      skipRegister: true,
+    });
+    for (let i = 0; i < cases.length; i += 1) {
+      hospitalTokenById.set(cases[i].hospitalId, token);
+    }
+  } else {
+    for (let i = 0; i < cases.length; i += 1) {
+      const hospitalId = cases[i].hospitalId;
+      if (!hospitalTokenById.has(hospitalId)) {
+        const token = await ensureUserAndToken({
+          email: `loadtest.ws.hosp.${profile}.${hospitalId}@example.com`,
+          password: "Pass123!load",
+          role: "hospital",
+          hospitalId,
+        });
+        hospitalTokenById.set(hospitalId, token);
+        await sleep(SEED_DELAY_MS);
+      }
     }
   }
 
@@ -329,32 +444,46 @@ async function run() {
   for (let i = 0; i < cases.length; i += 1) {
     const caseCtx = cases[i];
 
-    const publisher = await createTrackedSocket({
-      role: "publisher",
-      caseCtx,
-      token: caseCtx.publisherToken,
-      metrics,
-      pendingFanout,
-      sequenceState,
-    });
-    sockets.push(publisher);
+    let publisher = null;
+    try {
+      publisher = await createTrackedSocket({
+        role: "publisher",
+        caseCtx,
+        token: caseCtx.publisherToken,
+        metrics,
+        pendingFanout,
+        sequenceState,
+      });
+      sockets.push(publisher);
+    } catch {
+      metrics.wsConnectFail += 1;
+      continue;
+    }
 
     const hospitalToken = hospitalTokenById.get(caseCtx.hospitalId);
 
     for (let l = 0; l < wsProfile.listenersPerCase; l += 1) {
       const token = l % 2 === 0 ? hospitalToken : caseCtx.publisherToken;
-      const listener = await createTrackedSocket({
-        role: "listener",
-        caseCtx,
-        token,
-        metrics,
-        pendingFanout,
-        sequenceState,
-      });
-      sockets.push(listener);
-      listenerPool.push(listener);
+      try {
+        const listener = await createTrackedSocket({
+          role: "listener",
+          caseCtx,
+          token,
+          metrics,
+          pendingFanout,
+          sequenceState,
+        });
+        sockets.push(listener);
+        listenerPool.push(listener);
+      } catch {
+        metrics.wsConnectFail += 1;
+      }
       await sleep(Math.max(5, Math.floor(1000 / Math.max(1, wsProfile.connectRampPerSec))));
     }
+  }
+
+  if (!sockets.length) {
+    throw new Error("No websocket connections could be established.");
   }
 
   let running = true;
@@ -526,6 +655,17 @@ async function run() {
 }
 
 run().catch((err) => {
+  const fallback = makeMetrics();
+  fallback.finishedAt = new Date().toISOString();
+  fallback.runtimeSec = 0;
+  fallback.wsConnectSuccessRate = 0;
+  fallback.deliverySuccessRate = 0;
+  fallback.fanoutDelayMs = { p50: null, p95: null, p99: null, max: null, count: 0 };
+  fallback.error = err.message;
+
+  const summaryPath = path.join(resultsDir, `ws-${profile}-summary.json`);
+  fs.writeFileSync(summaryPath, JSON.stringify(fallback, null, 2));
+
   console.error("WS load test failed:", err.message);
   process.exitCode = 1;
 });

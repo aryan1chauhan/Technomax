@@ -13,7 +13,7 @@ def _pick_metric(summary: dict, metric_name: str, default=None):
     return values if values else default
 
 
-def _check_thresholds(profile: str, dispatch_summary: dict, ws_summary: dict) -> tuple[bool, list[str]]:
+def _check_thresholds(profile: str, dispatch_summary: dict, ws_summary: dict | None) -> tuple[bool, list[str]]:
     issues: list[str] = []
 
     p95_limit = 1500 if profile in {"peak", "spike"} else 800
@@ -29,6 +29,10 @@ def _check_thresholds(profile: str, dispatch_summary: dict, ws_summary: dict) ->
     failed_rate = http_req_failed.get("rate")
     if failed_rate is None or failed_rate > non2xx_limit:
         issues.append(f"HTTP non-2xx rate {failed_rate} exceeded limit {non2xx_limit}")
+
+    if ws_summary is None:
+        issues.append("WS_HARNESS_FAILED: no summary produced")
+        return (False, issues)
 
     ws_connect_success_rate = ws_summary.get("wsConnectSuccessRate", 0)
     if ws_connect_success_rate < 0.99:
@@ -72,7 +76,7 @@ def _top_fixes(issues: list[str]) -> list[str]:
 
 def build_report(profile: str, dispatch_path: Path, ws_path: Path, out_path: Path) -> None:
     dispatch_summary = _read_json(dispatch_path)
-    ws_summary = _read_json(ws_path)
+    ws_summary = _read_json(ws_path) if ws_path.exists() else None
 
     passed, issues = _check_thresholds(profile, dispatch_summary, ws_summary)
     fixes = _top_fixes(issues)
@@ -95,12 +99,15 @@ def build_report(profile: str, dispatch_path: Path, ws_path: Path, out_path: Pat
     lines.append("")
     lines.append("## WebSocket Metrics")
     lines.append("")
-    lines.append(f"- Connect success rate: {ws_summary.get('wsConnectSuccessRate')}")
-    lines.append(f"- Delivery success rate: {ws_summary.get('deliverySuccessRate')}")
-    lines.append(f"- Reconnects: {ws_summary.get('wsReconnects')}")
-    lines.append(f"- Fanout p95 delay: {ws_summary.get('fanoutDelayMs', {}).get('p95')} ms")
-    lines.append(f"- Out-of-order frames: {ws_summary.get('outOfOrder')}")
-    lines.append(f"- Dropped frames: {ws_summary.get('fanoutDropped')}")
+    if ws_summary is None:
+        lines.append("- WS_HARNESS_FAILED: no summary produced")
+    else:
+        lines.append(f"- Connect success rate: {ws_summary.get('wsConnectSuccessRate')}")
+        lines.append(f"- Delivery success rate: {ws_summary.get('deliverySuccessRate')}")
+        lines.append(f"- Reconnects: {ws_summary.get('wsReconnects')}")
+        lines.append(f"- Fanout p95 delay: {ws_summary.get('fanoutDelayMs', {}).get('p95')} ms")
+        lines.append(f"- Out-of-order frames: {ws_summary.get('outOfOrder')}")
+        lines.append(f"- Dropped frames: {ws_summary.get('fanoutDropped')}")
     lines.append("")
 
     if issues:

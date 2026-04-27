@@ -1,7 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import api from "../api/axios";
+import RouteFallback from "../components/RouteFallback";
+import useCaseSocket from "../hooks/useCaseSocket";
+
+const CaseChat = lazy(() => import("../components/CaseChat"));
+const CallPanel = lazy(() => import("../components/CallPanel"));
 
 export default function HospitalDashboard() {
   const navigate  = useNavigate();
@@ -11,6 +16,8 @@ export default function HospitalDashboard() {
   const [declineReasons, setDeclineReasons] = useState({});
   const [actionLoading, setActionLoading] = useState({});
   const [actionError, setActionError] = useState("");
+  const [selectedCase, setSelectedCase] = useState(null);
+  const [panelMode, setPanelMode] = useState(null);
 
   const fetchCases = useCallback(async () => {
     try {
@@ -57,6 +64,20 @@ export default function HospitalDashboard() {
     return () => clearInterval(t);
   }, [fetchCases]);
 
+  useEffect(() => {
+    if (!selectedCase) return;
+    const freshCase = cases.find((item) => item.id === selectedCase.id);
+    if (freshCase) {
+      setSelectedCase(freshCase);
+    }
+  }, [cases, selectedCase]);
+
+  const {
+    socketStatus: selectedCaseSocketStatus,
+    lastEvent: selectedCaseSocketEvent,
+    sendEvent: sendSelectedCaseEvent,
+  } = useCaseSocket(selectedCase?.id, Boolean(selectedCase && panelMode));
+
   const todayCount  = cases.filter(c => {
     const d = new Date(c.created_at), now = new Date();
     return d.getDate()===now.getDate() && d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
@@ -100,6 +121,11 @@ export default function HospitalDashboard() {
     } finally {
       setActionLoading(prev => ({ ...prev, [caseId]: null }));
     }
+  };
+
+  const openPanel = (caseRecord, mode) => {
+    setSelectedCase(caseRecord);
+    setPanelMode((prev) => (prev === mode && selectedCase?.id === caseRecord.id ? null : mode));
   };
 
   const navItems = ["🏥  Dashboard", "🚑  Active Cases", "📊  Analytics", "⚙️  Settings"];
@@ -175,6 +201,60 @@ export default function HospitalDashboard() {
               </div>
             ))}
           </div>
+
+          {selectedCase && panelMode && (
+            <div className="mb-8">
+              <div className="bg-white rounded-2xl border border-[#E2E6F0] shadow-sm p-5">
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                  <div>
+                    <p className="text-[15px] font-bold text-[#1A1E2E]">Case Communications</p>
+                    <p className="text-[12px] text-[#737A8F]">
+                      {(selectedCase.custom_condition || selectedCase.condition || "case").replace(/_/g, " ")} · Case #{selectedCase.id}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] uppercase tracking-wide text-[#1A78F2] bg-[#EBF3FF] border border-[#BDD6FF] rounded-full px-3 py-1">
+                      Socket {selectedCaseSocketStatus}
+                    </span>
+                    <button
+                      onClick={() => openPanel(selectedCase, "chat")}
+                      className="rounded-xl border border-[#D0D5E8] px-4 py-2 text-[13px] font-semibold text-[#1A1E2E]"
+                    >
+                      Chat
+                    </button>
+                    <button
+                      onClick={() => openPanel(selectedCase, "call")}
+                      className="rounded-xl bg-[#1A78F2] px-4 py-2 text-[13px] font-semibold text-white"
+                    >
+                      Call
+                    </button>
+                  </div>
+                </div>
+
+                {panelMode === "chat" && (
+                  <Suspense fallback={<RouteFallback label="Loading case chat..." />}>
+                    <CaseChat
+                      caseId={selectedCase.id}
+                      caseLabel={`${(selectedCase.custom_condition || selectedCase.condition || "case").replace(/_/g, " ")} · Case #${selectedCase.id}`}
+                      socketEvent={selectedCaseSocketEvent}
+                    />
+                  </Suspense>
+                )}
+
+                {panelMode === "call" && (
+                  <Suspense fallback={<RouteFallback label="Loading call controls..." />}>
+                    <CallPanel
+                      caseId={selectedCase.id}
+                      caseLabel={`${(selectedCase.custom_condition || selectedCase.condition || "case").replace(/_/g, " ")} · Case #${selectedCase.id}`}
+                      socketEvent={selectedCaseSocketEvent}
+                      sendEvent={sendSelectedCaseEvent}
+                      socketStatus={selectedCaseSocketStatus}
+                    />
+                  </Suspense>
+                )}
+              </div>
+            </div>
+          )}
 
           {actionError && (
             <div className="bg-[#FFF0F0] border border-[#FFCDD2] rounded-lg px-4 py-3 text-[#EE3B3B] text-[13px] mb-4">
@@ -252,6 +332,18 @@ export default function HospitalDashboard() {
                             </div>
                           </div>
                           <div className="px-6 pb-5 flex items-center gap-3">
+                            <button
+                              onClick={() => openPanel(c, "chat")}
+                              className="bg-white border border-[#BDD6FF] text-[#1A78F2] font-bold text-[13px] px-4 py-3 rounded-xl transition"
+                            >
+                              Chat
+                            </button>
+                            <button
+                              onClick={() => openPanel(c, "call")}
+                              className="bg-[#1A78F2] hover:bg-[#1259C8] text-white font-bold text-[13px] px-4 py-3 rounded-xl transition"
+                            >
+                              Call
+                            </button>
                             <button
                               onClick={() => acceptCase(c.id)}
                               disabled={Boolean(actionLoading[c.id])}
@@ -339,6 +431,18 @@ export default function HospitalDashboard() {
                         <div><p className="text-[16px] font-bold text-[#1A1E2E]">{c.distance_km} km</p><p className="text-[11px] text-[#737A8F]">Distance</p></div>
                         <div><p className="text-[16px] font-bold text-[#1A1E2E]">{c.eta_minutes} min</p><p className="text-[11px] text-[#737A8F]">ETA</p></div>
                       </div>
+                      <button
+                        onClick={() => openPanel(c, "chat")}
+                        className="bg-white border border-[#BDD6FF] text-[#1A78F2] font-bold text-[13px] px-4 py-3 rounded-xl transition"
+                      >
+                        Chat
+                      </button>
+                      <button
+                        onClick={() => openPanel(c, "call")}
+                        className="bg-[#1A78F2] hover:bg-[#1259C8] text-white font-bold text-[13px] px-4 py-3 rounded-xl transition"
+                      >
+                        Call
+                      </button>
                       <button
                         onClick={() => navigate(`/hospital/track/${c.id}`)}
                         className="bg-[#1A78F2] hover:bg-[#1259C8] text-white font-bold text-[13px] px-6 py-3 rounded-xl transition"

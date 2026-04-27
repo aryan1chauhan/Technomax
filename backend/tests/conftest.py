@@ -5,7 +5,7 @@ Uses a real test database with transaction rollback per test.
 import os
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 # Override env before importing app modules
@@ -29,15 +29,35 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(scope="function")
 def db_session():
-    """Create a fresh database session with rollback for each test."""
+    """Create an isolated database session per test.
+
+    Endpoint code calls commit() during normal execution. Using
+    join_transaction_mode=create_savepoint keeps those commits scoped to
+    per-test SAVEPOINTs so data does not leak between tests.
+    """
     connection = engine.connect()
     transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
+    session = TestingSessionLocal(bind=connection, join_transaction_mode="create_savepoint")
+
+    # Keep dispatch-capacity tests deterministic even if the shared local DB was
+    # previously exhausted by manual/dev runs.
+    session.execute(
+        text(
+            """
+            UPDATE availabilities
+            SET beds = GREATEST(COALESCE(beds, 0), 5),
+                icu = GREATEST(COALESCE(icu, 0), 2),
+                updated_at = NOW()
+            """
+        )
+    )
+    session.flush()
     
     yield session
     
     session.close()
-    transaction.rollback()
+    if transaction.is_active:
+        transaction.rollback()
     connection.close()
 
 

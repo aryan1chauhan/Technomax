@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import func, desc, Integer
 from app.db.database import get_db
-from app.db.models import Case, User, Hospital, Availability
+from app.db.models import Case, User, Hospital, Availability, CaseMessage
 from app.schemas.dispatch import CaseOut
-from app.schemas.case import CaseDeclineRequest, CaseStatusUpdate, CaseEventOut
+from app.schemas.case import CaseDeclineRequest, CaseStatusUpdate, CaseEventOut, CaseMessageCreate, CaseMessageOut, CaseMessagePage
 from app.core.security import get_current_user
 from app.db.models import CaseEvent
 from app.middleware.rate_limit import limiter, LIMIT_CASES
 from app.services.case_status_service import apply_case_status_update
+from app.services.case_realtime import case_realtime_manager
 
 router = APIRouter(prefix="/api/cases")
 
@@ -22,6 +23,28 @@ def _require_assigned_hospital(case: Case | None, current_user: User) -> Case:
     if case.assigned_hospital_id != current_user.hospital_id:
         raise HTTPException(status_code=403, detail="Not authorized for this case")
     return case
+
+
+def _require_case_participant(case: Case | None, current_user: User) -> Case:
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    if current_user.role == "ambulance" and case.user_id == current_user.id:
+        return case
+    if current_user.role == "hospital" and case.assigned_hospital_id == current_user.hospital_id:
+        return case
+    raise HTTPException(status_code=403, detail="Not authorized for this case")
+
+
+def _serialize_case_message(message: CaseMessage, sender: User) -> CaseMessageOut:
+    return CaseMessageOut(
+        id=message.id,
+        case_id=message.case_id,
+        sender_id=message.sender_id,
+        sender_role=sender.role,
+        sender_email=sender.email,
+        body=message.body,
+        sent_at=message.sent_at,
+    )
 
 @router.get("/", response_model=list[CaseOut])
 @limiter.limit(LIMIT_CASES)
@@ -205,15 +228,74 @@ def get_case_timeline(
 ):
     _ = request
     case = db.query(Case).filter(Case.id == case_id).first()
-    if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
-
-    if current_user.role == "ambulance":
-        if case.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Not authorized to view this case")
-    elif current_user.role == "hospital":
-        if case.assigned_hospital_id != current_user.hospital_id:
-            raise HTTPException(status_code=403, detail="Not authorized to view this case")
+    _require_case_participant(case, current_user)
             
     events = db.query(CaseEvent).filter(CaseEvent.case_id == case_id).order_by(CaseEvent.timestamp.asc()).all()
     return events
+
+
+@router.get("/{case_id}/messages", response_model=CaseMessagePage)
+@limiter.limit(LIMIT_CASES)
+def get_case_messages(
+    request: Request,  # noqa: ARG001
+    case_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = request
+    case = db.query(Case).filter(Case.id == case_id).first()
+    _require_case_participant(case, current_user)
+
+    total = db.query(CaseMessage).filter(CaseMessage.case_id == case_id).count()
+    rows = (
+        db.query(CaseMessage, User)
+        .join(User, User.id == CaseMessage.sender_id)
+        .filter(CaseMessage.case_id == case_id)
+        .order_by(CaseMessage.sent_at.asc(), CaseMessage.id.asc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+
+    return CaseMessagePage(
+        items=[_serialize_case_message(message, sender) for message, sender in rows],
+        page=page,
+        limit=limit,
+        total=total,
+    )
+
+
+@router.post("/{case_id}/messages", response_model=CaseMessageOut, status_code=201)
+@limiter.limit(LIMIT_CASES)
+async def post_case_message(
+    request: Request,  # noqa: ARG001
+    case_id: int,
+    payload: CaseMessageCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = request
+    case = db.query(Case).filter(Case.id == case_id).first()
+    _require_case_participant(case, current_user)
+    body = payload.body.strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Message body cannot be empty")
+
+    message = CaseMessage(
+        case_id=case_id,
+        sender_id=current_user.id,
+        body=body,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+
+    serialized = _serialize_case_message(message, current_user)
+    await case_realtime_manager.broadcast(case_id, {
+        "type": "chat",
+        "case_id": case_id,
+        "message": serialized.model_dump(mode="json"),
+    })
+    return serialized

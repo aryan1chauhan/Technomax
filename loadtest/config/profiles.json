@@ -1,0 +1,103 @@
+{
+  "http": {
+    "baseline": {
+      "preAllocatedVUs": 30,
+      "maxVUs": 80,
+      "rate": 8,
+      "timeUnit": "1s",
+      "duration": "10m",
+      "thinkTimeMs": {
+        "min": 150,
+        "max": 700
+      }
+    },
+    "peak": {
+      "preAllocatedVUs": 80,
+      "maxVUs": 220,
+      "rate": 25,
+      "timeUnit": "1s",
+      "duration": "15m",
+      "thinkTimeMs": {
+        "min": 100,
+        "max": 500
+      }
+    },
+    "spike": {
+      "preAllocatedVUs": 100,
+      "maxVUs": 300,
+      "rate": 60,
+      "timeUnit": "1s",
+      "duration": "5m",
+      "thinkTimeMs": {
+        "min": 50,
+        "max": 250
+      }
+    },
+    "soak": {
+      "preAllocatedVUs": 70,
+      "maxVUs": 180,
+      "rate": 12,
+      "timeUnit": "1s",
+      "duration": "30m",
+      "thinkTimeMs": {
+        "min": 120,
+        "max": 550
+      }
+    }
+  },
+  "ws": {
+    "baseline": {
+      "durationSec": 600,
+      "seedCaseCount": 20,
+      "listenersPerCase": 4,
+      "pingIntervalMs": 1000,
+      "chatIntervalMs": 12000,
+      "statusIntervalMs": 30000,
+      "churnIntervalMs": 20000,
+      "churnPercent": 0.05,
+      "connectRampPerSec": 8
+    },
+    "peak": {
+      "durationSec": 900,
+      "seedCaseCount": 60,
+      "listenersPerCase": 8,
+      "pingIntervalMs": 800,
+      "chatIntervalMs": 9000,
+      "statusIntervalMs": 25000,
+      "churnIntervalMs": 15000,
+      "churnPercent": 0.1,
+      "connectRampPerSec": 20
+    },
+    "spike": {
+      "durationSec": 300,
+      "seedCaseCount": 80,
+      "listenersPerCase": 12,
+      "pingIntervalMs": 600,
+      "chatIntervalMs": 7000,
+      "statusIntervalMs": 20000,
+      "churnIntervalMs": 10000,
+      "churnPercent": 0.2,
+      "connectRampPerSec": 40
+    },
+    "soak": {
+      "durationSec": 1800,
+      "seedCaseCount": 40,
+      "listenersPerCase": 6,
+      "pingIntervalMs": 1000,
+      "chatIntervalMs": 14000,
+      "statusIntervalMs": 35000,
+      "churnIntervalMs": 30000,
+      "churnPercent": 0.08,
+      "connectRampPerSec": 10
+    }
+  },
+  "geo": {
+    "name": "Uttarakhand",
+    "latMin": 29.5,
+    "latMax": 31.5,
+    "lngMin": 77.5,
+    "lngMax": 80.5,
+    "defaultCenterLat": 30.3165,
+    "defaultCenterLng": 78.0322
+  }
+}

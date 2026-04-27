@@ -37,6 +37,7 @@ from app.db.database import SessionLocal
 from app.db.models import Case, Hospital, User
 from app.schemas.case import CaseStatusUpdate
 from app.services.case_status_service import apply_case_status_update
+from app.services.case_realtime import case_realtime_manager
 from app.services.routing_service import eta_predictor
 
 router = APIRouter()
@@ -63,6 +64,14 @@ def _validate_ws_token(token: str | None) -> dict | None:
 def _user_can_access_case(user: User, case: Case) -> bool:
     if user.role == "admin":
         return True
+    if user.role == "ambulance":
+        return case.user_id == user.id
+    if user.role == "hospital":
+        return case.assigned_hospital_id == user.hospital_id
+    return False
+
+
+def _user_is_case_participant(user: User, case: Case) -> bool:
     if user.role == "ambulance":
         return case.user_id == user.id
     if user.role == "hospital":
@@ -112,6 +121,7 @@ async def track_case(
             return
 
         await websocket.accept()
+        await case_realtime_manager.connect(case_id, websocket)
 
         if not case:
             await _send(websocket, {"type": "error", "message": "Case not found"})
@@ -191,6 +201,7 @@ async def track_case(
 
                 broadcast_payload: dict = {
                     "type": "position",
+                    "case_id": case_id,
                     "lat": lat,
                     "lng": lng,
                     "eta_minutes": eta_update.updated_eta_minutes if eta_update else None,
@@ -201,7 +212,7 @@ async def track_case(
                     "observed_speed_kmh": eta_update.observed_speed_kmh if eta_update else None,
                     "predicted_speed_kmh": eta_update.predicted_speed_kmh if eta_update else None,
                 }
-                await _send(websocket, broadcast_payload)
+                await case_realtime_manager.broadcast(case_id, broadcast_payload)
 
                 # Also forward to any hospital listener on the legacy endpoint
                 if case_id in _legacy_manager.hospital_connections:
@@ -233,12 +244,38 @@ async def track_case(
                         eta_predictor.clear_case(case_id)
                         _route_cache.pop(case_id, None)
 
-                    await _send(websocket, {
+                    await case_realtime_manager.broadcast(case_id, {
                         "type": "status_change",
+                        "case_id": case_id,
                         "status": status_payload["status"],
                     })
 
+            elif msg_type in {"webrtc_offer", "webrtc_answer", "webrtc_ice_candidate", "call_end", "call_declined"}:
+                if not _user_is_case_participant(current_user, case):
+                    await _send(websocket, {
+                        "type": "error",
+                        "message": "Only case participants can use realtime comms",
+                        "status_code": 403,
+                    })
+                    continue
+
+                signal_payload = {
+                    "type": msg_type,
+                    "case_id": case_id,
+                    "from_user_id": current_user.id,
+                    "from_role": current_user.role,
+                }
+                if msg_type == "webrtc_offer":
+                    signal_payload["offer"] = msg.get("offer")
+                elif msg_type == "webrtc_answer":
+                    signal_payload["answer"] = msg.get("answer")
+                elif msg_type == "webrtc_ice_candidate":
+                    signal_payload["candidate"] = msg.get("candidate")
+
+                await case_realtime_manager.broadcast(case_id, signal_payload, exclude=websocket)
+
     finally:
+        await case_realtime_manager.disconnect(case_id, websocket)
         db.close()
 
 

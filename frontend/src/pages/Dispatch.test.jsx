@@ -17,7 +17,7 @@ describe("Dispatch payload contract", () => {
       },
       checkedEquipment: ["ventilator", "ventilator", "icu_equipment"],
       ambulanceEquipment: ["oxygen", "defibrillator"],
-      vitals: { oxygen: "84", pulse: "142", systolic: "78" },
+      vitals: { oxygen: "84", pulse: "142", systolic: "78", diastolic: "54" },
       selectedSeverity: 4,
       lat: 30.3165,
       lng: 78.0322,
@@ -33,7 +33,7 @@ describe("Dispatch payload contract", () => {
       important_equipment: ["icu"],
       optional_equipment: ["lab"],
       ambulance_equipment: ["oxygen", "defibrillator"],
-      vitals: { oxygen: 84, pulse: 142, systolic: 78 },
+      vitals: { oxygen: 84, pulse: 142, systolic: 78, diastolic: 54 },
       ambulance_lat: 30.3165,
       ambulance_lng: 78.0322,
       severity: "critical",
@@ -42,7 +42,7 @@ describe("Dispatch payload contract", () => {
   });
 
   it("DISPATCH-FE-VITALS-001 @unit ignores empty or malformed vitals deterministically", () => {
-    expect(normalizeVitals({ oxygen: "", pulse: "abc", systolic: "91" })).toEqual({
+    expect(normalizeVitals({ oxygen: "", pulse: "abc", systolic: "91", diastolic: "" })).toEqual({
       systolic: 91,
     });
   });
@@ -54,6 +54,7 @@ describe("Dispatch payload contract", () => {
       oxygen: "82",
       pulse: "138",
       systolic: "76",
+      diastolic: "40",
     });
   });
 });

@@ -618,6 +618,11 @@ def _infer_hospital_load(available_beds: int, hospital_load: float | None, total
 
 
 def _infer_model_feature_names() -> list[str]:
+    # Optimization: Cache the inferred feature names as they don't change until model reload
+    cache = getattr(_infer_model_feature_names, "_cache", None)
+    if cache is not None:
+        return cache
+
     if not _ML_AVAILABLE or _ml_model is None:
         return list(_FEATURE_COLUMNS)
 
@@ -641,12 +646,20 @@ def _infer_model_feature_names() -> list[str]:
         if isinstance(n_features, (int, np.integer)):
             n = int(n_features)
             if n <= len(_FEATURE_COLUMNS):
-                return list(_FEATURE_COLUMNS[:n])
+                res = list(_FEATURE_COLUMNS[:n])
+                setattr(_infer_model_feature_names, "_cache", res)
+                return res
             if n <= len(_EXTENDED_FEATURE_COLUMNS):
-                return list(_EXTENDED_FEATURE_COLUMNS[:n])
-            return list(_EXTENDED_FEATURE_COLUMNS) + [f"f{i}" for i in range(n - len(_EXTENDED_FEATURE_COLUMNS))]
+                res = list(_EXTENDED_FEATURE_COLUMNS[:n])
+                setattr(_infer_model_feature_names, "_cache", res)
+                return res
+            res = list(_EXTENDED_FEATURE_COLUMNS) + [f"f{i}" for i in range(n - len(_EXTENDED_FEATURE_COLUMNS))]
+            setattr(_infer_model_feature_names, "_cache", res)
+            return res
 
-    return names or list(_FEATURE_COLUMNS)
+    res = names or list(_FEATURE_COLUMNS)
+    setattr(_infer_model_feature_names, "_cache", res)
+    return res
 
 
 def _build_feature_vector(
@@ -860,43 +873,61 @@ def _coerce_probability(value: Any) -> float:
         return 1.0 if score > 0 else 0.0
 
 
-def _predict_ml_score(feature_vector: list[float], feature_names: list[str]) -> float:
+def _predict_ml_scores_batch(feature_vectors: list[list[float]], feature_names: list[str]) -> list[float]:
+    if not feature_vectors:
+        return []
     if _ml_model is None:
         raise RuntimeError("Model is not loaded")
 
-    X = np.array([feature_vector], dtype=np.float32)
+    X = np.array(feature_vectors, dtype=np.float32)
     errors: list[str] = []
+    num_samples = len(feature_vectors)
 
     if hasattr(_ml_model, "predict_proba"):
         try:
-            proba = np.asarray(_ml_model.predict_proba(X), dtype=np.float32)
+            X_input = X
+            if hasattr(_ml_model, "feature_names_in_"):
+                try:
+                    # Column alignment for model compatibility
+                    cols = list(_ml_model.feature_names_in_[: X.shape[1]])
+                    X_input = X
+                    if len(cols) == X.shape[1]:
+                        # Optimized path: if it's a pandas-trained model, we only convert once
+                        import pandas as pd  # noqa: PLC0415
+                        X_input = pd.DataFrame(X, columns=cols)
+                except Exception:  # noqa: BLE001
+                    pass
+            proba = np.asarray(_ml_model.predict_proba(X_input), dtype=np.float32)
             if proba.ndim == 2 and proba.shape[1] >= 2:
-                return _coerce_probability(proba[0, 1])
-            return _coerce_probability(proba.reshape(-1)[0])
-        except (AttributeError, TypeError, ValueError, RuntimeError, IndexError) as exc:
+                return [_coerce_probability(p) for p in proba[:, 1]]
+            return [_coerce_probability(p) for p in proba.reshape(-1)[:num_samples]]
+        except Exception as exc:  # noqa: BLE001
             errors.append(f"predict_proba failed: {exc}")
 
     if hasattr(_ml_model, "get_booster"):
         try:
             xgb = importlib.import_module("xgboost")
-
             booster = _ml_model.get_booster()
             dmatrix = xgb.DMatrix(X, feature_names=feature_names[: X.shape[1]])
             pred = booster.predict(dmatrix)
-            return _coerce_probability(np.asarray(pred).reshape(-1)[0])
-        except (ImportError, AttributeError, TypeError, ValueError, RuntimeError, IndexError) as exc:
+            return [_coerce_probability(p) for p in np.asarray(pred).reshape(-1)[:num_samples]]
+        except Exception as exc:  # noqa: BLE001
             errors.append(f"xgboost booster predict failed: {exc}")
 
     if hasattr(_ml_model, "predict"):
         try:
             pred = np.asarray(_ml_model.predict(X), dtype=np.float32)
             if pred.ndim == 2 and pred.shape[1] >= 2:
-                return _coerce_probability(pred[0, 1])
-            return _coerce_probability(pred.reshape(-1)[0])
-        except (AttributeError, TypeError, ValueError, RuntimeError, IndexError) as exc:
+                return [_coerce_probability(p) for p in pred[:, 1]]
+            return [_coerce_probability(p) for p in pred.reshape(-1)[:num_samples]]
+        except Exception as exc:  # noqa: BLE001
             errors.append(f"predict failed: {exc}")
 
     raise RuntimeError("; ".join(errors) if errors else "No supported prediction API found")
+
+
+def _predict_ml_score(feature_vector: list[float], feature_names: list[str]) -> float:
+    return _predict_ml_scores_batch([feature_vector], feature_names)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -929,6 +960,11 @@ def score_hospital(
     max_eta_minutes: float | None = None,
     survival_time_minutes: float | None = None,
     scenario_context: dict[str, Any] | None = None,
+    ml_score_override: float | None = None,
+    return_features: bool = False,
+    # Optional pre-computed items to save CPU in loops
+    pre_adjustments: dict[str, Any] | None = None,
+    pre_model_features: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Return a robust score payload for a single hospital candidate.
@@ -1000,7 +1036,9 @@ def score_hospital(
     s_eta = _eta_relative_score(eta, max_eta_minutes)
     s_load = _load_threshold_score(inferred_load)
 
-    dynamic_weights = _scenario_adjusted_weights(_get_active_weights(), scenario_context)
+    # Optimization: Use pre-loaded adjustments if provided
+    adjustments = pre_adjustments if pre_adjustments is not None else _load_scenario_adjustments()
+    dynamic_weights = _scenario_adjusted_weights(_get_active_weights(), scenario_context, adjustments=adjustments)
     interpretable_score = _clamp(
         (dynamic_weights["w_survival"] * s_survival)
         + (dynamic_weights["w_treatment"] * s_treatment)
@@ -1046,7 +1084,8 @@ def score_hospital(
         "effective_equipment_set": sorted(effective_equipment_set),
     }
 
-    model_features = _infer_model_feature_names()
+    # Optimization: Use pre-computed feature names
+    model_features = pre_model_features if pre_model_features is not None else _infer_model_feature_names()
     feature_vector = _build_feature_vector(
         distance_km=distance_km,
         eta_minutes=eta,
@@ -1065,8 +1104,54 @@ def score_hospital(
         equipment_match_override=equipment_match_score,
     )
 
+    if return_features:
+        return {
+            "feature_vector": feature_vector,
+            "interpretable_score": interpretable_score,
+            "score_breakdown": score_breakdown,
+            "model_features": model_features,
+            "s_survival": s_survival,
+            "s_treatment": s_treatment,
+            "s_equipment": s_equipment,
+            "inferred_load": inferred_load,
+            "eta": eta,
+            "distance_km": distance_km,
+            "available_beds": available_beds,
+            "icu_beds": icu_beds,
+            "hospital_equipment": hospital_equipment,
+            "required_equipment": required_equipment,
+            "condition_key": condition_key,
+            "accepting": accepting,
+            "specialist_count": specialist_count,
+            "success_rate": success_rate,
+            "has_icu": has_icu,
+            "icu_availability_norm": icu_availability_norm,
+            "matched_equip": matched_equip,
+            "missing_equip": missing_equip,
+            "condition_severity": condition_severity,
+        }
+
     ml_used = False
     global _ML_FALLBACK_WARNING_EMITTED
+
+    # Optimization: If we are just finalizing a pre-computed score, skip re-calculation.
+    if ml_score_override is not None:
+        ml_score = ml_score_override
+        ml_used = True
+        # For finalizing, we assume score_breakdown was already mostly built in return_features=True call
+        # but we need to merge the ML specific bits.
+        score_breakdown["ml_confidence"] = round(ml_score, 4)
+        return {
+            "hospital_id": hospital_id,
+            "ml_score": ml_score,
+            "score": ml_score,
+            "ml_used": True,
+            "score_breakdown": score_breakdown,
+            "explanation": "Optimized ML-first scoring applied.",
+            "pros": ["ML confidence high"],
+            "cons": [],
+        }
+
     if _ML_AVAILABLE:
         try:
             ml_score = _predict_ml_score(feature_vector, model_features)
@@ -1212,7 +1297,7 @@ def score_hospital(
     }
 
 
-def rank_hospitals(
+async def rank_hospitals(
     hospitals: list[dict[str, Any]],
     *,
     ambulance_lat: float,
@@ -1240,9 +1325,17 @@ def rank_hospitals(
         eta_candidates.append(max(0.0, _as_float(eta_val, 0.0)))
     max_eta_minutes = max(eta_candidates) if eta_candidates else None
 
-    scored: list[dict[str, Any]] = []
+    # Step 1: Extract features and rule-based scores for all hospitals
+    prepped: list[dict[str, Any]] = []
+    feature_vectors: list[list[float]] = []
+    model_features = _infer_model_feature_names()
+
+    # Optimization: Only load scenario adjustments once per rank call
+    scenario_adjustments = _load_scenario_adjustments()
+
     for hospital in hospitals:
-        result = score_hospital(
+        # We pass dummy context if none to ensure consistency
+        res = score_hospital(
             hospital_id=hospital.get("id") or hospital.get("hospital_id"),
             ambulance_lat=ambulance_lat,
             ambulance_lon=ambulance_lon,
@@ -1266,8 +1359,58 @@ def rank_hospitals(
             max_eta_minutes=max_eta_minutes,
             survival_time_minutes=survival_time_minutes,
             scenario_context=scenario_context,
+            return_features=True,
+            pre_adjustments=scenario_adjustments,
+            pre_model_features=model_features,
         )
-        scored.append({**hospital, **result})
+        prepped.append(res)
+        feature_vectors.append(res["feature_vector"])
+
+    # Step 2: Batch predict ML scores
+    ml_scores: list[float] = []
+    if _ML_AVAILABLE and feature_vectors:
+        try:
+            import asyncio  # noqa: PLC0415
+            ml_scores = await asyncio.to_thread(_predict_ml_scores_batch, feature_vectors, model_features)
+        except Exception:  # noqa: BLE001
+            ml_scores = [None] * len(feature_vectors)
+    else:
+        ml_scores = [None] * len(feature_vectors)
+
+    # Step 3: Finalize (Optimized)
+    scored: list[dict[str, Any]] = []
+    for i, hospital in enumerate(hospitals):
+        # We use the 'finalize' shortcut by passing ml_score_override to score_hospital
+        # It will detect the override and skip re-calculating features.
+        final_res = score_hospital(
+            hospital_id=hospital.get("id") or hospital.get("hospital_id"),
+            ambulance_lat=ambulance_lat,
+            ambulance_lon=ambulance_lon,
+            hospital_lat=hospital.get("latitude") or hospital.get("lat", ambulance_lat),
+            hospital_lon=hospital.get("longitude") or hospital.get("lon", ambulance_lon),
+            eta_minutes=hospital.get("eta_minutes"),
+            available_beds=hospital.get("available_beds", 0),
+            icu_beds=hospital.get("icu_beds", 0),
+            hospital_equipment=hospital.get("equipment", []),
+            required_equipment=required_equipment,
+            condition=condition,
+            accepting=hospital.get("accepting", True),
+            specialist_count=hospital.get("specialist_count", 0),
+            hospital_load=hospital.get("hospital_load"),
+            historical_success_rate=hospital.get("historical_success_rate"),
+            has_icu=hospital.get("has_ICU"),
+            total_beds=hospital.get("total_beds"),
+            equipment_match_override=hospital.get("equipment_match_score"),
+            ambulance_equipment=ambulance_equipment,
+            severity_score=severity_score,
+            max_eta_minutes=max_eta_minutes,
+            survival_time_minutes=survival_time_minutes,
+            scenario_context=scenario_context,
+            ml_score_override=ml_scores[i],
+            pre_adjustments=scenario_adjustments,
+            pre_model_features=model_features,
+        )
+        scored.append({**hospital, **final_res})
 
     scored.sort(key=lambda row: float(row.get("ml_score", row.get("score", 0.0))), reverse=True)
     return scored

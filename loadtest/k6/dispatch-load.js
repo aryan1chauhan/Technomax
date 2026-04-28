@@ -119,6 +119,13 @@ function makeDispatchPayload() {
 }
 
 function ensureAmbulanceUser(email, password) {
+  const loginPayload = JSON.stringify({ email, password });
+  let loginRes = http.post(`${apiBase}/api/auth/login`, loginPayload, { headers });
+
+  if (loginRes.status === 200 && loginRes.json("access_token")) {
+    return loginRes.json("access_token");
+  }
+
   const regPayload = JSON.stringify({
     email,
     password,
@@ -130,11 +137,10 @@ function ensureAmbulanceUser(email, password) {
     "register status is created or duplicate": (r) => r.status === 201 || r.status === 400,
   });
 
-  const loginPayload = JSON.stringify({ email, password });
-  const loginRes = http.post(`${apiBase}/api/auth/login`, loginPayload, { headers });
+  loginRes = http.post(`${apiBase}/api/auth/login`, loginPayload, { headers });
 
   check(loginRes, {
-    "login returns token": (r) => r.status === 200 && !!r.json("access_token"),
+    "login returns token": (r) => r.status === 200 && !!loginRes.json("access_token"),
   });
 
   if (loginRes.status !== 200) {

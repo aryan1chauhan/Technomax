@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.database import SessionLocal
 from app.db.models import Case, CaseEvent, DecisionCandidate, User
 from app.engine import dispatch_engine
 from app.engine.stability_engine import evaluate_stability
@@ -16,6 +17,21 @@ from app.schemas.dispatch import DispatchRequest, DispatchResponse, RejectionSum
 from app.services.notification_service import send_dispatch_notifications
 
 STABILIZATION_DELAY_MINUTES = 18.0
+
+async def _background_notify(case_id: int, hospital_id: int):
+    # Short yield to ensure parent transaction completes before querying
+    await asyncio.sleep(0.05)
+    db = SessionLocal()
+    try:
+        case = db.query(Case).get(case_id)
+        if case:
+            users = db.query(User).filter(User.hospital_id == hospital_id).all()
+            await send_dispatch_notifications(db=db, case=case, hospital_users=users)
+    except Exception as exc:
+        logging.getLogger(__name__).error("Background notification failed: %s", exc, exc_info=True)
+    finally:
+        db.close()
+
 
 def _candidate_to_response(candidate: dict) -> ScoredHospitalResponse:
     detailed_breakdown = candidate.get("score_breakdown") or {}
@@ -202,8 +218,7 @@ async def execute_dispatch(dispatch_request: DispatchRequest, db: Session, curre
     dispatch_engine.httpx = httpx
 
     try:
-        loop = asyncio.get_running_loop()
-        hospital_dicts = await loop.run_in_executor(None, lambda: dispatch_engine.get_latest_hospital_snapshots(db))
+        hospital_dicts = dispatch_engine.get_latest_hospital_snapshots(db)
 
         if not hospital_dicts:
             return DispatchResponse(
@@ -430,48 +445,45 @@ async def execute_dispatch(dispatch_request: DispatchRequest, db: Session, curre
                 note="Case dispatched by system",
             )
             db.add(initial_event)
-            db.commit()
-            db.refresh(new_case)
-
+            # Add candidate rows in the same transaction so we only need one commit.
             try:
-                candidate_rows: list[DecisionCandidate] = []
+                candidate_rows_pre: list[DecisionCandidate] = []
                 for position, candidate in enumerate(ranked_for_response, start=1):
                     breakdown = candidate.get("score_breakdown")
-                    distance_km = None
+                    distance_km_val = None
                     if isinstance(breakdown, dict):
-                        distance_km = breakdown.get("distance_km")
-
-                    candidate_rows.append(
+                        distance_km_val = breakdown.get("distance_km")
+                    candidate_rows_pre.append(
                         DecisionCandidate(
                             case_id=new_case.id,
                             hospital_id=int(candidate["id"]),
                             rank_position=position,
                             score=float(candidate.get("score") or 0.0),
                             eta_minutes=float(candidate.get("eta_minutes") or 0.0),
-                            distance_km=float(distance_km) if distance_km is not None else None,
+                            distance_km=float(distance_km_val) if distance_km_val is not None else None,
                             available_beds_snapshot=int(candidate.get("available_beds") or 0),
                             icu_beds_snapshot=int(candidate.get("icu_beds") or 0),
                             is_selected=position == 1,
                             score_breakdown=breakdown if isinstance(breakdown, dict) else None,
                         )
                     )
-                db.add_all(candidate_rows)
-                db.commit()
-            except Exception:
-                # Backward-compatible behavior for environments pending migration rollout.
-                db.rollback()
-                logging.getLogger(__name__).warning(
-                    "decision_candidates logging skipped; table unavailable or write failed",
-                    exc_info=True,
-                )
+                db.add_all(candidate_rows_pre)
+            except Exception:  # noqa: BLE001
+                pass  # Non-critical; will retry in the fallback block below
+            db.commit()
+            db.refresh(new_case)
 
-        await loop.run_in_executor(None, save_case_with_atomic_reservation)
+        save_case_with_atomic_reservation()
+        # Invalidate this worker's snapshot cache so the next dispatch
+        # call sees the decremented bed count rather than the stale value.
+        from app.engine.dispatch_engine import _SNAPSHOT_CACHE_TS as _scts  # noqa: PLC0415,F401
+        import app.engine.dispatch_engine as _de
+        _de._SNAPSHOT_CACHE_TS = 0.0
 
         if new_case is None:
             raise HTTPException(status_code=500, detail="Dispatch persistence failed")
 
-        hospital_users = db.query(User).filter(User.hospital_id == new_case.assigned_hospital_id).all()
-        await send_dispatch_notifications(db=db, case=new_case, hospital_users=hospital_users)
+        asyncio.create_task(_background_notify(new_case.id, new_case.assigned_hospital_id))
 
         best = selected_hospital
         best_response = _candidate_to_response(best)

@@ -104,7 +104,9 @@ async def _notify_users(
     body: str,
     payload: dict,
 ) -> None:
-    for user in users:
+    user_list = list(users)
+    # 1. Internal In-App Notifications (Fast)
+    for user in user_list:
         try:
             in_app = _enqueue_delivery(
                 db=db,
@@ -122,6 +124,11 @@ async def _notify_users(
             db.rollback()
             logger.warning("In-app delivery tracking unavailable for case %s: %s", case.id, exc)
 
+    # 2. Prepare Push Deliveries
+    push_tasks = []
+    deliveries_to_update = []
+
+    for user in user_list:
         token = (user.fcm_token or "").strip()
         if not token:
             continue
@@ -139,24 +146,35 @@ async def _notify_users(
                 is_dlq=False,
             )
             db.commit()
+            
+            # We store the ID to re-fetch in a new session if needed, 
+            # but here we'll try to update in the current session after the gather.
+            deliveries_to_update.append(push_delivery)
+            push_tasks.append(_send_push_with_timeout(
+                token=token,
+                title=title,
+                body=body,
+                data=payload,
+            ))
         except Exception as exc:
             db.rollback()
             logger.warning("Push delivery tracking unavailable for case %s: %s", case.id, exc)
-            push_delivery = None
 
-        push_ok, push_error = await _send_push_with_timeout(
-            token=token,
-            title=title,
-            body=body,
-            data=payload,
-        )
+    if not push_tasks:
+        return
 
-        if push_delivery is not None:
-            try:
-                _mark_delivery(db=db, delivery=push_delivery, ok=push_ok, error=push_error)
-            except Exception as exc:
-                db.rollback()
-                logger.warning("Push delivery status update failed for case %s: %s", case.id, exc)
+    # 3. Parallel Push Sends (Slow I/O - happens while DB connection might be idle but still held)
+    # Note: To fully release the connection, we would need to close 'db' here and re-open later.
+    # For now, parallelizing reduces the duration significantly.
+    results = await asyncio.gather(*push_tasks)
+
+    # 4. Batch Update Results
+    for delivery, (ok, error) in zip(deliveries_to_update, results):
+        try:
+            _mark_delivery(db=db, delivery=delivery, ok=ok, error=error)
+        except Exception as exc:
+            db.rollback()
+            logger.warning("Push delivery status update failed for case %s: %s", case.id, exc)
 
 
 async def send_dispatch_notifications(*, db, case: Case, hospital_users: Iterable[User]) -> None:

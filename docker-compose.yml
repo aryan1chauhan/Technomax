@@ -3,6 +3,7 @@ services:
   db:
     image: postgres:15
     container_name: mediroute_db
+    command: postgres -c max_connections=700
     environment:
       POSTGRES_DB: mediroute
       POSTGRES_USER: postgres
@@ -32,6 +33,7 @@ services:
 
   backend:
     build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 10
     container_name: mediroute_backend
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD}@db:5432/mediroute
@@ -46,6 +48,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_DB: "0"
+      ENABLE_RATE_LIMIT: "false"
     ports:
       - "8000:8000"
     depends_on:

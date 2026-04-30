@@ -2,36 +2,6 @@
 app/middleware/rate_limit.py
 ----------------------------
 Centralised rate-limit configuration for MediRoute.
-
-Usage
------
-In main.py / app factory:
-
-    from app.middleware.rate_limit import limiter, rate_limit_exceeded_handler
-    from slowapi.errors import RateLimitExceeded
-    from slowapi.middleware import SlowAPIMiddleware
-
-    app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
-    app.add_middleware(SlowAPIMiddleware)
-
-Then decorate endpoints:
-
-    from app.middleware.rate_limit import limiter
-    from fastapi import Request
-
-    @router.post("/dispatch")
-    @limiter.limit("10/minute")
-    async def dispatch(request: Request, ...):
-        ...
-
-Notes
------
-- Key function defaults to client IP.  Behind a proxy (Nginx / Render) the
-  real IP is read from X-Forwarded-For automatically by slowapi.
-- In tests, override with:  limiter._key_func = lambda r: "test-client"
-- All limits are env-configurable so staging/prod can differ without a code
-  change.
 """
 
 from __future__ import annotations
@@ -95,14 +65,12 @@ LIMIT_DEFAULT       = os.getenv("RATELIMIT_DEFAULT",       "100/minute")
 limiter = Limiter(
     key_func=_key_func,
     default_limits=[LIMIT_DEFAULT],
-    # Store in-memory by default; swap to Redis with:
-    #   storage_uri="redis://localhost:6379"
-    # (aligns with the Redis pub/sub roadmap item)
     storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
+    enabled=(os.getenv("ENABLE_RATE_LIMIT", "true").lower() == "true")
 )
 
 # ---------------------------------------------------------------------------
-# Custom 429 handler — returns JSON (not HTML) so the React UI never breaks
+# Custom 429 handler
 # ---------------------------------------------------------------------------
 
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> Response:

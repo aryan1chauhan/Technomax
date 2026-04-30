@@ -91,9 +91,9 @@
         },
         "final_score": 0.6723,
         "severity_score": 9.5,
+        "stability_score": 0.1111,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 1.0,
-        "stability_score": 0.1111
+        "estimated_survival_time": 1.0
       },
       "issues": []
     },
@@ -108,9 +108,9 @@
       "score_breakdown": {
         "distance_score": 0.0,
         "severity_score": 9.2,
+        "stability_score": 0.4706,
         "stabilization_time_minutes": 15.0,
-        "estimated_survival_time": 16.0,
-        "stability_score": 0.4706
+        "estimated_survival_time": 16.0
       },
       "issues": []
     },
@@ -138,9 +138,9 @@
         },
         "final_score": 0.4568,
         "severity_score": 9.8,
+        "stability_score": 0.2143,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 6.0,
-        "stability_score": 0.2143
+        "estimated_survival_time": 6.0
       },
       "issues": []
     },
@@ -168,9 +168,9 @@
         },
         "final_score": 0.5082,
         "severity_score": 8.9,
+        "stability_score": 0.125,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 2.0,
-        "stability_score": 0.125
+        "estimated_survival_time": 2.0
       },
       "issues": []
     },
@@ -185,9 +185,9 @@
       "score_breakdown": {
         "distance_score": 0.0,
         "severity_score": 9.1,
+        "stability_score": 0.0001,
         "stabilization_time_minutes": 10.0,
-        "estimated_survival_time": 1.0,
-        "stability_score": 0.0001
+        "estimated_survival_time": 1.0
       },
       "issues": []
     },
@@ -213,9 +213,9 @@
       "score_breakdown": {
         "distance_score": 0.0,
         "severity_score": 9.4,
+        "stability_score": 0.0345,
         "stabilization_time_minutes": 15.0,
-        "estimated_survival_time": 1.0,
-        "stability_score": 0.0345
+        "estimated_survival_time": 1.0
       },
       "issues": []
     },
@@ -243,9 +243,9 @@
         },
         "final_score": 0.7098,
         "severity_score": 9.6,
+        "stability_score": 0.125,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 1.0,
-        "stability_score": 0.125
+        "estimated_survival_time": 1.0
       },
       "issues": []
     },
@@ -273,9 +273,9 @@
         },
         "final_score": 0.5932,
         "severity_score": 9.9,
+        "stability_score": 0.1818,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 2.0,
-        "stability_score": 0.1818
+        "estimated_survival_time": 2.0
       },
       "issues": []
     },
@@ -303,9 +303,9 @@
         },
         "final_score": 0.4811,
         "severity_score": 9.9,
+        "stability_score": 0.05,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 1.0,
-        "stability_score": 0.05
+        "estimated_survival_time": 1.0
       },
       "issues": []
     },
@@ -333,9 +333,9 @@
         },
         "final_score": 0.9163,
         "severity_score": 6.5,
+        "stability_score": 0.7714,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 27.0,
-        "stability_score": 0.7714
+        "estimated_survival_time": 27.0
       },
       "issues": []
     },
@@ -363,9 +363,9 @@
         },
         "final_score": 0.7366,
         "severity_score": 6.2,
+        "stability_score": 0.7627,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 45.0,
-        "stability_score": 0.7627
+        "estimated_survival_time": 45.0
       },
       "issues": []
     },
@@ -393,9 +393,9 @@
         },
         "final_score": 0.7734,
         "severity_score": 5.8,
+        "stability_score": 0.6731,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 35.0,
-        "stability_score": 0.6731
+        "estimated_survival_time": 35.0
       },
       "issues": []
     },
@@ -423,9 +423,9 @@
         },
         "final_score": 0.7263,
         "severity_score": 5.5,
+        "stability_score": 0.7377,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 45.0,
-        "stability_score": 0.7377
+        "estimated_survival_time": 45.0
       },
       "issues": []
     },
@@ -453,9 +453,9 @@
         },
         "final_score": 0.7405,
         "severity_score": 5.2,
+        "stability_score": 0.8,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 40.0,
-        "stability_score": 0.8
+        "estimated_survival_time": 40.0
       },
       "issues": []
     },
@@ -470,9 +470,9 @@
       "score_breakdown": {
         "distance_score": 0.0,
         "severity_score": 5.9,
+        "stability_score": 0.0345,
         "stabilization_time_minutes": 10.0,
-        "estimated_survival_time": 1.0,
-        "stability_score": 0.0345
+        "estimated_survival_time": 1.0
       },
       "issues": []
     },
@@ -500,9 +500,9 @@
         },
         "final_score": 0.7743,
         "severity_score": 5.5,
+        "stability_score": 0.8491,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 45.0,
-        "stability_score": 0.8491
+        "estimated_survival_time": 45.0
       },
       "issues": []
     },
@@ -517,9 +517,9 @@
       "score_breakdown": {
         "distance_score": 0.0,
         "severity_score": 6.1,
+        "stability_score": 0.2143,
         "stabilization_time_minutes": 15.0,
-        "estimated_survival_time": 6.0,
-        "stability_score": 0.2143
+        "estimated_survival_time": 6.0
       },
       "issues": []
     },
@@ -558,9 +558,9 @@
         },
         "final_score": 0.4238,
         "severity_score": 5.4,
+        "stability_score": 0.1111,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 2.0,
-        "stability_score": 0.1111
+        "estimated_survival_time": 2.0
       },
       "issues": []
     },
@@ -588,9 +588,9 @@
         },
         "final_score": 0.9358,
         "severity_score": 2.5,
+        "stability_score": 0.9452,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 69.0,
-        "stability_score": 0.9452
+        "estimated_survival_time": 69.0
       },
       "issues": []
     },
@@ -618,9 +618,9 @@
         },
         "final_score": 0.9482,
         "severity_score": 2.8,
+        "stability_score": 0.9677,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 90.0,
-        "stability_score": 0.9677
+        "estimated_survival_time": 90.0
       },
       "issues": []
     },
@@ -648,9 +648,9 @@
         },
         "final_score": 0.838,
         "severity_score": 3.2,
+        "stability_score": 0.8913,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 82.0,
-        "stability_score": 0.8913
+        "estimated_survival_time": 82.0
       },
       "issues": []
     },
@@ -678,9 +678,9 @@
         },
         "final_score": 0.7313,
         "severity_score": 3.0,
+        "stability_score": 0.8889,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 120.0,
-        "stability_score": 0.8889
+        "estimated_survival_time": 120.0
       },
       "issues": []
     },
@@ -708,9 +708,9 @@
         },
         "final_score": 0.9551,
         "severity_score": 1.8,
+        "stability_score": 0.9718,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 69.0,
-        "stability_score": 0.9718
+        "estimated_survival_time": 69.0
       },
       "issues": []
     },
@@ -738,9 +738,9 @@
         },
         "final_score": 0.9388,
         "severity_score": 1.5,
+        "stability_score": 0.9574,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 90.0,
-        "stability_score": 0.9574
+        "estimated_survival_time": 90.0
       },
       "issues": []
     },
@@ -768,9 +768,9 @@
         },
         "final_score": 0.8718,
         "severity_score": 2.2,
+        "stability_score": 0.9213,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 82.0,
-        "stability_score": 0.9213
+        "estimated_survival_time": 82.0
       },
       "issues": []
     },
@@ -798,9 +798,9 @@
         },
         "final_score": 0.9033,
         "severity_score": 2.5,
+        "stability_score": 0.8961,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 69.0,
-        "stability_score": 0.8961
+        "estimated_survival_time": 69.0
       },
       "issues": []
     },
@@ -828,9 +828,9 @@
         },
         "final_score": 0.93,
         "severity_score": 2.0,
+        "stability_score": 0.9474,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 90.0,
-        "stability_score": 0.9474
+        "estimated_survival_time": 90.0
       },
       "issues": []
     },
@@ -858,9 +858,9 @@
         },
         "final_score": 0.9488,
         "severity_score": 1.9,
+        "stability_score": 0.9535,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 82.0,
-        "stability_score": 0.9535
+        "estimated_survival_time": 82.0
       },
       "issues": []
     },
@@ -921,9 +921,9 @@
         },
         "final_score": 0.4777,
         "severity_score": 7.0,
+        "stability_score": 0.0002,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 2.0,
-        "stability_score": 0.0002
+        "estimated_survival_time": 2.0
       },
       "issues": []
     },
@@ -962,9 +962,9 @@
         },
         "final_score": 0.8392,
         "severity_score": 6.8,
+        "stability_score": 0.8824,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 45.0,
-        "stability_score": 0.8824
+        "estimated_survival_time": 45.0
       },
       "issues": []
     },
@@ -1003,9 +1003,9 @@
         },
         "final_score": 0.402,
         "severity_score": 6.5,
+        "stability_score": 0.3214,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 45.0,
-        "stability_score": 0.3214
+        "estimated_survival_time": 45.0
       },
       "issues": []
     },
@@ -1033,9 +1033,9 @@
         },
         "final_score": 0.4415,
         "severity_score": 5.9,
+        "stability_score": 0.3038,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 24.0,
-        "stability_score": 0.3038
+        "estimated_survival_time": 24.0
       },
       "issues": []
     },
@@ -1063,9 +1063,9 @@
         },
         "final_score": 0.5968,
         "severity_score": 7.4,
+        "stability_score": 0.0001,
         "stabilization_time_minutes": null,
-        "estimated_survival_time": 1.0,
-        "stability_score": 0.0001
+        "estimated_survival_time": 1.0
       },
       "issues": []
     }

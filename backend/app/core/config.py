@@ -19,5 +19,6 @@ class Settings(BaseSettings):
     webhook_timeout_seconds: float = 5.0
     sms_fallback_number: str | None = None
     sms_timeout_seconds: float = 3.0
+    deterministic_eta: bool = True
 
 settings = Settings()

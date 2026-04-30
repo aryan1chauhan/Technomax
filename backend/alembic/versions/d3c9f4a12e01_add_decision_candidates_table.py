@@ -20,10 +20,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """No-op: baseline revision already includes this schema."""
+    """Create decision_candidates table if not exists."""
+    # Table is already created in baseline, this is a no-op for existing databases
     pass
 
 
 def downgrade() -> None:
-    """No-op: schema is managed by the baseline revision."""
+    """Downgrade is a no-op."""
     pass

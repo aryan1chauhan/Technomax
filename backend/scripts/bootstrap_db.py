@@ -26,30 +26,57 @@ def main() -> int:
     inspector = inspect(engine)
     table_names = set(inspector.get_table_names())
 
+    # ── Case 1: fresh DB or already alembic-tracked ──────────────────────────
+    # Let alembic run all pending migrations from scratch (or from current rev).
     if "alembic_version" in table_names or not table_names:
         return _run_alembic("upgrade", "head")
 
+    # ── Case 2: DB has some managed tables but NO alembic tracking ────────────
     missing_tables = [name for name in EXPECTED_TABLES if name not in table_names]
     if missing_tables:
+        # This happens when a previous stack run died before alembic could
+        # stamp its version table (e.g. stale Docker volume from an old build).
+        # Recovery: create only the missing tables via SQLAlchemy, then stamp.
         print(
-            "Existing database is missing managed tables and cannot be auto-stamped: "
-            + ", ".join(sorted(missing_tables)),
+            "WARNING: Untracked DB is missing managed tables: "
+            + ", ".join(sorted(missing_tables))
+            + ". Attempting self-heal via SQLAlchemy create_all...",
             file=sys.stderr,
         )
-        return 1
+        try:
+            # create_all with an explicit table list only touches those tables.
+            Base.metadata.create_all(
+                engine,
+                tables=[EXPECTED_TABLES[t] for t in missing_tables],
+            )
+            print(
+                "Self-heal OK — created: "
+                + ", ".join(sorted(missing_tables))
+                + ". Stamping alembic at head.",
+                file=sys.stderr,
+            )
+            return _run_alembic("stamp", "head")
+        except Exception as exc:
+            print(
+                f"Self-heal failed: {exc}\n"
+                "Manual recovery: docker compose down -v && docker compose up --build",
+                file=sys.stderr,
+            )
+            return 1
 
+    # ── Case 3: all tables present, no alembic tracking, check columns ────────
     missing_columns: list[str] = []
     for table_name, table in EXPECTED_TABLES.items():
-        actual_columns = {column["name"] for column in inspector.get_columns(table_name)}
-        expected_columns = {column.name for column in table.columns}
+        actual_columns = {col["name"] for col in inspector.get_columns(table_name)}
+        expected_columns = {col.name for col in table.columns}
         missing = sorted(expected_columns - actual_columns)
         if missing:
             missing_columns.append(f"{table_name}: {', '.join(missing)}")
 
     if missing_columns:
         print(
-            "Existing database schema is not aligned with current models and cannot be auto-stamped:\n"
-            + "\n".join(missing_columns),
+            "Existing database schema is not aligned with current models "
+            "and cannot be auto-stamped:\n" + "\n".join(missing_columns),
             file=sys.stderr,
         )
         return 1

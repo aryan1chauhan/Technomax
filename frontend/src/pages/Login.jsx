@@ -25,8 +25,14 @@ export default function Login() {
       if (role === "ambulance")  navigate("/dispatch");
       else if (role === "hospital") navigate("/hospital/dashboard");
       else if (role === "admin") navigate("/admin/dashboard");
-    } catch {
-      setError("Invalid email or password. Please try again.");
+    } catch (err) {
+      if (err.response?.status === 401) {
+        setError("Invalid email or password. Please try again.");
+      } else if (err.code === "ERR_NETWORK" || err.code === "ECONNREFUSED") {
+        setError("Cannot reach server. Please check your connection.");
+      } else {
+        setError(err.response?.data?.detail || "Login failed. Please try again.");
+      }
     } finally { setLoading(false); }
   };
 

@@ -84,6 +84,9 @@ def generate():
     print(f"Found {len(hospitals)} hospitals")
 
     with engine.connect() as conn:
+        conn.execute(text("DELETE FROM decision_candidates WHERE case_id IN (SELECT id FROM cases WHERE user_id = 4)"))
+        conn.execute(text("DELETE FROM case_events WHERE case_id IN (SELECT id FROM cases WHERE user_id = 4)"))
+        conn.execute(text("DELETE FROM notification_deliveries WHERE case_id IN (SELECT id FROM cases WHERE user_id = 4)"))
         result = conn.execute(text("DELETE FROM cases WHERE user_id = 4"))
         conn.commit()
         print(f"Deleted {result.rowcount} old synthetic cases")
@@ -166,9 +169,9 @@ def generate():
         for c in cases_to_insert:
             conn.execute(text(
                 "INSERT INTO cases (user_id, condition, equipment_needed, ambulance_lat, ambulance_lng, "
-                "assigned_hospital_id, final_score, distance_km, eta_minutes) "
+                "assigned_hospital_id, final_score, distance_km, eta_minutes, status) "
                 "VALUES (:user_id, :condition, :equipment_needed, :ambulance_lat, :ambulance_lng, "
-                ":assigned_hospital_id, :final_score, :distance_km, :eta_minutes)"
+                ":assigned_hospital_id, :final_score, :distance_km, :eta_minutes, 'completed')"
             ), c)
         conn.commit()
 

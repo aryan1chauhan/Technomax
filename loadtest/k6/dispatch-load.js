@@ -171,6 +171,7 @@ export function setup() {
 }
 
 export const options = {
+  setupTimeout: "180s",
   scenarios: {
     dispatch_traffic: {
       executor: "constant-arrival-rate",

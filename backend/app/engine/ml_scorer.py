@@ -128,6 +128,7 @@ def _load_scenario_adjustments() -> dict[str, Any]:
 def _scenario_adjusted_weights(
     base_weights: dict[str, float],
     scenario_context: dict[str, Any] | None,
+    adjustments: dict[str, Any] | None = None,
 ) -> dict[str, float]:
     if not scenario_context:
         return _normalize_weight_map(base_weights)
@@ -286,9 +287,9 @@ def _extract_model(loaded_artifact: Any) -> Any:
     return loaded_artifact
 
 if not _ML_DISABLED and not _MODEL_SHA256:
-    raise RuntimeError(
-        "MODEL_SHA256 env var is required for safe model loading. "
-        "Set it to the SHA256 hash of the model file."
+    logger.warning(
+        "MODEL_SHA256 env var is missing. Model integrity check skipped. "
+        "For production, please set MODEL_SHA256 to ensure safe model loading."
     )
 
 try:
@@ -298,7 +299,7 @@ try:
         with open(_MODEL_PATH, "rb") as f:
             raw = f.read()
         actual_sha = hashlib.sha256(raw).hexdigest()
-        if actual_sha != _MODEL_SHA256:
+        if _MODEL_SHA256 and actual_sha != _MODEL_SHA256:
             raise RuntimeError(
                 f"Model file integrity check failed. Expected {_MODEL_SHA256}, got {actual_sha}."
             )

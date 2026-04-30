@@ -28,7 +28,7 @@ validate:
 
 ## test: Run pytest unit tests.
 test:
-	$(PYTEST) tests/ -v --tb=short -x
+	$(PYTEST) tests/ -v --tb=short -x 
 
 ## check: Full pre-merge gate — validation suite then pytest.
 check: validate test

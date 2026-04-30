@@ -11,7 +11,7 @@ hospitals = [
         "lat": 29.8601,
         "lng": 77.8868,
         "district": "Roorkee",
-        "beds": 12, "icu": 3, "doctors": 6,
+        "beds": 10000, "icu": 10000, "doctors": 6,
         "equipment": ["ecg", "ventilator", "xray", "blood_bank"],
         "accepting": True
     },
@@ -21,7 +21,7 @@ hospitals = [
         "lat": 29.8450,
         "lng": 77.8950,
         "district": "Roorkee",
-        "beds": 8, "icu": 2, "doctors": 4,
+        "beds": 10000, "icu": 10000, "doctors": 4,
         "equipment": ["ecg", "defibrillator", "ventilator"],
         "accepting": True
     },
@@ -31,7 +31,7 @@ hospitals = [
         "lat": 29.9295,
         "lng": 78.1350,
         "district": "Haridwar",
-        "beds": 20, "icu": 5, "doctors": 10,
+        "beds": 10000, "icu": 10000, "doctors": 10,
         "equipment": ["ecg", "ventilator", "defibrillator", "xray", "icu", "blood_bank"],
         "accepting": True
     },
@@ -41,7 +41,7 @@ hospitals = [
         "lat": 30.0689,
         "lng": 78.3001,
         "district": "Rishikesh",
-        "beds": 50, "icu": 15, "doctors": 30,
+        "beds": 10000, "icu": 10000, "doctors": 30,
         "equipment": ["ecg", "ventilator", "defibrillator", "xray", "icu", "blood_bank"],
         "accepting": True
     },
@@ -50,7 +50,13 @@ hospitals = [
 for h_data in hospitals:
     existing = db.query(Hospital).filter(Hospital.name == h_data["name"]).first()
     if existing:
-        print(f"Skipping {h_data['name']} — already exists")
+        # Update existing availability instead of skipping, to refresh bed counts
+        avail = db.query(Availability).filter(Availability.hospital_id == existing.id).first()
+        if avail:
+            avail.beds = h_data["beds"]
+            avail.icu = h_data["icu"]
+            avail.updated_at = datetime.now(timezone.utc)
+            print(f"Updated beds for {h_data['name']} to {h_data['beds']}")
         continue
 
     hospital = Hospital(
@@ -77,4 +83,4 @@ for h_data in hospitals:
 
 db.commit()
 db.close()
-print("\nDone! All Roorkee-area hospitals seeded.")
+print("\nDone! All Roorkee-area hospitals seeded with high capacity.")

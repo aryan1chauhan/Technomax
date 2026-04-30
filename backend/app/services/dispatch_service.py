@@ -23,12 +23,12 @@ async def _background_notify(case_id: int, hospital_id: int):
     await asyncio.sleep(0.05)
     db = SessionLocal()
     try:
-        case = db.query(Case).get(case_id)
+        case = db.query(Case).filter(Case.id == case_id).first()
         if case:
             users = db.query(User).filter(User.hospital_id == hospital_id).all()
             await send_dispatch_notifications(db=db, case=case, hospital_users=users)
     except Exception as exc:
-        logging.getLogger(__name__).error("Background notification failed: %s", exc, exc_info=True)
+        logging.getLogger(__name__).error("Background notification failed for case %s: %s", case_id, exc, exc_info=True)
     finally:
         db.close()
 

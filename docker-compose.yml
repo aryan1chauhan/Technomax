@@ -45,9 +45,6 @@ services:
       MODEL_SHA256: ${MODEL_SHA256:-a46ae388b1fdc321edd355a3ae431d0eb5cd85f109227563d39c6edd8ee776b7}
       FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
       REDIS_URL: redis://redis:6379/0
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_DB: "0"
       ENABLE_RATE_LIMIT: "false"
     ports:
       - "8000:8000"

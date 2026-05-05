@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from sqlalchemy import create_engine, inspect
@@ -17,12 +18,49 @@ def _run_alembic(*args: str) -> int:
     return subprocess.call(["alembic", *args])
 
 
+def _connect_with_retry(database_url: str, max_wait_seconds: float = 30.0):
+    start = time.monotonic()
+    attempt = 0
+    delay = 1.0
+    last_error: Exception | None = None
+
+    while True:
+        attempt += 1
+        engine = None
+        try:
+            engine = create_engine(database_url)
+            with engine.connect() as conn:
+                conn.exec_driver_sql("SELECT 1")
+            return engine
+        except Exception as exc:
+            last_error = exc
+            if engine is not None:
+                engine.dispose()
+
+            elapsed = time.monotonic() - start
+            if elapsed >= max_wait_seconds:
+                break
+
+            sleep_for = min(delay, max_wait_seconds - elapsed)
+            print(
+                f"Database connection failed (attempt {attempt}): {exc}. "
+                f"Retrying in {sleep_for:.1f}s...",
+                file=sys.stderr,
+            )
+            time.sleep(sleep_for)
+            delay = min(delay * 2.0, 8.0)
+
+    raise RuntimeError(
+        f"Database connection failed after {max_wait_seconds:.0f}s"
+    ) from last_error
+
+
 def main() -> int:
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         raise RuntimeError("DATABASE_URL is required")
 
-    engine = create_engine(database_url)
+    engine = _connect_with_retry(database_url)
     inspector = inspect(engine)
     table_names = set(inspector.get_table_names())
 

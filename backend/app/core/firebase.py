@@ -1,5 +1,4 @@
 import json
-import os
 import logging
 import firebase_admin
 from firebase_admin import credentials, messaging
@@ -16,28 +15,36 @@ def init_firebase():
     if firebase_admin._apps:
         return  # Already initialized
 
-    try:
-        # Cloud path: JSON string directly in env var
-        sa_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
-        if sa_json:
+    # Cloud path: JSON string directly in env var
+    sa_json = settings.firebase_service_account_json
+    if sa_json:
+        try:
             sa_dict = json.loads(sa_json)
-            cred = credentials.Certificate(sa_dict)
-            firebase_admin.initialize_app(cred)
-            logger.info("Firebase initialized from FIREBASE_SERVICE_ACCOUNT_JSON")
-            return
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("FIREBASE_SERVICE_ACCOUNT_JSON is invalid") from exc
 
-        # Local path: file on disk
-        sa_path = settings.firebase_service_account_path
-        if not sa_path or sa_path == "dummy_path":
-            logger.warning("Firebase not configured — push notifications disabled")
-            return
-
-        cred = credentials.Certificate(sa_path)
+        cred = credentials.Certificate(sa_dict)
         firebase_admin.initialize_app(cred)
-        logger.info("Firebase initialized from file: %s", sa_path)
+        logger.info("Firebase initialized from FIREBASE_SERVICE_ACCOUNT_JSON")
+        return
 
-    except Exception as e:
-        logger.warning("Firebase init failed: %s", e)
+    # Local path: file on disk
+    sa_path = settings.firebase_service_account_path
+    if not sa_path:
+        raise RuntimeError(
+            "Firebase credentials are required. "
+            "Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH."
+        )
+
+    try:
+        cred = credentials.Certificate(sa_path)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to load Firebase credentials from path: {sa_path}"
+        ) from exc
+
+    firebase_admin.initialize_app(cred)
+    logger.info("Firebase initialized from file: %s", sa_path)
 
 def send_push(token: str, title: str, body: str, data: dict = None) -> bool:
     """

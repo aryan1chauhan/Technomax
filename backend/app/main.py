@@ -1,8 +1,10 @@
 import asyncio
+import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -34,23 +36,58 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown cleanup (add resource teardown here if needed)
 
-app = FastAPI(title="MediRoute API", lifespan=lifespan)
+# ---------------------------------------------------------------------------
+# Docs are only exposed when ENVIRONMENT != production
+# Set ENVIRONMENT=production in Render env vars.
+# ---------------------------------------------------------------------------
+_env = os.getenv("ENVIRONMENT", "development")
+_is_prod = _env == "production"
+_docs_url  = None if _is_prod else "/docs"
+_redoc_url = None if _is_prod else "/redoc"
+
+app = FastAPI(
+    title="MediRoute API",
+    lifespan=lifespan,
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
+)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
+# ---------------------------------------------------------------------------
+# CORS — localhost origins only allowed outside production
+# ---------------------------------------------------------------------------
+_cors_origins = ["https://technomax-1.onrender.com"]
+if not _is_prod:
+    _cors_origins += ["http://localhost:5173", "http://localhost:3000"]
+
+# Allow additional origins via comma-separated env var (e.g. custom domain)
+_extra = os.getenv("CORS_ALLOWED_ORIGINS", "")
+if _extra:
+    _cors_origins += [o.strip() for o in _extra.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://mediroute-frontend-xgzj.onrender.com",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------------------------------------------------------------------------
+# Security response headers
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next) -> Response:
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"]        = "DENY"
+    response.headers["Referrer-Policy"]        = "strict-origin-when-cross-origin"
+    if _is_prod:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 app.include_router(auth_router)
 app.include_router(hospitals_router)

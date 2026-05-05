@@ -39,7 +39,7 @@ def _key_func(request: Request) -> str:
 # ---------------------------------------------------------------------------
 
 # Auth endpoints – brute-force protection
-LIMIT_AUTH_LOGIN    = os.getenv("RATELIMIT_AUTH_LOGIN",    "10/minute")
+LIMIT_AUTH_LOGIN    = os.getenv("RATELIMIT_AUTH_LOGIN",    "5/minute")
 LIMIT_AUTH_REGISTER = os.getenv("RATELIMIT_AUTH_REGISTER", "5/minute")
 
 # Core dispatch – prevent DB / ML engine exhaustion

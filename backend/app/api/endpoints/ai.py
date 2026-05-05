@@ -3,7 +3,7 @@ import json
 import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ValidationError, field_validator
-from google import generativeai as genai
+import google.generativeai as genai
 from app.core.config import settings
 from app.core.security import get_current_user
 from app.db.models import User

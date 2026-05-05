@@ -3,9 +3,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import api from "../api/axios";
+import { useToast } from "../components/Toast";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [error, setError]       = useState("");
@@ -15,21 +17,23 @@ export default function Login() {
     e.preventDefault();
     setLoading(true); setError("");
     try {
-      const res = await api.post("/api/auth/login", { email, password }, { timeout: 8000 });
+      const res = await api.post("/api/auth/login", { email, password }, { timeout: 60_000 });
       const { access_token } = res.data;
       localStorage.setItem("token", access_token);
       const decoded = jwtDecode(access_token);
       const role = decoded.role || "ambulance";
       localStorage.setItem("role", role);
       localStorage.setItem("email", decoded.sub);
-      if (role === "ambulance")  navigate("/dispatch");
+      toast(`Welcome back! Signed in as ${role}.`, "success");
+      if (role === "ambulance")     navigate("/dispatch");
       else if (role === "hospital") navigate("/hospital/dashboard");
-      else if (role === "admin") navigate("/admin/dashboard");
+      else if (role === "admin")    navigate("/admin/dashboard");
     } catch (err) {
       if (err.response?.status === 401) {
         setError("Invalid email or password. Please try again.");
-      } else if (err.code === "ERR_NETWORK" || err.code === "ECONNREFUSED") {
-        setError("Cannot reach server. Please check your connection.");
+      } else if (err.code === "ERR_NETWORK" || err.code === "ECONNABORTED") {
+        setError("Server is waking up — please wait a moment and try again.");
+        toast("Backend is starting up (free tier). Retry in ~30 s.", "warning", 8000);
       } else {
         setError(err.response?.data?.detail || "Login failed. Please try again.");
       }

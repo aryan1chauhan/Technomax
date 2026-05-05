@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     claude_api_key: str | None = None
     gemini_api_key: str | None = None
     ors_api_key: str | None = None
+    firebase_service_account_json: str | None = None
     firebase_service_account_path: str | None = None
     webhook_delivery_url: str | None = None
     webhook_secret: str = "change-me-webhook-secret"

@@ -1,11 +1,14 @@
+import json
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from app.core import firebase
 from app.db.models import Case, User, Hospital
 
 @pytest.fixture
 def mock_settings():
     with patch("app.core.firebase.settings") as mock:
+        mock.firebase_service_account_json = None
+        mock.firebase_service_account_path = None
         yield mock
 
 @pytest.fixture
@@ -13,13 +16,25 @@ def mock_firebase_apps():
     with patch("app.core.firebase.firebase_admin._apps", new={"mock": True}):
         yield
 
-def test_init_firebase_dummy_path(mock_settings):
-    mock_settings.firebase_service_account_path = "dummy_path"
+def test_init_firebase_missing_credentials_raises(mock_settings):
     with patch("app.core.firebase.firebase_admin.initialize_app") as mock_init:
-        firebase.init_firebase()
+        with pytest.raises(RuntimeError, match="Firebase credentials are required"):
+            firebase.init_firebase()
         mock_init.assert_not_called()
 
-def test_init_firebase_success(mock_settings, mock_firebase_apps):
+def test_init_firebase_prefers_json(mock_settings, mock_firebase_apps):
+    mock_settings.firebase_service_account_json = json.dumps({"type": "service_account"})
+    mock_settings.firebase_service_account_path = "valid_path"
+    with patch("app.core.firebase.firebase_admin._apps", new={}):
+        with patch("app.core.firebase.credentials.Certificate") as mock_cert, \
+             patch("app.core.firebase.firebase_admin.initialize_app") as mock_init:
+            firebase.init_firebase()
+            mock_cert.assert_called_once()
+            assert isinstance(mock_cert.call_args[0][0], dict)
+            assert mock_cert.call_args[0][0]["type"] == "service_account"
+            mock_init.assert_called_once()
+
+def test_init_firebase_path_fallback(mock_settings, mock_firebase_apps):
     mock_settings.firebase_service_account_path = "valid_path"
     with patch("app.core.firebase.firebase_admin._apps", new={}):
         with patch("app.core.firebase.credentials.Certificate") as mock_cert, \
@@ -28,12 +43,19 @@ def test_init_firebase_success(mock_settings, mock_firebase_apps):
             mock_cert.assert_called_once_with("valid_path")
             mock_init.assert_called_once()
 
-def test_init_firebase_exception(mock_settings, mock_firebase_apps):
+def test_init_firebase_invalid_json_raises(mock_settings, mock_firebase_apps):
+    mock_settings.firebase_service_account_json = "{bad json"
+    with patch("app.core.firebase.firebase_admin._apps", new={}):
+        with pytest.raises(RuntimeError, match="FIREBASE_SERVICE_ACCOUNT_JSON is invalid"):
+            firebase.init_firebase()
+
+def test_init_firebase_path_error_raises(mock_settings, mock_firebase_apps):
+    mock_settings.firebase_service_account_json = None
     mock_settings.firebase_service_account_path = "valid_path"
     with patch("app.core.firebase.firebase_admin._apps", new={}):
         with patch("app.core.firebase.credentials.Certificate", side_effect=Exception("Cert error")):
-            # Should not raise, just log error
-            firebase.init_firebase()
+            with pytest.raises(RuntimeError, match="Failed to load Firebase credentials"):
+                firebase.init_firebase()
 
 def test_send_push_no_token(mock_firebase_apps):
     assert firebase.send_push("", "title", "body") is False

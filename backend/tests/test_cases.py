@@ -2,7 +2,10 @@
 tests/test_cases.py — Case endpoint tests for Phase 3 timeline and status updates.
 """
 import pytest
-from app.db.models import Case, Availability, CaseEvent
+from unittest.mock import patch
+
+from app.core.config import settings
+from app.db.models import Case, Availability, CaseEvent, NotificationDelivery, User, WebhookDelivery
 from sqlalchemy import func
 
 class TestCaseTimelineEndpoint:
@@ -136,3 +139,50 @@ class TestCaseStatusUpdateEndpoint:
         case_id = dispatch_case
         res = client.put(f"/api/cases/{case_id}/status", json={"status": "en_route"}, headers=admin_headers)
         assert res.status_code == 200
+
+    def test_status_update_persists_webhook_and_notification_rows(self, client, auth_headers, db_session, dispatch_case, monkeypatch):
+        case_id = dispatch_case
+        case = db_session.query(Case).filter(Case.id == case_id).first()
+        assert case is not None
+
+        # Ensure webhook enqueue path is enabled for persistence verification.
+        monkeypatch.setattr(settings, "webhook_delivery_url", "https://example.test/webhook")
+        monkeypatch.setattr(settings, "webhook_secret", "test-secret")
+
+        # Ensure at least one hospital user with push token exists for arrived notifications.
+        token_user = db_session.query(User).filter(
+            User.hospital_id == case.assigned_hospital_id,
+            User.fcm_token.is_not(None),
+        ).first()
+        if token_user is None:
+            token_user = User(
+                email="persist_notify@test.com",
+                password_hash="hash",
+                role="hospital",
+                hospital_id=case.assigned_hospital_id,
+                fcm_token="persist_token",
+            )
+            db_session.add(token_user)
+            db_session.commit()
+
+        def _capture_and_close(coro):
+            coro.close()
+            return None
+
+        with patch("app.services.case_status_service.asyncio.create_task", side_effect=_capture_and_close), \
+             patch("app.services.notification_service.send_push", return_value=True):
+            for status in ["en_route", "on_scene", "transporting", "arrived"]:
+                res = client.put(
+                    f"/api/cases/{case_id}/status",
+                    json={"status": status},
+                    headers=auth_headers,
+                )
+                assert res.status_code == 200
+
+        webhook_rows = db_session.query(WebhookDelivery).filter(WebhookDelivery.case_id == case_id).all()
+        notification_rows = db_session.query(NotificationDelivery).filter(NotificationDelivery.case_id == case_id).all()
+
+        assert len(webhook_rows) >= 1
+        assert any(row.event_type == "case.status.updated" for row in webhook_rows)
+        assert len(notification_rows) >= 1
+        assert any(row.channel == "push" for row in notification_rows)

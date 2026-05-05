@@ -9,6 +9,7 @@ Covers:
 - Case creation verification
 """
 import os
+import asyncio
 import pytest
 
 
@@ -151,8 +152,121 @@ class TestDispatchEndpoint:
         after_beds = db_session.query(func.sum(Availability.beds)).scalar() or 0
         assert after_beds == before_beds - 1
 
+    @pytest.mark.asyncio
+    async def test_atomic_reservation_under_contention(self):
+        """Exactly one dispatch should reserve the only available bed under contention."""
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        import httpx
+
+        from app.main import app
+        from app.db.database import get_db
+        from app.db.models import Availability
+
+        test_db_url = os.environ["DATABASE_URL"]
+        engine = create_engine(test_db_url)
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+        control_db = SessionLocal()
+        original_beds: dict[int, int] = {
+            row.hospital_id: int(row.beds or 0)
+            for row in control_db.query(Availability).all()
+        }
+
+        if not original_beds:
+            control_db.close()
+            pytest.skip("No availability rows found in test DB")
+
+        # Force a single-bed contention target for all concurrent requests.
+        control_db.query(Availability).update({Availability.beds: 0})
+        target = (
+            control_db.query(Availability)
+            .filter(Availability.hospital_id.in_(list(original_beds.keys())))
+            .first()
+        )
+        if target is None:
+            control_db.rollback()
+            control_db.close()
+            pytest.skip("No target hospital available for contention test")
+        target.beds = 1
+        target.accepting = True
+        target_hospital_id = int(target.hospital_id)
+        control_db.commit()
+        control_db.close()
+
+        def override_get_db():
+            db = SessionLocal()
+            try:
+                yield db
+            finally:
+                db.close()
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        transport = httpx.ASGITransport(app=app)
+
+        try:
+            async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:
+                email = f"contend_{os.urandom(4).hex()}@test.com"
+                await async_client.post(
+                    "/api/auth/register",
+                    json={"email": email, "password": "test123", "role": "ambulance"},
+                )
+                login_res = await async_client.post(
+                    "/api/auth/login",
+                    json={"email": email, "password": "test123"},
+                )
+                assert login_res.status_code == 200
+                token = login_res.json()["access_token"]
+                headers = {"Authorization": f"Bearer {token}"}
+
+                payload = {
+                    "condition": "fracture",
+                    "ambulance_lat": 29.86,
+                    "ambulance_lng": 77.89,
+                }
+
+                async def dispatch_case():
+                    return await async_client.post("/api/dispatch/", json=payload, headers=headers)
+
+                results = await asyncio.gather(*[dispatch_case() for _ in range(5)], return_exceptions=True)
+
+            exceptions = [r for r in results if isinstance(r, Exception)]
+            assert not exceptions, f"Unexpected dispatch exceptions: {exceptions}"
+
+            responses = [r for r in results if not isinstance(r, Exception)]
+            success_responses = [
+                r for r in responses
+                if r.status_code == 200 and bool(r.json().get("case_id")) and not bool(r.json().get("no_match"))
+            ]
+            assert len(success_responses) == 1
+
+            for response in responses:
+                if response in success_responses:
+                    continue
+                assert response.status_code in {409, 404, 200}
+
+            verify_db = SessionLocal()
+            target_row = (
+                verify_db.query(Availability)
+                .filter(Availability.hospital_id == target_hospital_id)
+                .first()
+            )
+            assert target_row is not None
+            assert int(target_row.beds or 0) == 0
+            verify_db.close()
+        finally:
+            restore_db = SessionLocal()
+            for hospital_id, beds in original_beds.items():
+                restore_db.query(Availability).filter(Availability.hospital_id == hospital_id).update(
+                    {Availability.beds: beds}
+                )
+            restore_db.commit()
+            restore_db.close()
+            app.dependency_overrides.pop(get_db, None)
+
     def test_dispatch_creates_initial_event(self, client, auth_headers, db_session):
-        from app.db.models import CaseEvent
+        from app.db.models import CaseEvent, DecisionCandidate
         res = client.post("/api/dispatch/", json={
             "condition": "fracture",
             "ambulance_lat": 29.86,
@@ -167,6 +281,15 @@ class TestDispatchEndpoint:
         events = db_session.query(CaseEvent).filter(CaseEvent.case_id == case_id).all()
         assert len(events) == 1
         assert events[0].status == "dispatched"
+
+        candidates = (
+            db_session.query(DecisionCandidate)
+            .filter(DecisionCandidate.case_id == case_id)
+            .order_by(DecisionCandidate.rank_position.asc())
+            .all()
+        )
+        assert len(candidates) >= 1
+        assert candidates[0].is_selected is True
 
     def test_dispatch_default_status_is_dispatched(self, client, auth_headers):
         res = client.post("/api/dispatch/", json={
@@ -219,69 +342,52 @@ class TestORSFallback:
 
     def test_ors_timeout_falls_back_to_haversine(self, client, auth_headers):
         """When ORS times out, dispatch should still succeed using haversine ETA."""
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import patch
         import httpx
 
-        # Patch settings to have a real-looking ORS key (not dummy)
-        with patch("app.api.endpoints.dispatch.settings") as mock_settings:
-            mock_settings.ors_api_key = "real_ors_key_for_test"
+        with patch("app.services.eta_service.httpx.get", side_effect=httpx.TimeoutException("OSRM timed out")):
+            res = client.post("/api/dispatch/", json={
+                "condition": "cardiac_arrest",
+                "ambulance_lat": 29.86,
+                "ambulance_lng": 77.89,
+                "equipment_needed": ["ecg"]
+            }, headers=auth_headers)
 
-            # Mock httpx.AsyncClient so the .get() raises a timeout
-            mock_response = AsyncMock()
-            mock_client_instance = AsyncMock()
-            mock_client_instance.get = AsyncMock(
-                side_effect=httpx.TimeoutException("ORS timed out")
-            )
-            mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
-            mock_client_instance.__aexit__ = AsyncMock(return_value=False)
+            if res.status_code == 404:
+                pytest.skip("No hospitals available in test DB")
 
-            with patch("app.api.endpoints.dispatch.httpx.AsyncClient", return_value=mock_client_instance):
-                res = client.post("/api/dispatch/", json={
-                    "condition": "cardiac_arrest",
-                    "ambulance_lat": 29.86,
-                    "ambulance_lng": 77.89,
-                    "equipment_needed": ["ecg"]
-                }, headers=auth_headers)
-
-                if res.status_code == 404:
-                    pytest.skip("No hospitals available in test DB")
-
-                assert res.status_code == 200
-                data = res.json()
-                # Case dispatched successfully with haversine fallback
-                assert data["eta_minutes"] >= 1
-                assert data["distance_km"] > 0
-                assert "case_id" in data
+            assert res.status_code == 200
+            data = res.json()
+            # Case dispatched successfully with haversine fallback
+            assert data["eta_minutes"] >= 1
+            assert data["distance_km"] > 0
+            assert "case_id" in data
 
     def test_ors_non_200_falls_back_to_haversine(self, client, auth_headers):
-        """When ORS returns a non-200 status, dispatch should still succeed."""
-        from unittest.mock import patch, AsyncMock, MagicMock
+        """When OSRM returns non-200, dispatch should still succeed."""
+        from unittest.mock import patch, MagicMock
+        import httpx
 
-        with patch("app.api.endpoints.dispatch.settings") as mock_settings:
-            mock_settings.ors_api_key = "real_ors_key_for_test"
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "503 Service Unavailable",
+            request=httpx.Request("GET", "https://router.project-osrm.org"),
+            response=httpx.Response(503),
+        )
 
-            # Mock httpx.AsyncClient so .get() returns a 503
-            mock_resp = MagicMock()
-            mock_resp.status_code = 503
+        with patch("app.services.eta_service.httpx.get", return_value=mock_resp):
+            res = client.post("/api/dispatch/", json={
+                "condition": "cardiac_arrest",
+                "ambulance_lat": 29.86,
+                "ambulance_lng": 77.89,
+                "equipment_needed": ["ecg"]
+            }, headers=auth_headers)
 
-            mock_client_instance = AsyncMock()
-            mock_client_instance.get = AsyncMock(return_value=mock_resp)
-            mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
-            mock_client_instance.__aexit__ = AsyncMock(return_value=False)
+            if res.status_code == 404:
+                pytest.skip("No hospitals available in test DB")
 
-            with patch("app.api.endpoints.dispatch.httpx.AsyncClient", return_value=mock_client_instance):
-                res = client.post("/api/dispatch/", json={
-                    "condition": "cardiac_arrest",
-                    "ambulance_lat": 29.86,
-                    "ambulance_lng": 77.89,
-                    "equipment_needed": ["ecg"]
-                }, headers=auth_headers)
-
-                if res.status_code == 404:
-                    pytest.skip("No hospitals available in test DB")
-
-                assert res.status_code == 200
-                data = res.json()
-                assert data["eta_minutes"] >= 1
-                assert data["distance_km"] > 0
+            assert res.status_code == 200
+            data = res.json()
+            assert data["eta_minutes"] >= 1
+            assert data["distance_km"] > 0
 

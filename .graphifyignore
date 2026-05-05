@@ -1,0 +1,12 @@
+# Graphify Ignore
+# Exclude build artifacts and vendor code for faster indexing
+
+vendor/
+node_modules/
+dist/
+*.generated.py
+.venv/
+__pycache__/
+.git/
+.code-review-graph/
+graphify-out/

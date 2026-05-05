@@ -1,0 +1,4249 @@
+{
+  "seed": 42,
+  "seeds": [
+    42
+  ],
+  "failure_threshold": 0.1,
+  "cases_per_scenario": 200,
+  "overall": {
+    "mean_scenario_score": 0.532516,
+    "mean_failure_rate": 0.628,
+    "mean_behavior_mismatch_rate": 0.213,
+    "min_observed_score": 0.179028,
+    "scenario_count": 5,
+    "total_safety_violations": 0,
+    "total_crashes": 0,
+    "target_check": {
+      "mean_score_gte_075": false,
+      "failure_rate_lte_020": false,
+      "behavior_mismatch_lte_010": false,
+      "min_score_gte_015": true,
+      "no_safety_violations": true,
+      "no_crashes": true
+    }
+  },
+  "scenarios": {
+    "cardiac_emergency": {
+      "scenario": "cardiac_emergency",
+      "priority_type": "time",
+      "expected_behavior": "Prioritize low ETA and immediate stabilization readiness.",
+      "total_cases": 200,
+      "metrics": {
+        "scenario_mean_score": 0.315467,
+        "scenario_mean_raw_score": 0.315467,
+        "scenario_failure_rate": 1.0,
+        "fallback_rate": 0.005,
+        "correct_behavior_rate": 1.0,
+        "behavior_mismatch_rate": 0.0,
+        "mismatch_penalty_impact": 0.0
+      },
+      "dominant_failure_mode": "score_collapse",
+      "failure_breakdown": {
+        "score_collapse": 199,
+        "fallback_dependency": 1
+      },
+      "failure_mode_reweighting": {
+        "scenario_name": "cardiac_emergency",
+        "failure_breakdown": {
+          "score_collapse": 199,
+          "fallback_dependency": 1
+        },
+        "component_shifts": {},
+        "dominant_failure": "score_collapse"
+      },
+      "scenario_adjustment_profile": {
+        "scenario_name": "cardiac_emergency",
+        "priority_type": "time",
+        "updated_at": "2026-04-10T22:55:05.031067+00:00",
+        "total_decisions": 11400,
+        "failure_breakdown": {
+          "score_collapse": 199,
+          "fallback_dependency": 1
+        },
+        "guardrails": {
+          "baseline_mean_score": 0.315467,
+          "candidate_mean_score": 0.314965,
+          "baseline_fallback_rate": 0.005,
+          "candidate_fallback_rate": 0.005,
+          "safety_violations": 0
+        },
+        "weight_multipliers": {
+          "w_survival": 1.05,
+          "w_treatment": 0.98,
+          "w_equipment": 0.98,
+          "w_eta": 1.05,
+          "w_load": 1.0002
+        }
+      },
+      "targeted_learning_update": {
+        "triggered": true,
+        "scenario_name": "cardiac_emergency",
+        "priority_type": "time",
+        "failure_rate": 1.0,
+        "threshold": 0.1,
+        "scenario_segment": {
+          "scenario_name": "cardiac_emergency",
+          "scenario_rows": 1024,
+          "global_rows": 5000
+        },
+        "train_result": {
+          "timestamp": "2026-04-10T22:55:04.491330+00:00",
+          "reason": "scenario_targeted:cardiac_emergency",
+          "total_decisions": 11400,
+          "dataset_row_count": 2000,
+          "prioritize_recent": true,
+          "previous_weights": {
+            "w_survival": 0.301667,
+            "w_treatment": 0.234575,
+            "w_equipment": 0.186187,
+            "w_eta": 0.139855,
+            "w_load": 0.137716
+          },
+          "dataset": {
+            "dataset_path": "C:\\Users\\ARYAN\\OneDrive\\Desktop(1)\\team tech\\backend\\learning\\artifacts\\learning_dataset.jsonl",
+            "format": "jsonl",
+            "row_count": 3000,
+            "fallback_rate": 0.000333
+          },
+          "train_r2": 0.997177,
+          "learned_weights": {
+            "w_survival": 0.210161,
+            "w_treatment": 0.15762,
+            "w_equipment": 0.30508,
+            "w_eta": 0.123752,
+            "w_load": 0.203387
+          },
+          "proposed_weights": {
+            "w_survival": 0.283366,
+            "w_treatment": 0.219184,
+            "w_equipment": 0.209966,
+            "w_eta": 0.136634,
+            "w_load": 0.15085
+          },
+          "guardrails": {
+            "accepted": false,
+            "reason": "mean_score_decrease",
+            "baseline_mean_score": 0.315467,
+            "candidate_mean_score": 0.315041,
+            "baseline_fallback_rate": 0.005,
+            "candidate_fallback_rate": 0.005,
+            "safety_violations": 0
+          },
+          "accepted": false,
+          "status": "rejected",
+          "rejection_reason": "mean_score_decrease"
+        },
+        "adjust_result": {
+          "timestamp": "2026-04-10T22:55:05.029952+00:00",
+          "reason": "scenario_adjustment:cardiac_emergency",
+          "priority_type": "time",
+          "scenario_name": "cardiac_emergency",
+          "total_decisions": 11400,
+          "previous_weights": {
+            "w_survival": 0.301667,
+            "w_treatment": 0.234575,
+            "w_equipment": 0.186187,
+            "w_eta": 0.139855,
+            "w_load": 0.137716
+          },
+          "proposed_weights": {
+            "w_survival": 0.316667,
+            "w_treatment": 0.224575,
+            "w_equipment": 0.176187,
+            "w_eta": 0.154855,
+            "w_load": 0.127716
+          },
+          "guardrails": {
+            "accepted": false,
+            "reason": "mean_score_decrease",
+            "baseline_mean_score": 0.315467,
+            "candidate_mean_score": 0.314965,
+            "baseline_fallback_rate": 0.005,
+            "candidate_fallback_rate": 0.005,
+            "safety_violations": 0
+          },
+          "failure_breakdown": {
+            "score_collapse": 199,
+            "fallback_dependency": 1
+          },
+          "scenario_weight_multipliers": {
+            "w_survival": 1.05,
+            "w_treatment": 0.98,
+            "w_equipment": 0.98,
+            "w_eta": 1.05,
+            "w_load": 1.0002
+          },
+          "accepted": true,
+          "status": "accepted",
+          "version_id": "scenario:cardiac_emergency",
+          "applied_weights": {
+            "w_survival": 0.301667,
+            "w_treatment": 0.234575,
+            "w_equipment": 0.186187,
+            "w_eta": 0.139855,
+            "w_load": 0.137716
+          },
+          "global_weights_stable": true
+        }
+      },
+      "mismatch_alerts": [],
+      "worst_cases": [
+        {
+          "case_id": "sim-cardiac_emergency-42-0015",
+          "score": 0.255754,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Cardiac time-critical behavior satisfied."
+        },
+        {
+          "case_id": "sim-cardiac_emergency-42-0021",
+          "score": 0.255754,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Cardiac time-critical behavior satisfied."
+        },
+        {
+          "case_id": "sim-cardiac_emergency-42-0049",
+          "score": 0.255754,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Cardiac time-critical behavior satisfied."
+        },
+        {
+          "case_id": "sim-cardiac_emergency-42-0050",
+          "score": 0.255754,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Cardiac time-critical behavior satisfied."
+        },
+        {
+          "case_id": "sim-cardiac_emergency-42-0149",
+          "score": 0.255754,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Cardiac time-critical behavior satisfied."
+        }
+      ]
+    },
+    "mixed_chaos": {
+      "scenario": "mixed_chaos",
+      "priority_type": "stabilization",
+      "expected_behavior": "Remain safe and deterministic under contradictory constraints.",
+      "total_cases": 200,
+      "metrics": {
+        "scenario_mean_score": 0.878115,
+        "scenario_mean_raw_score": 0.878115,
+        "scenario_failure_rate": 0.075,
+        "fallback_rate": 0.0,
+        "correct_behavior_rate": 1.0,
+        "behavior_mismatch_rate": 0.0,
+        "mismatch_penalty_impact": 0.0
+      },
+      "dominant_failure_mode": "none",
+      "failure_breakdown": {
+        "none": 185,
+        "score_collapse": 13,
+        "equipment_gap": 2
+      },
+      "failure_mode_reweighting": {
+        "scenario_name": "mixed_chaos",
+        "failure_breakdown": {
+          "score_collapse": 13,
+          "equipment_gap": 2
+        },
+        "component_shifts": {},
+        "dominant_failure": "score_collapse"
+      },
+      "scenario_adjustment_profile": null,
+      "targeted_learning_update": null,
+      "mismatch_alerts": [],
+      "worst_cases": [
+        {
+          "case_id": "sim-mixed_chaos-42-0078",
+          "score": 0.316456,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "General Secondary",
+          "behavior_reason": "Mixed-chaos safeguards satisfied."
+        },
+        {
+          "case_id": "sim-mixed_chaos-42-0165",
+          "score": 0.316456,
+          "decision_type": "stabilize_first",
+          "failure_type": "equipment_gap",
+          "root_cause": "Required equipment mapping underweighted or unavailable.",
+          "selected_hospital": "General Secondary",
+          "behavior_reason": "Mixed-chaos safeguards satisfied."
+        },
+        {
+          "case_id": "sim-mixed_chaos-42-0001",
+          "score": 0.328947,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Mixed-chaos safeguards satisfied."
+        },
+        {
+          "case_id": "sim-mixed_chaos-42-0017",
+          "score": 0.328947,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Mixed-chaos safeguards satisfied."
+        },
+        {
+          "case_id": "sim-mixed_chaos-42-0047",
+          "score": 0.328947,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Mixed-chaos safeguards satisfied."
+        }
+      ]
+    },
+    "respiratory_failure": {
+      "scenario": "respiratory_failure",
+      "priority_type": "equipment",
+      "expected_behavior": "Match equipment-intensive needs with ventilator-ready sites.",
+      "total_cases": 200,
+      "metrics": {
+        "scenario_mean_score": 0.32276,
+        "scenario_mean_raw_score": 0.32276,
+        "scenario_failure_rate": 1.0,
+        "fallback_rate": 0.0,
+        "correct_behavior_rate": 1.0,
+        "behavior_mismatch_rate": 0.0,
+        "mismatch_penalty_impact": 0.0
+      },
+      "dominant_failure_mode": "score_collapse",
+      "failure_breakdown": {
+        "score_collapse": 200
+      },
+      "failure_mode_reweighting": {
+        "scenario_name": "respiratory_failure",
+        "failure_breakdown": {
+          "score_collapse": 200
+        },
+        "component_shifts": {},
+        "dominant_failure": "score_collapse"
+      },
+      "scenario_adjustment_profile": {
+        "scenario_name": "respiratory_failure",
+        "priority_type": "equipment",
+        "updated_at": "2026-04-10T22:56:39.213169+00:00",
+        "total_decisions": 11800,
+        "failure_breakdown": {
+          "score_collapse": 200
+        },
+        "guardrails": {
+          "baseline_mean_score": 0.32276,
+          "candidate_mean_score": 0.32276,
+          "baseline_fallback_rate": 0.0,
+          "candidate_fallback_rate": 0.0,
+          "safety_violations": 0
+        },
+        "weight_multipliers": {
+          "w_survival": 0.98,
+          "w_treatment": 1.05,
+          "w_equipment": 1.05,
+          "w_eta": 0.98,
+          "w_load": 0.98
+        }
+      },
+      "targeted_learning_update": {
+        "triggered": true,
+        "scenario_name": "respiratory_failure",
+        "priority_type": "equipment",
+        "failure_rate": 1.0,
+        "threshold": 0.1,
+        "scenario_segment": {
+          "scenario_name": "respiratory_failure",
+          "scenario_rows": 1200,
+          "global_rows": 5000
+        },
+        "train_result": {
+          "timestamp": "2026-04-10T22:56:38.721140+00:00",
+          "reason": "scenario_targeted:respiratory_failure",
+          "total_decisions": 11800,
+          "dataset_row_count": 2000,
+          "prioritize_recent": true,
+          "previous_weights": {
+            "w_survival": 0.342742,
+            "w_treatment": 0.229914,
+            "w_equipment": 0.177119,
+            "w_eta": 0.125969,
+            "w_load": 0.124257
+          },
+          "dataset": {
+            "dataset_path": "C:\\Users\\ARYAN\\OneDrive\\Desktop(1)\\team tech\\backend\\learning\\artifacts\\learning_dataset.jsonl",
+            "format": "jsonl",
+            "row_count": 3000,
+            "fallback_rate": 0.000333
+          },
+          "train_r2": 0.997597,
+          "learned_weights": {
+            "w_survival": 0.507042,
+            "w_treatment": 0.211268,
+            "w_equipment": 0.140845,
+            "w_eta": 0.070423,
+            "w_load": 0.070423
+          },
+          "proposed_weights": {
+            "w_survival": 0.375602,
+            "w_treatment": 0.226185,
+            "w_equipment": 0.169864,
+            "w_eta": 0.11486,
+            "w_load": 0.11349
+          },
+          "guardrails": {
+            "accepted": true,
+            "reason": "accepted",
+            "baseline_mean_score": 0.32276,
+            "candidate_mean_score": 0.32276,
+            "baseline_fallback_rate": 0.0,
+            "candidate_fallback_rate": 0.0,
+            "safety_violations": 0
+          },
+          "accepted": true,
+          "status": "accepted",
+          "version_id": "w20260410225639-0100",
+          "applied_weights": {
+            "w_survival": 0.375602,
+            "w_treatment": 0.226185,
+            "w_equipment": 0.169864,
+            "w_eta": 0.11486,
+            "w_load": 0.11349
+          }
+        },
+        "adjust_result": {
+          "timestamp": "2026-04-10T22:56:39.212458+00:00",
+          "reason": "scenario_adjustment:respiratory_failure",
+          "priority_type": "equipment",
+          "scenario_name": "respiratory_failure",
+          "total_decisions": 11800,
+          "previous_weights": {
+            "w_survival": 0.375602,
+            "w_treatment": 0.226185,
+            "w_equipment": 0.169864,
+            "w_eta": 0.11486,
+            "w_load": 0.11349
+          },
+          "proposed_weights": {
+            "w_survival": 0.365602,
+            "w_treatment": 0.241185,
+            "w_equipment": 0.184864,
+            "w_eta": 0.10486,
+            "w_load": 0.10349
+          },
+          "guardrails": {
+            "accepted": true,
+            "reason": "accepted",
+            "baseline_mean_score": 0.32276,
+            "candidate_mean_score": 0.32276,
+            "baseline_fallback_rate": 0.0,
+            "candidate_fallback_rate": 0.0,
+            "safety_violations": 0
+          },
+          "failure_breakdown": {
+            "score_collapse": 200
+          },
+          "scenario_weight_multipliers": {
+            "w_survival": 0.98,
+            "w_treatment": 1.05,
+            "w_equipment": 1.05,
+            "w_eta": 0.98,
+            "w_load": 0.98
+          },
+          "accepted": true,
+          "status": "accepted",
+          "version_id": "scenario:respiratory_failure",
+          "applied_weights": {
+            "w_survival": 0.375602,
+            "w_treatment": 0.226185,
+            "w_equipment": 0.169864,
+            "w_eta": 0.11486,
+            "w_load": 0.11349
+          },
+          "global_weights_stable": true
+        }
+      },
+      "mismatch_alerts": [],
+      "worst_cases": [
+        {
+          "case_id": "sim-respiratory_failure-42-0140",
+          "score": 0.233645,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Respiratory Care Unit",
+          "behavior_reason": "Respiratory equipment routing satisfied."
+        },
+        {
+          "case_id": "sim-respiratory_failure-42-0150",
+          "score": 0.233645,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Respiratory Care Unit",
+          "behavior_reason": "Respiratory equipment routing satisfied."
+        },
+        {
+          "case_id": "sim-respiratory_failure-42-0168",
+          "score": 0.233645,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Respiratory Care Unit",
+          "behavior_reason": "Respiratory equipment routing satisfied."
+        },
+        {
+          "case_id": "sim-respiratory_failure-42-0037",
+          "score": 0.255754,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Respiratory equipment routing satisfied."
+        },
+        {
+          "case_id": "sim-respiratory_failure-42-0047",
+          "score": 0.255754,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Respiratory equipment routing satisfied."
+        }
+      ]
+    },
+    "stroke_specialty": {
+      "scenario": "stroke_specialty",
+      "priority_type": "specialty",
+      "expected_behavior": "Prefer facilities with stroke and neuro treatment capability.",
+      "total_cases": 200,
+      "metrics": {
+        "scenario_mean_score": 0.917697,
+        "scenario_mean_raw_score": 0.932294,
+        "scenario_failure_rate": 0.065,
+        "fallback_rate": 0.0,
+        "correct_behavior_rate": 0.935,
+        "behavior_mismatch_rate": 0.065,
+        "mismatch_penalty_impact": 0.014597
+      },
+      "dominant_failure_mode": "none",
+      "failure_breakdown": {
+        "none": 187,
+        "behavior_mismatch": 13
+      },
+      "failure_mode_reweighting": {
+        "scenario_name": "stroke_specialty",
+        "failure_breakdown": {
+          "behavior_mismatch": 13
+        },
+        "component_shifts": {},
+        "dominant_failure": "behavior_mismatch"
+      },
+      "scenario_adjustment_profile": null,
+      "targeted_learning_update": null,
+      "mismatch_alerts": [
+        {
+          "case_id": "sim-stroke_specialty-42-0010",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Trauma Hub"
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0014",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Trauma Hub"
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0015",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0037",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Respiratory Care Unit"
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0042",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Cardiac Hub"
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0055",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Trauma Hub"
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0076",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Trauma Hub"
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0080",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0096",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Cardiac Hub"
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0108",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0117",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Respiratory Care Unit"
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0132",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Cardiac Hub"
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0181",
+          "alert": "Stroke case missed specialty-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "General Secondary"
+        }
+      ],
+      "worst_cases": [
+        {
+          "case_id": "sim-stroke_specialty-42-0037",
+          "score": 0.507391,
+          "decision_type": "direct",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Respiratory Care Unit",
+          "behavior_reason": "Stroke case missed specialty-capable destination."
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0117",
+          "score": 0.511573,
+          "decision_type": "direct",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Respiratory Care Unit",
+          "behavior_reason": "Stroke case missed specialty-capable destination."
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0042",
+          "score": 0.511797,
+          "decision_type": "direct",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Stroke case missed specialty-capable destination."
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0096",
+          "score": 0.517518,
+          "decision_type": "direct",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Stroke case missed specialty-capable destination."
+        },
+        {
+          "case_id": "sim-stroke_specialty-42-0132",
+          "score": 0.517518,
+          "decision_type": "direct",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Stroke case missed specialty-capable destination."
+        }
+      ]
+    },
+    "trauma_stabilization": {
+      "scenario": "trauma_stabilization",
+      "priority_type": "stabilization",
+      "expected_behavior": "Stabilize first when unstable, then route to trauma-capable center.",
+      "total_cases": 200,
+      "metrics": {
+        "scenario_mean_score": 0.228539,
+        "scenario_mean_raw_score": 0.326484,
+        "scenario_failure_rate": 1.0,
+        "fallback_rate": 0.0,
+        "correct_behavior_rate": 0.0,
+        "behavior_mismatch_rate": 1.0,
+        "mismatch_penalty_impact": 0.097945
+      },
+      "dominant_failure_mode": "behavior_mismatch",
+      "failure_breakdown": {
+        "behavior_mismatch": 200
+      },
+      "failure_mode_reweighting": {
+        "scenario_name": "trauma_stabilization",
+        "failure_breakdown": {
+          "behavior_mismatch": 200
+        },
+        "component_shifts": {},
+        "dominant_failure": "behavior_mismatch"
+      },
+      "scenario_adjustment_profile": {
+        "scenario_name": "trauma_stabilization",
+        "priority_type": "stabilization",
+        "updated_at": "2026-04-10T22:57:57.138736+00:00",
+        "total_decisions": 12200,
+        "failure_breakdown": {
+          "behavior_mismatch": 200
+        },
+        "guardrails": {
+          "baseline_mean_score": 0.326484,
+          "candidate_mean_score": 0.326484,
+          "baseline_fallback_rate": 0.0,
+          "candidate_fallback_rate": 0.0,
+          "safety_violations": 0
+        },
+        "weight_multipliers": {
+          "w_survival": 1.05,
+          "w_treatment": 1.05,
+          "w_equipment": 0.98,
+          "w_eta": 0.98,
+          "w_load": 0.98
+        }
+      },
+      "targeted_learning_update": {
+        "triggered": true,
+        "scenario_name": "trauma_stabilization",
+        "priority_type": "stabilization",
+        "failure_rate": 1.0,
+        "threshold": 0.1,
+        "scenario_segment": {
+          "scenario_name": "trauma_stabilization",
+          "scenario_rows": 1176,
+          "global_rows": 5000
+        },
+        "train_result": {
+          "timestamp": "2026-04-10T22:57:56.650189+00:00",
+          "reason": "scenario_targeted:trauma_stabilization",
+          "total_decisions": 12200,
+          "dataset_row_count": 2000,
+          "prioritize_recent": true,
+          "previous_weights": {
+            "w_survival": 0.422921,
+            "w_treatment": 0.220815,
+            "w_equipment": 0.159417,
+            "w_eta": 0.098862,
+            "w_load": 0.097985
+          },
+          "dataset": {
+            "dataset_path": "C:\\Users\\ARYAN\\OneDrive\\Desktop(1)\\team tech\\backend\\learning\\artifacts\\learning_dataset.jsonl",
+            "format": "jsonl",
+            "row_count": 3000,
+            "fallback_rate": 0.000333
+          },
+          "train_r2": 0.998164,
+          "learned_weights": {
+            "w_survival": 0.507042,
+            "w_treatment": 0.211268,
+            "w_equipment": 0.140845,
+            "w_eta": 0.070423,
+            "w_load": 0.070423
+          },
+          "proposed_weights": {
+            "w_survival": 0.439745,
+            "w_treatment": 0.218906,
+            "w_equipment": 0.155703,
+            "w_eta": 0.093174,
+            "w_load": 0.092473
+          },
+          "guardrails": {
+            "accepted": true,
+            "reason": "accepted",
+            "baseline_mean_score": 0.326484,
+            "candidate_mean_score": 0.326484,
+            "baseline_fallback_rate": 0.0,
+            "candidate_fallback_rate": 0.0,
+            "safety_violations": 0
+          },
+          "accepted": true,
+          "status": "accepted",
+          "version_id": "w20260410225757-0103",
+          "applied_weights": {
+            "w_survival": 0.439745,
+            "w_treatment": 0.218906,
+            "w_equipment": 0.155703,
+            "w_eta": 0.093174,
+            "w_load": 0.092473
+          }
+        },
+        "adjust_result": {
+          "timestamp": "2026-04-10T22:57:57.137462+00:00",
+          "reason": "scenario_adjustment:trauma_stabilization",
+          "priority_type": "stabilization",
+          "scenario_name": "trauma_stabilization",
+          "total_decisions": 12200,
+          "previous_weights": {
+            "w_survival": 0.439745,
+            "w_treatment": 0.218906,
+            "w_equipment": 0.155703,
+            "w_eta": 0.093174,
+            "w_load": 0.092473
+          },
+          "proposed_weights": {
+            "w_survival": 0.450967,
+            "w_treatment": 0.235526,
+            "w_equipment": 0.146712,
+            "w_eta": 0.08375,
+            "w_load": 0.083044
+          },
+          "guardrails": {
+            "accepted": true,
+            "reason": "accepted",
+            "baseline_mean_score": 0.326484,
+            "candidate_mean_score": 0.326484,
+            "baseline_fallback_rate": 0.0,
+            "candidate_fallback_rate": 0.0,
+            "safety_violations": 0
+          },
+          "failure_breakdown": {
+            "behavior_mismatch": 200
+          },
+          "scenario_weight_multipliers": {
+            "w_survival": 1.05,
+            "w_treatment": 1.05,
+            "w_equipment": 0.98,
+            "w_eta": 0.98,
+            "w_load": 0.98
+          },
+          "accepted": true,
+          "status": "accepted",
+          "version_id": "scenario:trauma_stabilization",
+          "applied_weights": {
+            "w_survival": 0.439745,
+            "w_treatment": 0.218906,
+            "w_equipment": 0.155703,
+            "w_eta": 0.093174,
+            "w_load": 0.092473
+          },
+          "global_weights_stable": true
+        }
+      },
+      "mismatch_alerts": [
+        {
+          "case_id": "sim-trauma_stabilization-42-0000",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0001",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0002",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0003",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0004",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0005",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0006",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0007",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0008",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0009",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0010",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0011",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0012",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0013",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0014",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0015",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0016",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0017",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0018",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0019",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0020",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0021",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0022",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0023",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0024",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0025",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0026",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0027",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0028",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0029",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0030",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0031",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0032",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0033",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0034",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0035",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0036",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0037",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0038",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0039",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0040",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0041",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0042",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0043",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0044",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0045",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0046",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0047",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0048",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0049",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0050",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0051",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0052",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0053",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0054",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0055",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0056",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0057",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0058",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0059",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0060",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0061",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0062",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0063",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0064",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0065",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0066",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0067",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0068",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0069",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0070",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0071",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0072",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0073",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0074",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0075",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0076",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0077",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0078",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0079",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0080",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0081",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0082",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0083",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0084",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0085",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0086",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0087",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0088",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0089",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0090",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0091",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Cardiac Hub"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0092",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0093",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0094",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0095",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0096",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0097",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0098",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0099",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0100",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0101",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0102",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0103",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0104",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0105",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0106",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0107",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0108",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0109",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0110",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0111",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0112",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0113",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0114",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0115",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0116",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0117",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0118",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0119",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0120",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0121",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0122",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0123",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0124",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Cardiac Hub"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0125",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0126",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0127",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0128",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0129",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0130",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0131",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0132",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0133",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0134",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0135",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0136",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0137",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0138",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0139",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0140",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0141",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0142",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0143",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0144",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0145",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0146",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0147",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0148",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0149",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0150",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0151",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0152",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0153",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0154",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0155",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0156",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Cardiac Hub"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0157",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0158",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0159",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0160",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0161",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0162",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0163",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0164",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0165",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0166",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0167",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0168",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0169",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0170",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0171",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0172",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0173",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0174",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0175",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0176",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0177",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0178",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0179",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0180",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0181",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0182",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0183",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0184",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "General Secondary"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0185",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0186",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0187",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0188",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0189",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0190",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Cardiac Hub"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0191",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0192",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0193",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0194",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0195",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0196",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0197",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0198",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0199",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        }
+      ],
+      "worst_cases": [
+        {
+          "case_id": "sim-trauma_stabilization-42-0091",
+          "score": 0.179028,
+          "decision_type": "stabilize_first",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Trauma case missed trauma-capable destination."
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0124",
+          "score": 0.179028,
+          "decision_type": "stabilize_first",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Trauma case missed trauma-capable destination."
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0156",
+          "score": 0.179028,
+          "decision_type": "stabilize_first",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Trauma case missed trauma-capable destination."
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0190",
+          "score": 0.179028,
+          "decision_type": "stabilize_first",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Trauma case missed trauma-capable destination."
+        },
+        {
+          "case_id": "sim-trauma_stabilization-42-0001",
+          "score": 0.221519,
+          "decision_type": "stabilize_first",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "General Secondary",
+          "behavior_reason": "Trauma case missed trauma-capable destination."
+        }
+      ]
+    }
+  },
+  "seed_reports": [
+    {
+      "seed": 42,
+      "failure_threshold": 0.1,
+      "cases_per_scenario": 200,
+      "overall": {
+        "mean_scenario_score": 0.532516,
+        "mean_failure_rate": 0.628,
+        "mean_behavior_mismatch_rate": 0.213,
+        "min_observed_score": 0.179028,
+        "scenario_count": 5,
+        "total_safety_violations": 0,
+        "total_crashes": 0
+      },
+      "scenarios": {
+        "cardiac_emergency": {
+          "scenario": "cardiac_emergency",
+          "priority_type": "time",
+          "expected_behavior": "Prioritize low ETA and immediate stabilization readiness.",
+          "total_cases": 200,
+          "metrics": {
+            "scenario_mean_score": 0.315467,
+            "scenario_mean_raw_score": 0.315467,
+            "scenario_failure_rate": 1.0,
+            "fallback_rate": 0.005,
+            "correct_behavior_rate": 1.0,
+            "behavior_mismatch_rate": 0.0,
+            "mismatch_penalty_impact": 0.0,
+            "scenario_safety_violations": 0,
+            "scenario_crashes": 0
+          },
+          "dominant_failure_mode": "score_collapse",
+          "dominant_root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "failure_breakdown": {
+            "score_collapse": 199,
+            "fallback_dependency": 1
+          },
+          "failure_mode_reweighting": {
+            "scenario_name": "cardiac_emergency",
+            "failure_breakdown": {
+              "score_collapse": 199,
+              "fallback_dependency": 1
+            },
+            "component_shifts": {},
+            "dominant_failure": "score_collapse"
+          },
+          "mismatch_alerts": [],
+          "worst_cases": [
+            {
+              "case_id": "sim-cardiac_emergency-42-0015",
+              "score": 0.255754,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Cardiac time-critical behavior satisfied."
+            },
+            {
+              "case_id": "sim-cardiac_emergency-42-0021",
+              "score": 0.255754,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Cardiac time-critical behavior satisfied."
+            },
+            {
+              "case_id": "sim-cardiac_emergency-42-0049",
+              "score": 0.255754,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Cardiac time-critical behavior satisfied."
+            },
+            {
+              "case_id": "sim-cardiac_emergency-42-0050",
+              "score": 0.255754,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Cardiac time-critical behavior satisfied."
+            },
+            {
+              "case_id": "sim-cardiac_emergency-42-0149",
+              "score": 0.255754,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Cardiac time-critical behavior satisfied."
+            }
+          ],
+          "targeted_learning_update": {
+            "triggered": true,
+            "scenario_name": "cardiac_emergency",
+            "priority_type": "time",
+            "failure_rate": 1.0,
+            "threshold": 0.1,
+            "scenario_segment": {
+              "scenario_name": "cardiac_emergency",
+              "scenario_rows": 1024,
+              "global_rows": 5000
+            },
+            "train_result": {
+              "timestamp": "2026-04-10T22:55:04.491330+00:00",
+              "reason": "scenario_targeted:cardiac_emergency",
+              "total_decisions": 11400,
+              "dataset_row_count": 2000,
+              "prioritize_recent": true,
+              "previous_weights": {
+                "w_survival": 0.301667,
+                "w_treatment": 0.234575,
+                "w_equipment": 0.186187,
+                "w_eta": 0.139855,
+                "w_load": 0.137716
+              },
+              "dataset": {
+                "dataset_path": "C:\\Users\\ARYAN\\OneDrive\\Desktop(1)\\team tech\\backend\\learning\\artifacts\\learning_dataset.jsonl",
+                "format": "jsonl",
+                "row_count": 3000,
+                "fallback_rate": 0.000333
+              },
+              "train_r2": 0.997177,
+              "learned_weights": {
+                "w_survival": 0.210161,
+                "w_treatment": 0.15762,
+                "w_equipment": 0.30508,
+                "w_eta": 0.123752,
+                "w_load": 0.203387
+              },
+              "proposed_weights": {
+                "w_survival": 0.283366,
+                "w_treatment": 0.219184,
+                "w_equipment": 0.209966,
+                "w_eta": 0.136634,
+                "w_load": 0.15085
+              },
+              "guardrails": {
+                "accepted": false,
+                "reason": "mean_score_decrease",
+                "baseline_mean_score": 0.315467,
+                "candidate_mean_score": 0.315041,
+                "baseline_fallback_rate": 0.005,
+                "candidate_fallback_rate": 0.005,
+                "safety_violations": 0
+              },
+              "accepted": false,
+              "status": "rejected",
+              "rejection_reason": "mean_score_decrease"
+            },
+            "adjust_result": {
+              "timestamp": "2026-04-10T22:55:05.029952+00:00",
+              "reason": "scenario_adjustment:cardiac_emergency",
+              "priority_type": "time",
+              "scenario_name": "cardiac_emergency",
+              "total_decisions": 11400,
+              "previous_weights": {
+                "w_survival": 0.301667,
+                "w_treatment": 0.234575,
+                "w_equipment": 0.186187,
+                "w_eta": 0.139855,
+                "w_load": 0.137716
+              },
+              "proposed_weights": {
+                "w_survival": 0.316667,
+                "w_treatment": 0.224575,
+                "w_equipment": 0.176187,
+                "w_eta": 0.154855,
+                "w_load": 0.127716
+              },
+              "guardrails": {
+                "accepted": false,
+                "reason": "mean_score_decrease",
+                "baseline_mean_score": 0.315467,
+                "candidate_mean_score": 0.314965,
+                "baseline_fallback_rate": 0.005,
+                "candidate_fallback_rate": 0.005,
+                "safety_violations": 0
+              },
+              "failure_breakdown": {
+                "score_collapse": 199,
+                "fallback_dependency": 1
+              },
+              "scenario_weight_multipliers": {
+                "w_survival": 1.05,
+                "w_treatment": 0.98,
+                "w_equipment": 0.98,
+                "w_eta": 1.05,
+                "w_load": 1.0002
+              },
+              "accepted": true,
+              "status": "accepted",
+              "version_id": "scenario:cardiac_emergency",
+              "applied_weights": {
+                "w_survival": 0.301667,
+                "w_treatment": 0.234575,
+                "w_equipment": 0.186187,
+                "w_eta": 0.139855,
+                "w_load": 0.137716
+              },
+              "global_weights_stable": true
+            }
+          },
+          "scenario_adjustment_profile": {
+            "scenario_name": "cardiac_emergency",
+            "priority_type": "time",
+            "updated_at": "2026-04-10T22:55:05.031067+00:00",
+            "total_decisions": 11400,
+            "failure_breakdown": {
+              "score_collapse": 199,
+              "fallback_dependency": 1
+            },
+            "guardrails": {
+              "baseline_mean_score": 0.315467,
+              "candidate_mean_score": 0.314965,
+              "baseline_fallback_rate": 0.005,
+              "candidate_fallback_rate": 0.005,
+              "safety_violations": 0
+            },
+            "weight_multipliers": {
+              "w_survival": 1.05,
+              "w_treatment": 0.98,
+              "w_equipment": 0.98,
+              "w_eta": 1.05,
+              "w_load": 1.0002
+            }
+          },
+          "profile_failure_components": [
+            "score_collapse"
+          ],
+          "safety_violations": 0,
+          "crashes": 0
+        },
+        "mixed_chaos": {
+          "scenario": "mixed_chaos",
+          "priority_type": "stabilization",
+          "expected_behavior": "Remain safe and deterministic under contradictory constraints.",
+          "total_cases": 200,
+          "metrics": {
+            "scenario_mean_score": 0.878115,
+            "scenario_mean_raw_score": 0.878115,
+            "scenario_failure_rate": 0.075,
+            "fallback_rate": 0.0,
+            "correct_behavior_rate": 1.0,
+            "behavior_mismatch_rate": 0.0,
+            "mismatch_penalty_impact": 0.0,
+            "scenario_safety_violations": 0,
+            "scenario_crashes": 0
+          },
+          "dominant_failure_mode": "score_collapse",
+          "dominant_root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "failure_breakdown": {
+            "none": 185,
+            "score_collapse": 13,
+            "equipment_gap": 2
+          },
+          "failure_mode_reweighting": {
+            "scenario_name": "mixed_chaos",
+            "failure_breakdown": {
+              "score_collapse": 13,
+              "equipment_gap": 2
+            },
+            "component_shifts": {},
+            "dominant_failure": "score_collapse"
+          },
+          "mismatch_alerts": [],
+          "worst_cases": [
+            {
+              "case_id": "sim-mixed_chaos-42-0078",
+              "score": 0.316456,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "General Secondary",
+              "behavior_reason": "Mixed-chaos safeguards satisfied."
+            },
+            {
+              "case_id": "sim-mixed_chaos-42-0165",
+              "score": 0.316456,
+              "decision_type": "stabilize_first",
+              "failure_type": "equipment_gap",
+              "root_cause": "Required equipment mapping underweighted or unavailable.",
+              "selected_hospital": "General Secondary",
+              "behavior_reason": "Mixed-chaos safeguards satisfied."
+            },
+            {
+              "case_id": "sim-mixed_chaos-42-0001",
+              "score": 0.328947,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Stroke Center",
+              "behavior_reason": "Mixed-chaos safeguards satisfied."
+            },
+            {
+              "case_id": "sim-mixed_chaos-42-0017",
+              "score": 0.328947,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Stroke Center",
+              "behavior_reason": "Mixed-chaos safeguards satisfied."
+            },
+            {
+              "case_id": "sim-mixed_chaos-42-0047",
+              "score": 0.328947,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Stroke Center",
+              "behavior_reason": "Mixed-chaos safeguards satisfied."
+            }
+          ],
+          "targeted_learning_update": null,
+          "scenario_adjustment_profile": null,
+          "profile_failure_components": [],
+          "safety_violations": 0,
+          "crashes": 0
+        },
+        "respiratory_failure": {
+          "scenario": "respiratory_failure",
+          "priority_type": "equipment",
+          "expected_behavior": "Match equipment-intensive needs with ventilator-ready sites.",
+          "total_cases": 200,
+          "metrics": {
+            "scenario_mean_score": 0.32276,
+            "scenario_mean_raw_score": 0.32276,
+            "scenario_failure_rate": 1.0,
+            "fallback_rate": 0.0,
+            "correct_behavior_rate": 1.0,
+            "behavior_mismatch_rate": 0.0,
+            "mismatch_penalty_impact": 0.0,
+            "scenario_safety_violations": 0,
+            "scenario_crashes": 0
+          },
+          "dominant_failure_mode": "score_collapse",
+          "dominant_root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "failure_breakdown": {
+            "score_collapse": 200
+          },
+          "failure_mode_reweighting": {
+            "scenario_name": "respiratory_failure",
+            "failure_breakdown": {
+              "score_collapse": 200
+            },
+            "component_shifts": {},
+            "dominant_failure": "score_collapse"
+          },
+          "mismatch_alerts": [],
+          "worst_cases": [
+            {
+              "case_id": "sim-respiratory_failure-42-0140",
+              "score": 0.233645,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Respiratory Care Unit",
+              "behavior_reason": "Respiratory equipment routing satisfied."
+            },
+            {
+              "case_id": "sim-respiratory_failure-42-0150",
+              "score": 0.233645,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Respiratory Care Unit",
+              "behavior_reason": "Respiratory equipment routing satisfied."
+            },
+            {
+              "case_id": "sim-respiratory_failure-42-0168",
+              "score": 0.233645,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Respiratory Care Unit",
+              "behavior_reason": "Respiratory equipment routing satisfied."
+            },
+            {
+              "case_id": "sim-respiratory_failure-42-0037",
+              "score": 0.255754,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Respiratory equipment routing satisfied."
+            },
+            {
+              "case_id": "sim-respiratory_failure-42-0047",
+              "score": 0.255754,
+              "decision_type": "stabilize_first",
+              "failure_type": "score_collapse",
+              "root_cause": "Scoring confidence deteriorated under scenario stress.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Respiratory equipment routing satisfied."
+            }
+          ],
+          "targeted_learning_update": {
+            "triggered": true,
+            "scenario_name": "respiratory_failure",
+            "priority_type": "equipment",
+            "failure_rate": 1.0,
+            "threshold": 0.1,
+            "scenario_segment": {
+              "scenario_name": "respiratory_failure",
+              "scenario_rows": 1200,
+              "global_rows": 5000
+            },
+            "train_result": {
+              "timestamp": "2026-04-10T22:56:38.721140+00:00",
+              "reason": "scenario_targeted:respiratory_failure",
+              "total_decisions": 11800,
+              "dataset_row_count": 2000,
+              "prioritize_recent": true,
+              "previous_weights": {
+                "w_survival": 0.342742,
+                "w_treatment": 0.229914,
+                "w_equipment": 0.177119,
+                "w_eta": 0.125969,
+                "w_load": 0.124257
+              },
+              "dataset": {
+                "dataset_path": "C:\\Users\\ARYAN\\OneDrive\\Desktop(1)\\team tech\\backend\\learning\\artifacts\\learning_dataset.jsonl",
+                "format": "jsonl",
+                "row_count": 3000,
+                "fallback_rate": 0.000333
+              },
+              "train_r2": 0.997597,
+              "learned_weights": {
+                "w_survival": 0.507042,
+                "w_treatment": 0.211268,
+                "w_equipment": 0.140845,
+                "w_eta": 0.070423,
+                "w_load": 0.070423
+              },
+              "proposed_weights": {
+                "w_survival": 0.375602,
+                "w_treatment": 0.226185,
+                "w_equipment": 0.169864,
+                "w_eta": 0.11486,
+                "w_load": 0.11349
+              },
+              "guardrails": {
+                "accepted": true,
+                "reason": "accepted",
+                "baseline_mean_score": 0.32276,
+                "candidate_mean_score": 0.32276,
+                "baseline_fallback_rate": 0.0,
+                "candidate_fallback_rate": 0.0,
+                "safety_violations": 0
+              },
+              "accepted": true,
+              "status": "accepted",
+              "version_id": "w20260410225639-0100",
+              "applied_weights": {
+                "w_survival": 0.375602,
+                "w_treatment": 0.226185,
+                "w_equipment": 0.169864,
+                "w_eta": 0.11486,
+                "w_load": 0.11349
+              }
+            },
+            "adjust_result": {
+              "timestamp": "2026-04-10T22:56:39.212458+00:00",
+              "reason": "scenario_adjustment:respiratory_failure",
+              "priority_type": "equipment",
+              "scenario_name": "respiratory_failure",
+              "total_decisions": 11800,
+              "previous_weights": {
+                "w_survival": 0.375602,
+                "w_treatment": 0.226185,
+                "w_equipment": 0.169864,
+                "w_eta": 0.11486,
+                "w_load": 0.11349
+              },
+              "proposed_weights": {
+                "w_survival": 0.365602,
+                "w_treatment": 0.241185,
+                "w_equipment": 0.184864,
+                "w_eta": 0.10486,
+                "w_load": 0.10349
+              },
+              "guardrails": {
+                "accepted": true,
+                "reason": "accepted",
+                "baseline_mean_score": 0.32276,
+                "candidate_mean_score": 0.32276,
+                "baseline_fallback_rate": 0.0,
+                "candidate_fallback_rate": 0.0,
+                "safety_violations": 0
+              },
+              "failure_breakdown": {
+                "score_collapse": 200
+              },
+              "scenario_weight_multipliers": {
+                "w_survival": 0.98,
+                "w_treatment": 1.05,
+                "w_equipment": 1.05,
+                "w_eta": 0.98,
+                "w_load": 0.98
+              },
+              "accepted": true,
+              "status": "accepted",
+              "version_id": "scenario:respiratory_failure",
+              "applied_weights": {
+                "w_survival": 0.375602,
+                "w_treatment": 0.226185,
+                "w_equipment": 0.169864,
+                "w_eta": 0.11486,
+                "w_load": 0.11349
+              },
+              "global_weights_stable": true
+            }
+          },
+          "scenario_adjustment_profile": {
+            "scenario_name": "respiratory_failure",
+            "priority_type": "equipment",
+            "updated_at": "2026-04-10T22:56:39.213169+00:00",
+            "total_decisions": 11800,
+            "failure_breakdown": {
+              "score_collapse": 200
+            },
+            "guardrails": {
+              "baseline_mean_score": 0.32276,
+              "candidate_mean_score": 0.32276,
+              "baseline_fallback_rate": 0.0,
+              "candidate_fallback_rate": 0.0,
+              "safety_violations": 0
+            },
+            "weight_multipliers": {
+              "w_survival": 0.98,
+              "w_treatment": 1.05,
+              "w_equipment": 1.05,
+              "w_eta": 0.98,
+              "w_load": 0.98
+            }
+          },
+          "profile_failure_components": [
+            "score_collapse"
+          ],
+          "safety_violations": 0,
+          "crashes": 0
+        },
+        "stroke_specialty": {
+          "scenario": "stroke_specialty",
+          "priority_type": "specialty",
+          "expected_behavior": "Prefer facilities with stroke and neuro treatment capability.",
+          "total_cases": 200,
+          "metrics": {
+            "scenario_mean_score": 0.917697,
+            "scenario_mean_raw_score": 0.932294,
+            "scenario_failure_rate": 0.065,
+            "fallback_rate": 0.0,
+            "correct_behavior_rate": 0.935,
+            "behavior_mismatch_rate": 0.065,
+            "mismatch_penalty_impact": 0.014597,
+            "scenario_safety_violations": 0,
+            "scenario_crashes": 0
+          },
+          "dominant_failure_mode": "behavior_mismatch",
+          "dominant_root_cause": "Decision policy drift against expected scenario behavior.",
+          "failure_breakdown": {
+            "none": 187,
+            "behavior_mismatch": 13
+          },
+          "failure_mode_reweighting": {
+            "scenario_name": "stroke_specialty",
+            "failure_breakdown": {
+              "behavior_mismatch": 13
+            },
+            "component_shifts": {},
+            "dominant_failure": "behavior_mismatch"
+          },
+          "mismatch_alerts": [
+            {
+              "case_id": "sim-stroke_specialty-42-0010",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "Trauma Hub"
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0014",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "Trauma Hub"
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0015",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0037",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "Respiratory Care Unit"
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0042",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "Cardiac Hub"
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0055",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "Trauma Hub"
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0076",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "Trauma Hub"
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0080",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0096",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "Cardiac Hub"
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0108",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0117",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "Respiratory Care Unit"
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0132",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "Cardiac Hub"
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0181",
+              "alert": "Stroke case missed specialty-capable destination.",
+              "decision_type": "direct",
+              "selected_hospital": "General Secondary"
+            }
+          ],
+          "worst_cases": [
+            {
+              "case_id": "sim-stroke_specialty-42-0037",
+              "score": 0.507391,
+              "decision_type": "direct",
+              "failure_type": "behavior_mismatch",
+              "root_cause": "Decision policy drift against expected scenario behavior.",
+              "selected_hospital": "Respiratory Care Unit",
+              "behavior_reason": "Stroke case missed specialty-capable destination."
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0117",
+              "score": 0.511573,
+              "decision_type": "direct",
+              "failure_type": "behavior_mismatch",
+              "root_cause": "Decision policy drift against expected scenario behavior.",
+              "selected_hospital": "Respiratory Care Unit",
+              "behavior_reason": "Stroke case missed specialty-capable destination."
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0042",
+              "score": 0.511797,
+              "decision_type": "direct",
+              "failure_type": "behavior_mismatch",
+              "root_cause": "Decision policy drift against expected scenario behavior.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Stroke case missed specialty-capable destination."
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0096",
+              "score": 0.517518,
+              "decision_type": "direct",
+              "failure_type": "behavior_mismatch",
+              "root_cause": "Decision policy drift against expected scenario behavior.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Stroke case missed specialty-capable destination."
+            },
+            {
+              "case_id": "sim-stroke_specialty-42-0132",
+              "score": 0.517518,
+              "decision_type": "direct",
+              "failure_type": "behavior_mismatch",
+              "root_cause": "Decision policy drift against expected scenario behavior.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Stroke case missed specialty-capable destination."
+            }
+          ],
+          "targeted_learning_update": null,
+          "scenario_adjustment_profile": null,
+          "profile_failure_components": [],
+          "safety_violations": 0,
+          "crashes": 0
+        },
+        "trauma_stabilization": {
+          "scenario": "trauma_stabilization",
+          "priority_type": "stabilization",
+          "expected_behavior": "Stabilize first when unstable, then route to trauma-capable center.",
+          "total_cases": 200,
+          "metrics": {
+            "scenario_mean_score": 0.228539,
+            "scenario_mean_raw_score": 0.326484,
+            "scenario_failure_rate": 1.0,
+            "fallback_rate": 0.0,
+            "correct_behavior_rate": 0.0,
+            "behavior_mismatch_rate": 1.0,
+            "mismatch_penalty_impact": 0.097945,
+            "scenario_safety_violations": 0,
+            "scenario_crashes": 0
+          },
+          "dominant_failure_mode": "behavior_mismatch",
+          "dominant_root_cause": "Decision policy drift against expected scenario behavior.",
+          "failure_breakdown": {
+            "behavior_mismatch": 200
+          },
+          "failure_mode_reweighting": {
+            "scenario_name": "trauma_stabilization",
+            "failure_breakdown": {
+              "behavior_mismatch": 200
+            },
+            "component_shifts": {},
+            "dominant_failure": "behavior_mismatch"
+          },
+          "mismatch_alerts": [
+            {
+              "case_id": "sim-trauma_stabilization-42-0000",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0001",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0002",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0003",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0004",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0005",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0006",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0007",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0008",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0009",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0010",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0011",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0012",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0013",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0014",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0015",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0016",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0017",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0018",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0019",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0020",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0021",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0022",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0023",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0024",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0025",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0026",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0027",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0028",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0029",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0030",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0031",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0032",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0033",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0034",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0035",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0036",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0037",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0038",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0039",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0040",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0041",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0042",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0043",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0044",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0045",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0046",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0047",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0048",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0049",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0050",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0051",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0052",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0053",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0054",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0055",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0056",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0057",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0058",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0059",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0060",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0061",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0062",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0063",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0064",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0065",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0066",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0067",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0068",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0069",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0070",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0071",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0072",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0073",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0074",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0075",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0076",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0077",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0078",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0079",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0080",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0081",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0082",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0083",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0084",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0085",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0086",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0087",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0088",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0089",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0090",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0091",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Cardiac Hub"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0092",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0093",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0094",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0095",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0096",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0097",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0098",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0099",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0100",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0101",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0102",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0103",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0104",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0105",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0106",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0107",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0108",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0109",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0110",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0111",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0112",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0113",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0114",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0115",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0116",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0117",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0118",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0119",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0120",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0121",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0122",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0123",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0124",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Cardiac Hub"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0125",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0126",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0127",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0128",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0129",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0130",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0131",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0132",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0133",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0134",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0135",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0136",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0137",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0138",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0139",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0140",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0141",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0142",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0143",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0144",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0145",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0146",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0147",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0148",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0149",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0150",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0151",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0152",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0153",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0154",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0155",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0156",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Cardiac Hub"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0157",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0158",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0159",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0160",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0161",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0162",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0163",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0164",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0165",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0166",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0167",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0168",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0169",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0170",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0171",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0172",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0173",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0174",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0175",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0176",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0177",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0178",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0179",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0180",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0181",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0182",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0183",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0184",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "General Secondary"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0185",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0186",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0187",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0188",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0189",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0190",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Cardiac Hub"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0191",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0192",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0193",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0194",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0195",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0196",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0197",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0198",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0199",
+              "alert": "Trauma case missed trauma-capable destination.",
+              "decision_type": "stabilize_first",
+              "selected_hospital": "Stroke Center"
+            }
+          ],
+          "worst_cases": [
+            {
+              "case_id": "sim-trauma_stabilization-42-0091",
+              "score": 0.179028,
+              "decision_type": "stabilize_first",
+              "failure_type": "behavior_mismatch",
+              "root_cause": "Decision policy drift against expected scenario behavior.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Trauma case missed trauma-capable destination."
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0124",
+              "score": 0.179028,
+              "decision_type": "stabilize_first",
+              "failure_type": "behavior_mismatch",
+              "root_cause": "Decision policy drift against expected scenario behavior.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Trauma case missed trauma-capable destination."
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0156",
+              "score": 0.179028,
+              "decision_type": "stabilize_first",
+              "failure_type": "behavior_mismatch",
+              "root_cause": "Decision policy drift against expected scenario behavior.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Trauma case missed trauma-capable destination."
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0190",
+              "score": 0.179028,
+              "decision_type": "stabilize_first",
+              "failure_type": "behavior_mismatch",
+              "root_cause": "Decision policy drift against expected scenario behavior.",
+              "selected_hospital": "Cardiac Hub",
+              "behavior_reason": "Trauma case missed trauma-capable destination."
+            },
+            {
+              "case_id": "sim-trauma_stabilization-42-0001",
+              "score": 0.221519,
+              "decision_type": "stabilize_first",
+              "failure_type": "behavior_mismatch",
+              "root_cause": "Decision policy drift against expected scenario behavior.",
+              "selected_hospital": "General Secondary",
+              "behavior_reason": "Trauma case missed trauma-capable destination."
+            }
+          ],
+          "targeted_learning_update": {
+            "triggered": true,
+            "scenario_name": "trauma_stabilization",
+            "priority_type": "stabilization",
+            "failure_rate": 1.0,
+            "threshold": 0.1,
+            "scenario_segment": {
+              "scenario_name": "trauma_stabilization",
+              "scenario_rows": 1176,
+              "global_rows": 5000
+            },
+            "train_result": {
+              "timestamp": "2026-04-10T22:57:56.650189+00:00",
+              "reason": "scenario_targeted:trauma_stabilization",
+              "total_decisions": 12200,
+              "dataset_row_count": 2000,
+              "prioritize_recent": true,
+              "previous_weights": {
+                "w_survival": 0.422921,
+                "w_treatment": 0.220815,
+                "w_equipment": 0.159417,
+                "w_eta": 0.098862,
+                "w_load": 0.097985
+              },
+              "dataset": {
+                "dataset_path": "C:\\Users\\ARYAN\\OneDrive\\Desktop(1)\\team tech\\backend\\learning\\artifacts\\learning_dataset.jsonl",
+                "format": "jsonl",
+                "row_count": 3000,
+                "fallback_rate": 0.000333
+              },
+              "train_r2": 0.998164,
+              "learned_weights": {
+                "w_survival": 0.507042,
+                "w_treatment": 0.211268,
+                "w_equipment": 0.140845,
+                "w_eta": 0.070423,
+                "w_load": 0.070423
+              },
+              "proposed_weights": {
+                "w_survival": 0.439745,
+                "w_treatment": 0.218906,
+                "w_equipment": 0.155703,
+                "w_eta": 0.093174,
+                "w_load": 0.092473
+              },
+              "guardrails": {
+                "accepted": true,
+                "reason": "accepted",
+                "baseline_mean_score": 0.326484,
+                "candidate_mean_score": 0.326484,
+                "baseline_fallback_rate": 0.0,
+                "candidate_fallback_rate": 0.0,
+                "safety_violations": 0
+              },
+              "accepted": true,
+              "status": "accepted",
+              "version_id": "w20260410225757-0103",
+              "applied_weights": {
+                "w_survival": 0.439745,
+                "w_treatment": 0.218906,
+                "w_equipment": 0.155703,
+                "w_eta": 0.093174,
+                "w_load": 0.092473
+              }
+            },
+            "adjust_result": {
+              "timestamp": "2026-04-10T22:57:57.137462+00:00",
+              "reason": "scenario_adjustment:trauma_stabilization",
+              "priority_type": "stabilization",
+              "scenario_name": "trauma_stabilization",
+              "total_decisions": 12200,
+              "previous_weights": {
+                "w_survival": 0.439745,
+                "w_treatment": 0.218906,
+                "w_equipment": 0.155703,
+                "w_eta": 0.093174,
+                "w_load": 0.092473
+              },
+              "proposed_weights": {
+                "w_survival": 0.450967,
+                "w_treatment": 0.235526,
+                "w_equipment": 0.146712,
+                "w_eta": 0.08375,
+                "w_load": 0.083044
+              },
+              "guardrails": {
+                "accepted": true,
+                "reason": "accepted",
+                "baseline_mean_score": 0.326484,
+                "candidate_mean_score": 0.326484,
+                "baseline_fallback_rate": 0.0,
+                "candidate_fallback_rate": 0.0,
+                "safety_violations": 0
+              },
+              "failure_breakdown": {
+                "behavior_mismatch": 200
+              },
+              "scenario_weight_multipliers": {
+                "w_survival": 1.05,
+                "w_treatment": 1.05,
+                "w_equipment": 0.98,
+                "w_eta": 0.98,
+                "w_load": 0.98
+              },
+              "accepted": true,
+              "status": "accepted",
+              "version_id": "scenario:trauma_stabilization",
+              "applied_weights": {
+                "w_survival": 0.439745,
+                "w_treatment": 0.218906,
+                "w_equipment": 0.155703,
+                "w_eta": 0.093174,
+                "w_load": 0.092473
+              },
+              "global_weights_stable": true
+            }
+          },
+          "scenario_adjustment_profile": {
+            "scenario_name": "trauma_stabilization",
+            "priority_type": "stabilization",
+            "updated_at": "2026-04-10T22:57:57.138736+00:00",
+            "total_decisions": 12200,
+            "failure_breakdown": {
+              "behavior_mismatch": 200
+            },
+            "guardrails": {
+              "baseline_mean_score": 0.326484,
+              "candidate_mean_score": 0.326484,
+              "baseline_fallback_rate": 0.0,
+              "candidate_fallback_rate": 0.0,
+              "safety_violations": 0
+            },
+            "weight_multipliers": {
+              "w_survival": 1.05,
+              "w_treatment": 1.05,
+              "w_equipment": 0.98,
+              "w_eta": 0.98,
+              "w_load": 0.98
+            }
+          },
+          "profile_failure_components": [
+            "behavior_mismatch"
+          ],
+          "safety_violations": 0,
+          "crashes": 0
+        }
+      }
+    }
+  ],
+  "comparison": {
+    "overall_delta": {
+      "mean_scenario_score": -0.143997,
+      "mean_failure_rate": 0.168,
+      "mean_behavior_mismatch_rate": 0.213,
+      "min_observed_score": 0.179028
+    }
+  }
+}

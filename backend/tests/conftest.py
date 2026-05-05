@@ -5,17 +5,22 @@ Uses a real test database with transaction rollback per test.
 import os
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 # Override env before importing app modules
 os.environ["TESTING"] = "true"  # Disables rate limiting
+# On local Windows shells, pytest's default capture can hit a closed tmpfile
+# teardown error after collection; run full suites with `-s` if that appears.
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/mediroute")
 os.environ.setdefault("SECRET_KEY", "test_secret_key_not_for_production")
 os.environ.setdefault("ALGORITHM", "HS256")
+os.environ.setdefault("MODEL_SHA256", "a46ae388b1fdc321edd355a3ae431d0eb5cd85f109227563d39c6edd8ee776b7")
 
 from app.main import app
 from app.db.database import Base, get_db
+from app.core.security import hash_password
+from app.db.models import User
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 engine = create_engine(TEST_DATABASE_URL)
@@ -24,15 +29,35 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(scope="function")
 def db_session():
-    """Create a fresh database session with rollback for each test."""
+    """Create an isolated database session per test.
+
+    Endpoint code calls commit() during normal execution. Using
+    join_transaction_mode=create_savepoint keeps those commits scoped to
+    per-test SAVEPOINTs so data does not leak between tests.
+    """
     connection = engine.connect()
     transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
+    session = TestingSessionLocal(bind=connection, join_transaction_mode="create_savepoint")
+
+    # Keep dispatch-capacity tests deterministic even if the shared local DB was
+    # previously exhausted by manual/dev runs.
+    session.execute(
+        text(
+            """
+            UPDATE availabilities
+            SET beds = GREATEST(COALESCE(beds, 0), 5),
+                icu = GREATEST(COALESCE(icu, 0), 2),
+                updated_at = NOW()
+            """
+        )
+    )
+    session.flush()
     
     yield session
     
     session.close()
-    transaction.rollback()
+    if transaction.is_active:
+        transaction.rollback()
     connection.close()
 
 
@@ -75,15 +100,16 @@ def auth_headers(client):
 
 
 @pytest.fixture
-def admin_headers(client):
+def admin_headers(client, db_session):
     """Register an admin user and return auth headers."""
     email = f"test_admin_{os.urandom(4).hex()}@test.com"
-    
-    client.post("/api/auth/register", json={
-        "email": email,
-        "password": "admin123",
-        "role": "admin",
-    })
+
+    db_session.add(User(
+        email=email,
+        password_hash=hash_password("admin123"),
+        role="admin",
+    ))
+    db_session.commit()
     
     res = client.post("/api/auth/login", json={
         "email": email,

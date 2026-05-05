@@ -1,10 +1,12 @@
 import os
 import json
 import re
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, field_validator
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, ValidationError, field_validator
 import google.generativeai as genai
 from app.core.config import settings
+from app.core.security import get_current_user
+from app.db.models import User
 from app.middleware.rate_limit import limiter, LIMIT_AI
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
@@ -23,6 +25,45 @@ MEDICAL_KEYWORDS = {
     "toxic", "fire", "scald", "anaphyla", "allerg", "hepatic", "jaundice",
     "dialysis", "urine", "neck", "back", "congestive", "facial", "speech"
 }
+
+CRITICAL_EQUIPMENT = {"ventilator", "defibrillator"}
+IMPORTANT_EQUIPMENT = {"icu", "trauma_care"}
+OPTIONAL_EQUIPMENT = {"xray", "lab"}
+
+EQUIPMENT_ALIASES = {
+    "icu_equipment": "icu",
+    "ct_scan": "xray",
+    "x-ray": "xray",
+    "x_ray": "xray",
+    "blood_bank": "lab",
+    "ecg_monitor": "lab",
+}
+
+
+def _normalize_equipment_name(value: str) -> str:
+    token = str(value or "").strip().lower()
+    return EQUIPMENT_ALIASES.get(token, token)
+
+
+def _categorize_equipment(items: list[str]) -> dict[str, list[str]]:
+    buckets = {
+        "critical_equipment": [],
+        "important_equipment": [],
+        "optional_equipment": [],
+    }
+    for raw in items:
+        normalized = _normalize_equipment_name(raw)
+        if not normalized:
+            continue
+        if normalized in CRITICAL_EQUIPMENT:
+            target = "critical_equipment"
+        elif normalized in OPTIONAL_EQUIPMENT:
+            target = "optional_equipment"
+        else:
+            target = "important_equipment"
+        if normalized not in buckets[target]:
+            buckets[target].append(normalized)
+    return buckets
 
 def _is_medical(text: str) -> bool:
     words = set(text.lower().split())
@@ -66,7 +107,12 @@ class CaseInput(BaseModel):
 
 @router.post("/analyze")
 @limiter.limit(LIMIT_AI)
-async def analyze_case(request: Request, case: CaseInput):
+async def analyze_case(
+    request: Request,
+    case: CaseInput,
+    current_user: User = Depends(get_current_user),
+):
+    _ = current_user
     if not _has_key():
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured in .env")
 
@@ -133,7 +179,12 @@ class VoiceInput(BaseModel):
 # Route name matches what the frontend posts to: /api/ai/equipment-recommend
 @router.post("/equipment-recommend")
 @limiter.limit(LIMIT_AI)
-async def recommend_equipment(request: Request, body: VoiceInput):
+async def recommend_equipment(
+    request: Request,
+    body: VoiceInput,
+    current_user: User = Depends(get_current_user),
+):
+    _ = current_user
     """
     Analyze voice transcript → return condition + recommended equipment.
     Called by Dispatch.jsx after the paramedic speaks.
@@ -159,6 +210,9 @@ Respond ONLY with valid JSON (no markdown, no preamble):
   "condition_label": "Short condition name (max 4 words)",
   "severity": <integer 1-4, where 4=Critical>,
   "severity_label": "Low|Moderate|High|Critical",
+    "critical_equipment": ["item1"],
+    "important_equipment": ["item2"],
+    "optional_equipment": ["item3"],
   "recommended_equipment": ["item1", "item2"],
   "notes": "One critical sentence for hospital",
   "matched_condition_id": "cardiac_arrest|chest_pain|stroke|trauma|respiratory|burns|poisoning|obstetric|pediatric|diabetic|other"
@@ -169,6 +223,32 @@ Respond ONLY with valid JSON (no markdown, no preamble):
         text_resp = response.text.strip()
         text_resp = text_resp.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         parsed = json.loads(text_resp)
+        recommended = parsed.get("recommended_equipment") or []
+        if not isinstance(recommended, list):
+            recommended = []
+
+        provided_tiers = {
+            "critical_equipment": parsed.get("critical_equipment"),
+            "important_equipment": parsed.get("important_equipment"),
+            "optional_equipment": parsed.get("optional_equipment"),
+        }
+        if any(not isinstance(v, list) for v in provided_tiers.values()):
+            provided_tiers = _categorize_equipment(recommended)
+        else:
+            provided_tiers = {
+                key: [_normalize_equipment_name(item) for item in values if item]
+                for key, values in provided_tiers.items()
+            }
+
+        normalized_recommended = sorted(
+            set(
+                provided_tiers["critical_equipment"]
+                + provided_tiers["important_equipment"]
+                + provided_tiers["optional_equipment"]
+            )
+        )
+        parsed.update(provided_tiers)
+        parsed["recommended_equipment"] = normalized_recommended
         return parsed
 
     except json.JSONDecodeError as e:
@@ -265,7 +345,8 @@ def _rule_based_fallback(text: str) -> dict:
         "condition_label": condition_label,
         "severity": severity,
         "severity_label": ["", "Low", "Moderate", "High", "Critical"][severity],
-        "recommended_equipment": equipment,
+        **_categorize_equipment(equipment),
+        "recommended_equipment": sorted({_normalize_equipment_name(item) for item in equipment if item}),
         "notes": f"Rule-based assessment (AI offline). Voice: {text[:80]}",
         "matched_condition_id": condition_id,
     }
@@ -279,7 +360,9 @@ Required output schema:
   "condition": "<primary medical condition string>",
   "severity": "<exactly one of: critical | moderate | low>",
   "priority": <integer 1-10, where 10 is most urgent>,
-  "required_equipment": ["<item1>", "<item2>"],
+    "critical_equipment": ["<item1>"],
+    "important_equipment": ["<item2>"],
+    "optional_equipment": ["<item3>"],
   "required_specialists": ["<specialist1>"],
   "reasoning": "<one sentence justification>"
 }
@@ -291,8 +374,22 @@ class TriageOutput(BaseModel):
     severity: str
     priority: int
     required_equipment: list[str] = []
+    critical_equipment: list[str] = []
+    important_equipment: list[str] = []
+    optional_equipment: list[str] = []
     required_specialists: list[str] = []
     reasoning: str = ""
+
+    @field_validator("required_equipment", "critical_equipment", "important_equipment", "optional_equipment", mode="before")
+    @classmethod
+    def normalize_equipment_list(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [_normalize_equipment_name(v)]
+        if isinstance(v, list):
+            return [_normalize_equipment_name(item) for item in v if item]
+        return []
 
     @field_validator("severity")
     @classmethod
@@ -317,9 +414,29 @@ class TriageOutput(BaseModel):
             raise ValueError("condition cannot be empty")
         return val
 
+    def fill_equipment_buckets(self):
+        if not (self.critical_equipment or self.important_equipment or self.optional_equipment):
+            buckets = _categorize_equipment(self.required_equipment)
+            self.critical_equipment = buckets["critical_equipment"]
+            self.important_equipment = buckets["important_equipment"]
+            self.optional_equipment = buckets["optional_equipment"]
+
+        merged = sorted(
+            set(self.critical_equipment + self.important_equipment + self.optional_equipment)
+        )
+        self.required_equipment = merged
+        return self
+
 
 def parse_and_validate_ai_response(raw: str) -> tuple[TriageOutput | None, str | None]:
-    cleaned = re.sub(r"```(?:json)?", "", raw).strip()
+    if not isinstance(raw, str):
+        return None, "AI response is not a string"
+
+    try:
+        cleaned = re.sub(r"```(?:json)?", "", raw).strip()
+    except (TypeError, ValueError) as exc:
+        return None, f"AI response normalization failed: {exc}"
+
     match = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if not match:
         return None, f"No JSON object found in AI response: {raw[:200]}"
@@ -331,6 +448,8 @@ def parse_and_validate_ai_response(raw: str) -> tuple[TriageOutput | None, str |
         return None, f"JSON parse error: {exc} — raw: {json_str[:200]}"
 
     try:
-        return TriageOutput(**data), None
-    except Exception as exc:
+        parsed = TriageOutput(**data)
+        parsed.fill_equipment_buckets()
+        return parsed, None
+    except ValidationError as exc:
         return None, f"Triage validation error: {exc}"

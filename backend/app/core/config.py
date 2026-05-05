@@ -11,6 +11,15 @@ class Settings(BaseSettings):
     claude_api_key: str | None = None
     gemini_api_key: str | None = None
     ors_api_key: str | None = None
+    firebase_service_account_json: str | None = None
     firebase_service_account_path: str | None = None
+    webhook_delivery_url: str | None = None
+    webhook_secret: str = "change-me-webhook-secret"
+    webhook_max_attempts: int = 4
+    webhook_base_backoff_seconds: float = 0.5
+    webhook_timeout_seconds: float = 5.0
+    sms_fallback_number: str | None = None
+    sms_timeout_seconds: float = 3.0
+    deterministic_eta: bool = True
 
 settings = Settings()

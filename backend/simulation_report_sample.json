@@ -1,0 +1,699 @@
+{
+  "seed": 123,
+  "failure_threshold": 0.12,
+  "cases_per_scenario": 10,
+  "overall": {
+    "mean_scenario_score": 0.676513,
+    "mean_failure_rate": 0.46,
+    "scenario_count": 5
+  },
+  "scenarios": {
+    "cardiac_emergency": {
+      "scenario": "cardiac_emergency",
+      "priority_type": "time",
+      "expected_behavior": "cardiac_emergency:time",
+      "total_cases": 10,
+      "metrics": {
+        "scenario_mean_score": 0.66666,
+        "scenario_failure_rate": 0.4,
+        "fallback_rate": 0.0,
+        "correct_behavior_rate": 1.0
+      },
+      "dominant_failure_mode": "score_collapse",
+      "dominant_root_cause": "Scoring confidence deteriorated under scenario stress.",
+      "failure_breakdown": {
+        "score_collapse": 4,
+        "none": 6
+      },
+      "mismatch_alerts": [],
+      "worst_cases": [
+        {
+          "case_id": "sim-cardiac_emergency-123-0000",
+          "score": 0.183486,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Cardiac time-critical behavior satisfied."
+        },
+        {
+          "case_id": "sim-cardiac_emergency-123-0003",
+          "score": 0.316456,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "General Secondary",
+          "behavior_reason": "Cardiac time-critical behavior satisfied."
+        },
+        {
+          "case_id": "sim-cardiac_emergency-123-0004",
+          "score": 0.316456,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "General Secondary",
+          "behavior_reason": "Cardiac time-critical behavior satisfied."
+        },
+        {
+          "case_id": "sim-cardiac_emergency-123-0005",
+          "score": 0.316456,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "General Secondary",
+          "behavior_reason": "Cardiac time-critical behavior satisfied."
+        },
+        {
+          "case_id": "sim-cardiac_emergency-123-0007",
+          "score": 0.880624,
+          "decision_type": "direct",
+          "failure_type": "none",
+          "root_cause": "No dominant failure mode detected.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Cardiac time-critical behavior satisfied."
+        }
+      ],
+      "targeted_learning_update": {
+        "triggered": true,
+        "scenario_name": "cardiac_emergency",
+        "priority_type": "time",
+        "failure_rate": 0.4,
+        "threshold": 0.12,
+        "train_result": {
+          "timestamp": "2026-04-10T20:56:34.145528+00:00",
+          "reason": "scenario_targeted:cardiac_emergency",
+          "total_decisions": 1062,
+          "dataset_row_count": 1062,
+          "prioritize_recent": true,
+          "previous_weights": {
+            "w_survival": 0.3,
+            "w_treatment": 0.25,
+            "w_equipment": 0.2,
+            "w_eta": 0.15,
+            "w_load": 0.1
+          },
+          "dataset": {
+            "dataset_path": "C:\\Users\\ARYAN\\OneDrive\\Desktop(1)\\team tech\\backend\\learning\\artifacts\\learning_dataset.jsonl",
+            "format": "jsonl",
+            "row_count": 1062,
+            "fallback_rate": 0.07533
+          },
+          "train_r2": 0.999122,
+          "learned_weights": {
+            "w_survival": 0.287674,
+            "w_treatment": 0.209348,
+            "w_equipment": 0.139565,
+            "w_eta": 0.269783,
+            "w_load": 0.093631
+          },
+          "proposed_weights": {
+            "w_survival": 0.297535,
+            "w_treatment": 0.24187,
+            "w_equipment": 0.187913,
+            "w_eta": 0.173957,
+            "w_load": 0.098726
+          },
+          "guardrails": {
+            "accepted": true,
+            "reason": "accepted",
+            "baseline_mean_score": 0.799344,
+            "candidate_mean_score": 0.799896,
+            "baseline_fallback_rate": 0.05,
+            "candidate_fallback_rate": 0.05,
+            "safety_violations": 0
+          },
+          "accepted": true,
+          "status": "accepted",
+          "version_id": "w20260410205635-0003",
+          "applied_weights": {
+            "w_survival": 0.297535,
+            "w_treatment": 0.24187,
+            "w_equipment": 0.187913,
+            "w_eta": 0.173957,
+            "w_load": 0.098726
+          }
+        },
+        "adjust_result": {
+          "timestamp": "2026-04-10T20:56:36.052752+00:00",
+          "reason": "scenario_adjustment:cardiac_emergency",
+          "priority_type": "time",
+          "scenario_name": "cardiac_emergency",
+          "total_decisions": 1062,
+          "previous_weights": {
+            "w_survival": 0.297535,
+            "w_treatment": 0.24187,
+            "w_equipment": 0.187913,
+            "w_eta": 0.173957,
+            "w_load": 0.098726
+          },
+          "proposed_weights": {
+            "w_survival": 0.307535,
+            "w_treatment": 0.235203,
+            "w_equipment": 0.181246,
+            "w_eta": 0.183957,
+            "w_load": 0.092059
+          },
+          "guardrails": {
+            "accepted": true,
+            "reason": "accepted",
+            "baseline_mean_score": 0.799344,
+            "candidate_mean_score": 0.800535,
+            "baseline_fallback_rate": 0.05,
+            "candidate_fallback_rate": 0.05,
+            "safety_violations": 0
+          },
+          "accepted": true,
+          "status": "accepted",
+          "version_id": "w20260410205636-0004",
+          "applied_weights": {
+            "w_survival": 0.307535,
+            "w_treatment": 0.235203,
+            "w_equipment": 0.181246,
+            "w_eta": 0.183957,
+            "w_load": 0.092059
+          }
+        }
+      }
+    },
+    "mixed_chaos": {
+      "scenario": "mixed_chaos",
+      "priority_type": "stabilization",
+      "expected_behavior": "mixed_chaos:stabilization",
+      "total_cases": 10,
+      "metrics": {
+        "scenario_mean_score": 0.893213,
+        "scenario_failure_rate": 0.0,
+        "fallback_rate": 0.0,
+        "correct_behavior_rate": 1.0
+      },
+      "dominant_failure_mode": "none",
+      "dominant_root_cause": "No dominant failure mode detected.",
+      "failure_breakdown": {
+        "none": 10
+      },
+      "mismatch_alerts": [],
+      "worst_cases": [
+        {
+          "case_id": "sim-mixed_chaos-123-0009",
+          "score": 0.831493,
+          "decision_type": "direct",
+          "failure_type": "none",
+          "root_cause": "No dominant failure mode detected.",
+          "selected_hospital": "Respiratory Care Unit",
+          "behavior_reason": "Mixed-chaos safeguards satisfied."
+        },
+        {
+          "case_id": "sim-mixed_chaos-123-0003",
+          "score": 0.868317,
+          "decision_type": "direct",
+          "failure_type": "none",
+          "root_cause": "No dominant failure mode detected.",
+          "selected_hospital": "Respiratory Care Unit",
+          "behavior_reason": "Mixed-chaos safeguards satisfied."
+        },
+        {
+          "case_id": "sim-mixed_chaos-123-0004",
+          "score": 0.868317,
+          "decision_type": "direct",
+          "failure_type": "none",
+          "root_cause": "No dominant failure mode detected.",
+          "selected_hospital": "Respiratory Care Unit",
+          "behavior_reason": "Mixed-chaos safeguards satisfied."
+        },
+        {
+          "case_id": "sim-mixed_chaos-123-0000",
+          "score": 0.892626,
+          "decision_type": "direct",
+          "failure_type": "none",
+          "root_cause": "No dominant failure mode detected.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Mixed-chaos safeguards satisfied."
+        },
+        {
+          "case_id": "sim-mixed_chaos-123-0007",
+          "score": 0.892626,
+          "decision_type": "direct",
+          "failure_type": "none",
+          "root_cause": "No dominant failure mode detected.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Mixed-chaos safeguards satisfied."
+        }
+      ],
+      "targeted_learning_update": null
+    },
+    "respiratory_failure": {
+      "scenario": "respiratory_failure",
+      "priority_type": "equipment",
+      "expected_behavior": "respiratory_failure:equipment",
+      "total_cases": 10,
+      "metrics": {
+        "scenario_mean_score": 0.314401,
+        "scenario_failure_rate": 1.0,
+        "fallback_rate": 0.0,
+        "correct_behavior_rate": 1.0
+      },
+      "dominant_failure_mode": "score_collapse",
+      "dominant_root_cause": "Scoring confidence deteriorated under scenario stress.",
+      "failure_breakdown": {
+        "score_collapse": 10
+      },
+      "mismatch_alerts": [],
+      "worst_cases": [
+        {
+          "case_id": "sim-respiratory_failure-123-0001",
+          "score": 0.183486,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Respiratory equipment routing satisfied."
+        },
+        {
+          "case_id": "sim-respiratory_failure-123-0000",
+          "score": 0.328947,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Respiratory equipment routing satisfied."
+        },
+        {
+          "case_id": "sim-respiratory_failure-123-0002",
+          "score": 0.328947,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Respiratory equipment routing satisfied."
+        },
+        {
+          "case_id": "sim-respiratory_failure-123-0003",
+          "score": 0.328947,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Respiratory equipment routing satisfied."
+        },
+        {
+          "case_id": "sim-respiratory_failure-123-0004",
+          "score": 0.328947,
+          "decision_type": "stabilize_first",
+          "failure_type": "score_collapse",
+          "root_cause": "Scoring confidence deteriorated under scenario stress.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Respiratory equipment routing satisfied."
+        }
+      ],
+      "targeted_learning_update": {
+        "triggered": true,
+        "scenario_name": "respiratory_failure",
+        "priority_type": "equipment",
+        "failure_rate": 1.0,
+        "threshold": 0.12,
+        "train_result": {
+          "timestamp": "2026-04-10T20:56:37.022214+00:00",
+          "reason": "scenario_targeted:respiratory_failure",
+          "total_decisions": 1082,
+          "dataset_row_count": 1082,
+          "prioritize_recent": true,
+          "previous_weights": {
+            "w_survival": 0.307535,
+            "w_treatment": 0.235203,
+            "w_equipment": 0.181246,
+            "w_eta": 0.183957,
+            "w_load": 0.092059
+          },
+          "dataset": {
+            "dataset_path": "C:\\Users\\ARYAN\\OneDrive\\Desktop(1)\\team tech\\backend\\learning\\artifacts\\learning_dataset.jsonl",
+            "format": "jsonl",
+            "row_count": 1082,
+            "fallback_rate": 0.073937
+          },
+          "train_r2": 0.999108,
+          "learned_weights": {
+            "w_survival": 0.284766,
+            "w_treatment": 0.211203,
+            "w_equipment": 0.140802,
+            "w_eta": 0.270401,
+            "w_load": 0.092828
+          },
+          "proposed_weights": {
+            "w_survival": 0.302981,
+            "w_treatment": 0.230403,
+            "w_equipment": 0.173157,
+            "w_eta": 0.201246,
+            "w_load": 0.092213
+          },
+          "guardrails": {
+            "accepted": true,
+            "reason": "accepted",
+            "baseline_mean_score": 0.775572,
+            "candidate_mean_score": 0.777087,
+            "baseline_fallback_rate": 0.05,
+            "candidate_fallback_rate": 0.05,
+            "safety_violations": 0
+          },
+          "accepted": true,
+          "status": "accepted",
+          "version_id": "w20260410205638-0005",
+          "applied_weights": {
+            "w_survival": 0.302981,
+            "w_treatment": 0.230403,
+            "w_equipment": 0.173157,
+            "w_eta": 0.201246,
+            "w_load": 0.092213
+          }
+        },
+        "adjust_result": {
+          "timestamp": "2026-04-10T20:56:38.800799+00:00",
+          "reason": "scenario_adjustment:respiratory_failure",
+          "priority_type": "equipment",
+          "scenario_name": "respiratory_failure",
+          "total_decisions": 1082,
+          "previous_weights": {
+            "w_survival": 0.302981,
+            "w_treatment": 0.230403,
+            "w_equipment": 0.173157,
+            "w_eta": 0.201246,
+            "w_load": 0.092213
+          },
+          "proposed_weights": {
+            "w_survival": 0.296314,
+            "w_treatment": 0.240403,
+            "w_equipment": 0.183157,
+            "w_eta": 0.194579,
+            "w_load": 0.085546
+          },
+          "guardrails": {
+            "accepted": true,
+            "reason": "accepted",
+            "baseline_mean_score": 0.775572,
+            "candidate_mean_score": 0.776098,
+            "baseline_fallback_rate": 0.05,
+            "candidate_fallback_rate": 0.05,
+            "safety_violations": 0
+          },
+          "accepted": true,
+          "status": "accepted",
+          "version_id": "w20260410205638-0006",
+          "applied_weights": {
+            "w_survival": 0.296314,
+            "w_treatment": 0.240403,
+            "w_equipment": 0.183157,
+            "w_eta": 0.194579,
+            "w_load": 0.085546
+          }
+        }
+      }
+    },
+    "stroke_specialty": {
+      "scenario": "stroke_specialty",
+      "priority_type": "specialty",
+      "expected_behavior": "stroke_specialty:specialty",
+      "total_cases": 10,
+      "metrics": {
+        "scenario_mean_score": 0.938219,
+        "scenario_failure_rate": 0.0,
+        "fallback_rate": 0.0,
+        "correct_behavior_rate": 1.0
+      },
+      "dominant_failure_mode": "none",
+      "dominant_root_cause": "No dominant failure mode detected.",
+      "failure_breakdown": {
+        "none": 10
+      },
+      "mismatch_alerts": [],
+      "worst_cases": [
+        {
+          "case_id": "sim-stroke_specialty-123-0007",
+          "score": 0.873204,
+          "decision_type": "direct",
+          "failure_type": "none",
+          "root_cause": "No dominant failure mode detected.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Stroke specialty routing satisfied."
+        },
+        {
+          "case_id": "sim-stroke_specialty-123-0002",
+          "score": 0.907422,
+          "decision_type": "direct",
+          "failure_type": "none",
+          "root_cause": "No dominant failure mode detected.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Stroke specialty routing satisfied."
+        },
+        {
+          "case_id": "sim-stroke_specialty-123-0000",
+          "score": 0.950196,
+          "decision_type": "direct",
+          "failure_type": "none",
+          "root_cause": "No dominant failure mode detected.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Stroke specialty routing satisfied."
+        },
+        {
+          "case_id": "sim-stroke_specialty-123-0001",
+          "score": 0.950196,
+          "decision_type": "direct",
+          "failure_type": "none",
+          "root_cause": "No dominant failure mode detected.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Stroke specialty routing satisfied."
+        },
+        {
+          "case_id": "sim-stroke_specialty-123-0003",
+          "score": 0.950196,
+          "decision_type": "direct",
+          "failure_type": "none",
+          "root_cause": "No dominant failure mode detected.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Stroke specialty routing satisfied."
+        }
+      ],
+      "targeted_learning_update": null
+    },
+    "trauma_stabilization": {
+      "scenario": "trauma_stabilization",
+      "priority_type": "stabilization",
+      "expected_behavior": "trauma_stabilization:stabilization",
+      "total_cases": 10,
+      "metrics": {
+        "scenario_mean_score": 0.570073,
+        "scenario_failure_rate": 0.9,
+        "fallback_rate": 0.0,
+        "correct_behavior_rate": 0.1
+      },
+      "dominant_failure_mode": "behavior_mismatch",
+      "dominant_root_cause": "Decision policy drift against expected scenario behavior.",
+      "failure_breakdown": {
+        "behavior_mismatch": 9,
+        "none": 1
+      },
+      "mismatch_alerts": [
+        {
+          "case_id": "sim-trauma_stabilization-123-0000",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-123-0001",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-123-0002",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Cardiac Hub"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-123-0003",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Cardiac Hub"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-123-0004",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-123-0005",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "stabilize_first",
+          "selected_hospital": "Stroke Center"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-123-0006",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Cardiac Hub"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-123-0007",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Cardiac Hub"
+        },
+        {
+          "case_id": "sim-trauma_stabilization-123-0009",
+          "alert": "Trauma case missed trauma-capable destination.",
+          "decision_type": "direct",
+          "selected_hospital": "Stroke Center"
+        }
+      ],
+      "worst_cases": [
+        {
+          "case_id": "sim-trauma_stabilization-123-0000",
+          "score": 0.328947,
+          "decision_type": "stabilize_first",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Trauma case missed trauma-capable destination."
+        },
+        {
+          "case_id": "sim-trauma_stabilization-123-0001",
+          "score": 0.328947,
+          "decision_type": "stabilize_first",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Trauma case missed trauma-capable destination."
+        },
+        {
+          "case_id": "sim-trauma_stabilization-123-0004",
+          "score": 0.328947,
+          "decision_type": "stabilize_first",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Trauma case missed trauma-capable destination."
+        },
+        {
+          "case_id": "sim-trauma_stabilization-123-0005",
+          "score": 0.328947,
+          "decision_type": "stabilize_first",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Stroke Center",
+          "behavior_reason": "Trauma case missed trauma-capable destination."
+        },
+        {
+          "case_id": "sim-trauma_stabilization-123-0002",
+          "score": 0.73036,
+          "decision_type": "direct",
+          "failure_type": "behavior_mismatch",
+          "root_cause": "Decision policy drift against expected scenario behavior.",
+          "selected_hospital": "Cardiac Hub",
+          "behavior_reason": "Trauma case missed trauma-capable destination."
+        }
+      ],
+      "targeted_learning_update": {
+        "triggered": true,
+        "scenario_name": "trauma_stabilization",
+        "priority_type": "stabilization",
+        "failure_rate": 0.9,
+        "threshold": 0.12,
+        "train_result": {
+          "timestamp": "2026-04-10T20:56:39.839042+00:00",
+          "reason": "scenario_targeted:trauma_stabilization",
+          "total_decisions": 1102,
+          "dataset_row_count": 1102,
+          "prioritize_recent": true,
+          "previous_weights": {
+            "w_survival": 0.296314,
+            "w_treatment": 0.240403,
+            "w_equipment": 0.183157,
+            "w_eta": 0.194579,
+            "w_load": 0.085546
+          },
+          "dataset": {
+            "dataset_path": "C:\\Users\\ARYAN\\OneDrive\\Desktop(1)\\team tech\\backend\\learning\\artifacts\\learning_dataset.jsonl",
+            "format": "jsonl",
+            "row_count": 1102,
+            "fallback_rate": 0.072595
+          },
+          "train_r2": 0.999208,
+          "learned_weights": {
+            "w_survival": 0.283167,
+            "w_treatment": 0.212375,
+            "w_equipment": 0.141583,
+            "w_eta": 0.270792,
+            "w_load": 0.092083
+          },
+          "proposed_weights": {
+            "w_survival": 0.293685,
+            "w_treatment": 0.234798,
+            "w_equipment": 0.174842,
+            "w_eta": 0.209822,
+            "w_load": 0.086853
+          },
+          "guardrails": {
+            "accepted": true,
+            "reason": "accepted",
+            "baseline_mean_score": 0.773487,
+            "candidate_mean_score": 0.774495,
+            "baseline_fallback_rate": 0.04,
+            "candidate_fallback_rate": 0.04,
+            "safety_violations": 0
+          },
+          "accepted": true,
+          "status": "accepted",
+          "version_id": "w20260410205640-0007",
+          "applied_weights": {
+            "w_survival": 0.293685,
+            "w_treatment": 0.234798,
+            "w_equipment": 0.174842,
+            "w_eta": 0.209822,
+            "w_load": 0.086853
+          }
+        },
+        "adjust_result": {
+          "timestamp": "2026-04-10T20:56:41.867371+00:00",
+          "reason": "scenario_adjustment:trauma_stabilization",
+          "priority_type": "stabilization",
+          "scenario_name": "trauma_stabilization",
+          "total_decisions": 1102,
+          "previous_weights": {
+            "w_survival": 0.293685,
+            "w_treatment": 0.234798,
+            "w_equipment": 0.174842,
+            "w_eta": 0.209822,
+            "w_load": 0.086853
+          },
+          "proposed_weights": {
+            "w_survival": 0.303685,
+            "w_treatment": 0.244798,
+            "w_equipment": 0.168175,
+            "w_eta": 0.203155,
+            "w_load": 0.080186
+          },
+          "guardrails": {
+            "accepted": true,
+            "reason": "accepted",
+            "baseline_mean_score": 0.773487,
+            "candidate_mean_score": 0.773614,
+            "baseline_fallback_rate": 0.04,
+            "candidate_fallback_rate": 0.04,
+            "safety_violations": 0
+          },
+          "accepted": true,
+          "status": "accepted",
+          "version_id": "w20260410205641-0008",
+          "applied_weights": {
+            "w_survival": 0.303685,
+            "w_treatment": 0.244798,
+            "w_equipment": 0.168175,
+            "w_eta": 0.203155,
+            "w_load": 0.080186
+          }
+        }
+      }
+    }
+  }
+}

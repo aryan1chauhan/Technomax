@@ -16,6 +16,9 @@ import math
 import sys
 import types
 import pytest
+from pathlib import Path
+
+import joblib
 
 # ---------------------------------------------------------------------------
 # Inline the module under test so the suite runs without a full FastAPI stack.
@@ -314,6 +317,14 @@ class TestScoreHospital:
         cons = r["cons"]
         assert any("missing" in c.lower() for c in cons)
 
+    def test_equipment_match_override_updates_breakdown(self):
+        r = self._score(
+            hospital_equipment=["ventilator"],
+            required_equipment=["ventilator", "ct_scan"],
+            equipment_match_override=0.9,
+        )
+        assert r["score_breakdown"]["equipment_match"] == pytest.approx(0.9, rel=1e-3)
+
     def test_specialist_on_duty_in_pros(self):
         r = self._score(specialist_count=1)
         assert any("specialist" in p.lower() for p in r["pros"])
@@ -380,6 +391,14 @@ class TestRankHospitals:
                                 equipment=[])
         ranked = self._rank([partial, full], required_equipment=["ventilator", "ct_scan"])
         assert ranked[0]["name"] == "Full"
+
+    def test_rank_uses_prefilter_equipment_match_score_when_provided(self):
+        favored = make_hospital(id=1, name="Favored", equipment=[])
+        underweighted = make_hospital(id=2, name="Underweighted", equipment=["ventilator", "ct_scan"])
+        favored["equipment_match_score"] = 0.95
+        underweighted["equipment_match_score"] = 0.20
+        ranked = self._rank([underweighted, favored], required_equipment=["ventilator", "ct_scan"])
+        assert ranked[0]["name"] == "Favored"
 
     def test_sorted_descending_by_score(self):
         hospitals = [make_hospital(id=i, lat=30.3 + i*0.1, lon=78.0) for i in range(5)]
@@ -556,3 +575,8 @@ class TestMlPath:
         assert r["ml_used"] is False
         assert 0.0 <= r["score"] <= 1.0
         assert "ml_confidence" not in r["score_breakdown"]
+
+    def test_trained_model_smoke_has_predict_interfaces(self):
+        model_path = Path(__file__).resolve().parent.parent / "ml_training" / "hospital_model.pkl"
+        model = scorer._extract_model(joblib.load(model_path))
+        assert hasattr(model, "predict") and hasattr(model, "predict_proba")

@@ -1,26 +1,59 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import func, desc, Integer
 from app.db.database import get_db
-from app.db.models import Case, User, Hospital, Availability
+from app.db.models import Case, User, Hospital, Availability, CaseMessage
 from app.schemas.dispatch import CaseOut
-from app.schemas.case import CaseStatusUpdate, CaseEventOut
+from app.schemas.case import CaseDeclineRequest, CaseStatusUpdate, CaseEventOut, CaseMessageCreate, CaseMessageOut, CaseMessagePage
 from app.core.security import get_current_user
 from app.db.models import CaseEvent
-from app.core.transitions import validate_transition, VALID_TRANSITIONS, BED_RESTORE_STATUSES
-from app.core.firebase import send_push
 from app.middleware.rate_limit import limiter, LIMIT_CASES
+from app.services.case_status_service import apply_case_status_update
+from app.services.case_realtime import case_realtime_manager
 
 router = APIRouter(prefix="/api/cases")
+
+
+def _require_assigned_hospital(case: Case | None, current_user: User) -> Case:
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    if current_user.role != "hospital":
+        raise HTTPException(status_code=403, detail="Not a hospital account")
+    if case.assigned_hospital_id != current_user.hospital_id:
+        raise HTTPException(status_code=403, detail="Not authorized for this case")
+    return case
+
+
+def _require_case_participant(case: Case | None, current_user: User) -> Case:
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    if current_user.role == "ambulance" and case.user_id == current_user.id:
+        return case
+    if current_user.role == "hospital" and case.assigned_hospital_id == current_user.hospital_id:
+        return case
+    raise HTTPException(status_code=403, detail="Not authorized for this case")
+
+
+def _serialize_case_message(message: CaseMessage, sender: User) -> CaseMessageOut:
+    return CaseMessageOut(
+        id=message.id,
+        case_id=message.case_id,
+        sender_id=message.sender_id,
+        sender_role=sender.role,
+        sender_email=sender.email,
+        body=message.body,
+        sent_at=message.sent_at,
+    )
 
 @router.get("/", response_model=list[CaseOut])
 @limiter.limit(LIMIT_CASES)
 def get_cases(
-    request: Request,
+    request: Request,  # noqa: ARG001
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    _ = request
     cases = db.query(Case)\
         .filter(Case.user_id == current_user.id)\
         .order_by(Case.created_at.desc())\
@@ -31,10 +64,11 @@ def get_cases(
 @router.get("/hospital")
 @limiter.limit(LIMIT_CASES)
 def get_hospital_cases(
-    request: Request,
+    request: Request,  # noqa: ARG001
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    _ = request
     if current_user.role != "hospital":
         raise HTTPException(status_code=403, detail="Not a hospital account")
     
@@ -52,10 +86,11 @@ def get_hospital_cases(
 @router.get("/admin/stats")
 @limiter.limit(LIMIT_CASES)
 def admin_stats(
-    request: Request,
+    request: Request,  # noqa: ARG001
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    _ = request
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -83,32 +118,23 @@ def admin_stats(
     # Total cases all time
     total_cases = db.query(Case).count()
 
-    # District breakdown — group hospitals by lat ranges
-    # (approximate district mapping using hospital IDs)
-    district_map = [
-        {"name": "Dehradun",   "id_min": 93,  "id_max": 132},
-        {"name": "Rishikesh",  "id_min": 133, "id_max": 157},
-        {"name": "Haridwar",   "id_min": 66,  "id_max": 92},
-        {"name": "Roorkee",    "id_min": 25,  "id_max": 65},
-        {"name": "Haldwani",   "id_min": 158, "id_max": 187},
-        {"name": "Nainital",   "id_min": 188, "id_max": 212},
-    ]
+    # District breakdown — group hospitals by district column
+    rows = db.query(
+        Hospital.district.label("district"),
+        func.sum(Availability.beds).label("beds"),
+        func.sum(Availability.icu).label("icu"),
+        func.count(Availability.id).label("hospitals"),
+        func.sum(func.cast(Availability.accepting, Integer)).label("accepting"),
+    ).join(
+        Hospital, Availability.hospital_id == Hospital.id
+    ).group_by(
+        Hospital.district
+    ).all()
 
     districts = []
-    for d in district_map:
-        row = db.query(
-            func.sum(Availability.beds).label("beds"),
-            func.sum(Availability.icu).label("icu"),
-            func.count(Availability.id).label("hospitals"),
-            func.sum(func.cast(Availability.accepting, Integer)).label("accepting"),
-        ).join(Hospital, Availability.hospital_id == Hospital.id
-        ).filter(
-            Hospital.id >= d["id_min"],
-            Hospital.id <= d["id_max"]
-        ).first()
-
+    for row in rows:
         districts.append({
-            "name": d["name"],
+            "name": row.district or "Unknown",
             "hospitals": row.hospitals or 0,
             "beds": row.beds or 0,
             "icu": row.icu or 0,
@@ -140,97 +166,136 @@ def admin_stats(
 
 @router.put("/{case_id}/status")
 @limiter.limit(LIMIT_CASES)
-def update_case_status(
-    request: Request,
+async def update_case_status(
+    request: Request,  # noqa: ARG001
     case_id: int,
     update_data: CaseStatusUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    case = db.query(Case).filter(Case.id == case_id).first()
-    if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
-
-    if current_user.role == "ambulance":
-        if case.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Not authorized to update this case")
-    elif current_user.role == "hospital":
-        if case.assigned_hospital_id != current_user.hospital_id:
-            raise HTTPException(status_code=403, detail="Not authorized to update this case")
-    elif current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Invalid role")
-
-    new_status = update_data.status
-    if not validate_transition(case.status, new_status):
-        allowed = VALID_TRANSITIONS.get(case.status, [])
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid transition: {case.status} → {new_status}. Allowed: {allowed}"
-        )
-
-    if new_status == "arrived" and current_user.role != "ambulance":
-        raise HTTPException(
-            status_code=403,
-            detail="Only ambulances can mark case as arrived"
-        )
-
-    case.status = new_status
-
-    if case.assigned_hospital_id and new_status in BED_RESTORE_STATUSES:
-        db.query(Availability).filter(
-            Availability.hospital_id == case.assigned_hospital_id
-        ).update(
-            {
-                Availability.beds: Availability.beds + 1,
-                Availability.updated_at: datetime.now(timezone.utc)
-            },
-            synchronize_session=False
-        )
-
-    event = CaseEvent(
-        case_id=case.id,
-        status=new_status,
-        actor_id=current_user.id,
-        actor_role=current_user.role,
-        note=update_data.note,
+    _ = request
+    # Keep all status mutations routed through case_status_service so HTTP and
+    # WebSocket paths share one transition/bed-restoration/audit implementation.
+    return await apply_case_status_update(
+        db=db,
+        case_id=case_id,
+        update_data=update_data,
+        current_user=current_user,
     )
-    db.add(event)
-    db.commit()
 
-    if new_status == "arrived":
-        # Notify hospital staff via FCM
-        hospital_users = db.query(User).filter(
-            User.hospital_id == case.assigned_hospital_id,
-            User.fcm_token.is_not(None)
-        ).all()
-        for user in hospital_users:
-            send_push(
-                token=user.fcm_token,
-                title="Ambulance Arrived",
-                body=f"Ambulance for case #{case.id} has arrived at your hospital.",
-                data={"case_id": str(case.id), "status": "arrived"}
-            )
-    
-    return {"status": new_status, "case_id": case.id}
+@router.post("/{case_id}/accept")
+@limiter.limit(LIMIT_CASES)
+async def accept_case(
+    request: Request,  # noqa: ARG001
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = request
+    case = _require_assigned_hospital(db.query(Case).filter(Case.id == case_id).first(), current_user)
+    return await apply_case_status_update(
+        db=db,
+        case_id=case.id,
+        update_data=CaseStatusUpdate(status="accepted", note="Case accepted by hospital"),
+        current_user=current_user,
+    )
+
+@router.post("/{case_id}/decline")
+@limiter.limit(LIMIT_CASES)
+async def decline_case(
+    request: Request,  # noqa: ARG001
+    case_id: int,
+    decline_data: CaseDeclineRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = request
+    case = _require_assigned_hospital(db.query(Case).filter(Case.id == case_id).first(), current_user)
+    return await apply_case_status_update(
+        db=db,
+        case_id=case.id,
+        update_data=CaseStatusUpdate(status="declined", note=decline_data.reason.strip()),
+        current_user=current_user,
+    )
 
 @router.get("/{case_id}/timeline", response_model=list[CaseEventOut])
 @limiter.limit(LIMIT_CASES)
 def get_case_timeline(
-    request: Request,
+    request: Request,  # noqa: ARG001
     case_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    _ = request
     case = db.query(Case).filter(Case.id == case_id).first()
-    if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
-
-    if current_user.role == "ambulance":
-        if case.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Not authorized to view this case")
-    elif current_user.role == "hospital":
-        if case.assigned_hospital_id != current_user.hospital_id:
-            raise HTTPException(status_code=403, detail="Not authorized to view this case")
+    _require_case_participant(case, current_user)
             
     events = db.query(CaseEvent).filter(CaseEvent.case_id == case_id).order_by(CaseEvent.timestamp.asc()).all()
     return events
+
+
+@router.get("/{case_id}/messages", response_model=CaseMessagePage)
+@limiter.limit(LIMIT_CASES)
+def get_case_messages(
+    request: Request,  # noqa: ARG001
+    case_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = request
+    case = db.query(Case).filter(Case.id == case_id).first()
+    _require_case_participant(case, current_user)
+
+    total = db.query(CaseMessage).filter(CaseMessage.case_id == case_id).count()
+    rows = (
+        db.query(CaseMessage, User)
+        .join(User, User.id == CaseMessage.sender_id)
+        .filter(CaseMessage.case_id == case_id)
+        .order_by(CaseMessage.sent_at.asc(), CaseMessage.id.asc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+
+    return CaseMessagePage(
+        items=[_serialize_case_message(message, sender) for message, sender in rows],
+        page=page,
+        limit=limit,
+        total=total,
+    )
+
+
+@router.post("/{case_id}/messages", response_model=CaseMessageOut, status_code=201)
+@limiter.limit(LIMIT_CASES)
+async def post_case_message(
+    request: Request,  # noqa: ARG001
+    case_id: int,
+    payload: CaseMessageCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = request
+    case = db.query(Case).filter(Case.id == case_id).first()
+    _require_case_participant(case, current_user)
+    body = payload.body.strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Message body cannot be empty")
+
+    message = CaseMessage(
+        case_id=case_id,
+        sender_id=current_user.id,
+        body=body,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+
+    serialized = _serialize_case_message(message, current_user)
+    await case_realtime_manager.broadcast(case_id, {
+        "type": "chat",
+        "case_id": case_id,
+        "message": serialized.model_dump(mode="json"),
+    })
+    return serialized

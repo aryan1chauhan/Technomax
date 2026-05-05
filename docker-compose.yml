@@ -1,10 +1,9 @@
-version: "3.9"
-
 services:
 
   db:
     image: postgres:15
     container_name: mediroute_db
+    command: postgres -c max_connections=700
     environment:
       POSTGRES_DB: mediroute
       POSTGRES_USER: postgres
@@ -19,8 +18,22 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: mediroute_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 10
     container_name: mediroute_backend
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD}@db:5432/mediroute
@@ -29,18 +42,26 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: 60
       CLAUDE_API_KEY: ${CLAUDE_API_KEY}
       ORS_API_KEY: ${ORS_API_KEY}
+      MODEL_SHA256: ${MODEL_SHA256:-a46ae388b1fdc321edd355a3ae431d0eb5cd85f109227563d39c6edd8ee776b7}
       FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
+      REDIS_URL: redis://redis:6379/0
+      ENABLE_RATE_LIMIT: "false"
     ports:
       - "8000:8000"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - ./backend/ml_training:/app/ml_training
       - ./backend/firebase-service-account.json:/app/firebase-service-account.json:ro
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
     container_name: mediroute_frontend
     ports:
       - "3000:80"
@@ -49,3 +70,4 @@ services:
 
 volumes:
   pg_data:
+  redis_data:

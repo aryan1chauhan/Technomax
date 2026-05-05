@@ -1,0 +1,94 @@
+{
+  "cardiac_emergency": {
+    "scenario_name": "cardiac_emergency",
+    "priority_type": "time",
+    "updated_at": "2026-04-14T13:06:05.990329+00:00",
+    "total_decisions": 110550,
+    "failure_breakdown": {
+      "fallback_dependency": 500
+    },
+    "guardrails": {
+      "baseline_mean_score": 0.74968,
+      "candidate_mean_score": 0.752187,
+      "baseline_fallback_rate": 1.0,
+      "candidate_fallback_rate": 1.0,
+      "safety_violations": 0
+    },
+    "weight_multipliers": {
+      "w_survival": 1.05,
+      "w_treatment": 0.98,
+      "w_equipment": 0.98,
+      "w_eta": 1.05,
+      "w_load": 1.03
+    }
+  },
+  "respiratory_failure": {
+    "scenario_name": "respiratory_failure",
+    "priority_type": "equipment",
+    "updated_at": "2026-04-14T13:06:11.317029+00:00",
+    "total_decisions": 111550,
+    "failure_breakdown": {
+      "fallback_dependency": 500
+    },
+    "guardrails": {
+      "baseline_mean_score": 0.773472,
+      "candidate_mean_score": 0.768648,
+      "baseline_fallback_rate": 1.0,
+      "candidate_fallback_rate": 1.0,
+      "safety_violations": 0
+    },
+    "weight_multipliers": {
+      "w_survival": 0.98,
+      "w_treatment": 1.05,
+      "w_equipment": 1.05,
+      "w_eta": 0.98,
+      "w_load": 1.03
+    }
+  },
+  "trauma_stabilization": {
+    "scenario_name": "trauma_stabilization",
+    "priority_type": "stabilization",
+    "updated_at": "2026-04-14T13:06:15.089378+00:00",
+    "total_decisions": 112550,
+    "failure_breakdown": {
+      "fallback_dependency": 500
+    },
+    "guardrails": {
+      "baseline_mean_score": 0.537198,
+      "candidate_mean_score": 0.567671,
+      "baseline_fallback_rate": 1.0,
+      "candidate_fallback_rate": 1.0,
+      "safety_violations": 0
+    },
+    "weight_multipliers": {
+      "w_survival": 1.05,
+      "w_treatment": 1.05,
+      "w_equipment": 0.98,
+      "w_eta": 0.98,
+      "w_load": 1.03
+    }
+  },
+  "stroke_specialty": {
+    "scenario_name": "stroke_specialty",
+    "priority_type": "specialty",
+    "updated_at": "2026-04-13T10:58:40.758802+00:00",
+    "total_decisions": 58302,
+    "failure_breakdown": {
+      "fallback_dependency": 11
+    },
+    "guardrails": {
+      "baseline_mean_score": 0.847598,
+      "candidate_mean_score": 0.836153,
+      "baseline_fallback_rate": 0.555,
+      "candidate_fallback_rate": 0.555,
+      "safety_violations": 0
+    },
+    "weight_multipliers": {
+      "w_survival": 0.98,
+      "w_treatment": 1.05,
+      "w_equipment": 1.05,
+      "w_eta": 0.98,
+      "w_load": 1.03
+    }
+  }
+}

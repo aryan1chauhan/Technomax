@@ -12,15 +12,19 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 
-// getMessaging() can throw if FCM is unsupported (no service worker, missing
-// env vars, or non-HTTPS context). Keep it lazy so it never crashes app init.
+// Eagerly initialized — resolves to the messaging instance or null.
+// Consumers that need `messaging` should await this promise to avoid the
+// race condition where `messaging` is still null when the hook runs.
 export let messaging = null;
-isSupported()
+
+export const messagingReady = isSupported()
   .then((supported) => {
     if (supported) {
       messaging = getMessaging(app);
     }
+    return messaging;
   })
   .catch((err) => {
     console.warn("Firebase Messaging not available:", err.message);
+    return null;
   });

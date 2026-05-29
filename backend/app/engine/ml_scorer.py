@@ -23,6 +23,13 @@ import os
 from pathlib import Path
 from typing import Any
 
+# Load environment variables from .env during local development
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 import joblib
 import numpy as np
 
@@ -1139,18 +1146,35 @@ def score_hospital(
     if ml_score_override is not None:
         ml_score = ml_score_override
         ml_used = True
-        # For finalizing, we assume score_breakdown was already mostly built in return_features=True call
-        # but we need to merge the ML specific bits.
+        # Blend ML confidence with the rule-based interpretable_score so the
+        # overall score is a function of the component scores the user sees.
+        blended_score = _clamp(
+            interpretable_score * (0.5 + 0.5 * ml_score),
+            0.15, 1.0,
+        )
         score_breakdown["ml_confidence"] = round(ml_score, 4)
+        score_breakdown["blended_score"] = round(blended_score, 4)
+        score_breakdown["interpretable_score"] = round(interpretable_score, 4)
+
+        ml_conf_pct = round(ml_score * 100)
+        pros = []
+        cons = []
+        if ml_conf_pct >= 60:
+            pros.append(f"ML confidence high ({ml_conf_pct}%)")
+        elif ml_conf_pct >= 30:
+            pros.append(f"ML confidence moderate ({ml_conf_pct}%)")
+        else:
+            cons.append(f"ML confidence low ({ml_conf_pct}%)")
+
         return {
             "hospital_id": hospital_id,
             "ml_score": ml_score,
-            "score": ml_score,
+            "score": blended_score,
             "ml_used": True,
             "score_breakdown": score_breakdown,
-            "explanation": "Optimized ML-first scoring applied.",
-            "pros": ["ML confidence high"],
-            "cons": [],
+            "explanation": f"Blended scoring: rule-based {interpretable_score:.0%} × ML confidence {ml_score:.0%}.",
+            "pros": pros,
+            "cons": cons,
         }
 
     if _ML_AVAILABLE:
@@ -1235,7 +1259,27 @@ def score_hospital(
         score_breakdown["delay_penalty_multiplier"] = round(delay_penalty_multiplier, 4)
 
     ml_score = _clamp(ml_score, 0.15, 1.0)
-    score_breakdown["final_score"] = round(ml_score, 4)
+
+    # ── Blend ML confidence with rule-based interpretable_score ────────
+    # The interpretable_score is a weighted sum of the same components
+    # shown in the UI (distance, capacity, specialist, equipment).
+    # ML confidence acts as a quality modifier:
+    #   - ml_conf = 1.0  →  blended = interpretable_score × 1.0
+    #   - ml_conf = 0.5  →  blended = interpretable_score × 0.75
+    #   - ml_conf = 0.19 →  blended = interpretable_score × 0.595
+    # When ML is not used (fallback), ml_score IS the interpretable score
+    # already, so blending still works correctly.
+    if ml_used:
+        blended_score = _clamp(
+            interpretable_score * (0.5 + 0.5 * ml_score),
+            0.15, 1.0,
+        )
+    else:
+        # Fallback: ml_score is already the rule-based score, use it directly
+        blended_score = ml_score
+
+    score_breakdown["final_score"] = round(blended_score, 4)
+    score_breakdown["blended_score"] = round(blended_score, 4)
     score_breakdown["ml_used"] = ml_used
 
     pros: list[str] = []
@@ -1278,8 +1322,17 @@ def score_hospital(
     if specialist_count > 0:
         pros.append("Relevant specialist on duty")
 
-    engine_label = "ML model" if ml_used else "rule-based fallback"
-    explanation_list = [f"Scored {ml_score:.2%} via {engine_label}."]
+    if ml_used:
+        ml_conf_pct = round(ml_score * 100)
+        if ml_conf_pct >= 60:
+            pros.append(f"ML confidence high ({ml_conf_pct}%)")
+        elif ml_conf_pct >= 30:
+            pros.append(f"ML confidence moderate ({ml_conf_pct}%)")
+        else:
+            cons.append(f"ML confidence low ({ml_conf_pct}%)")
+
+    engine_label = "blended ML + rule-based" if ml_used else "rule-based fallback"
+    explanation_list = [f"Scored {blended_score:.2%} via {engine_label}."]
     if pros:
         explanation_list.append("Pros: " + "; ".join(pros) + ".")
     if cons:
@@ -1288,8 +1341,9 @@ def score_hospital(
     return {
         "hospital_id": hospital_id,
         "ml_score": ml_score,
-        # Legacy aliases retained for existing callers.
-        "score": ml_score,
+        # Blended score: interpretable rule-based score modulated by ML confidence.
+        # This is what the UI shows as "Overall Match".
+        "score": blended_score,
         "ml_used": ml_used,
         "score_breakdown": score_breakdown,
         "explanation": " ".join(explanation_list),

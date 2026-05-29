@@ -12,7 +12,6 @@ const getValidNextTransitionLabel = (role, currentStatus) => {
       default: return null;
     }
   } else if (role === "hospital") {
-    // Hospital CANNOT click "Start Journey" or "Arrived at Scene"
     switch (currentStatus) {
       case "dispatched": return ["Start Journey (Ambulance Only)", null];
       case "en_route": return ["Arrived at Scene (Ambulance Only)", null];
@@ -90,52 +89,192 @@ export default function CaseTimeline({ caseId, role }) {
   const nextVal = transitionInfo ? transitionInfo[1] : null;
 
   return (
-    <div className="bg-white rounded-2xl border border-[#F0F2F7] overflow-hidden shadow-sm mb-6 p-8">
-      <h3 className="text-[18px] font-bold text-[#1A1E2E] mb-6 flex items-center gap-2">⏱ Case Timeline</h3>
+    <div style={{
+      background: "#1e293b",
+      border: "1px solid #334155",
+      borderRadius: "16px",
+      padding: "24px",
+      marginBottom: "24px",
+    }}>
+      <h3 style={{
+        fontSize: "16px",
+        fontWeight: "700",
+        color: "#f1f5f9",
+        marginBottom: "20px",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        fontFamily: "Inter, system-ui, -apple-system, sans-serif"
+      }}>
+        ⏱ Case Timeline
+      </h3>
       
       {error && (
-        <div className="bg-[#FFEDED] text-[#EE3B3B] p-3 rounded-lg mb-4 text-[13px] font-medium">
+        <div style={{
+          background: "rgba(239, 68, 68, 0.1)",
+          border: "1px solid rgba(239, 68, 68, 0.3)",
+          color: "#fca5a5",
+          padding: "12px",
+          borderRadius: "8px",
+          marginBottom: "16px",
+          fontSize: "13px",
+          fontWeight: "500",
+        }}>
           {error}
         </div>
       )}
 
-      <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-300 before:to-transparent">
-        {events.map((ev, i) => {
-          const formattedDate = new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " · " + new Date(ev.timestamp).toLocaleDateString([], { day: '2-digit', month: 'short' });
-          return (
-            <div key={ev.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-              <div className={"flex items-center justify-center w-10 h-10 rounded-full border border-white bg-slate-200 text-slate-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 " + (i === events.length - 1 ? 'bg-[#1A78F2] text-white' : '')}>
-                {i + 1}
-              </div>
-              <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-slate-50 p-4 rounded border border-slate-200 shadow-sm">
-                <div className="flex items-center justify-between space-x-2 mb-1">
-                  <div className="font-bold text-slate-900 capitalize">{ev.status.replace(/_/g, ' ')}</div>
-                  <time className="font-caveat font-medium text-slate-500 text-xs">{formattedDate}</time>
+      {/* Timeline items list */}
+      <div style={{ position: "relative", paddingLeft: "24px" }}>
+        {/* Connecting Vertical Line */}
+        {events.length > 1 && (
+          <div style={{
+            position: "absolute",
+            left: "6px",
+            top: "10px",
+            bottom: "10px",
+            width: "2px",
+            background: "#334155",
+          }} />
+        )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          {events.map((ev, i) => {
+            const formattedDate = new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " · " + new Date(ev.timestamp).toLocaleDateString([], { day: '2-digit', month: 'short' });
+            const isLatest = i === events.length - 1;
+            
+            // Tag styling by role
+            let tagBg = "rgba(148, 163, 184, 0.1)";
+            let tagColor = "#cbd5e1";
+            let tagBorder = "rgba(148, 163, 184, 0.2)";
+            if (ev.actor_role === "ambulance") {
+              tagBg = "rgba(56, 189, 248, 0.1)";
+              tagColor = "#38bdf8";
+              tagBorder = "rgba(56, 189, 248, 0.25)";
+            } else if (ev.actor_role === "hospital") {
+              tagBg = "rgba(167, 139, 250, 0.1)";
+              tagColor = "#a78bfa";
+              tagBorder = "rgba(167, 139, 250, 0.25)";
+            }
+
+            return (
+              <div key={ev.id} style={{ position: "relative", display: "flex", gap: "16px", alignItems: "flex-start" }}>
+                {/* Timeline Dot */}
+                <div style={{
+                  position: "absolute",
+                  left: "-23px",
+                  top: "6px",
+                  width: "12px",
+                  height: "12px",
+                  borderRadius: "50%",
+                  background: isLatest ? "#10b981" : "#475569",
+                  border: isLatest ? "3px solid rgba(16, 185, 129, 0.3)" : "3px solid rgba(71, 85, 105, 0.3)",
+                  zIndex: 2,
+                  boxSizing: "content-box",
+                }} />
+
+                {/* Event Details Card */}
+                <div style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{
+                      fontWeight: "700",
+                      fontSize: "14px",
+                      color: isLatest ? "#10b981" : "#f1f5f9",
+                      textTransform: "capitalize",
+                      fontFamily: "Inter, system-ui, -apple-system, sans-serif"
+                    }}>
+                      {ev.status.replace(/_/g, ' ')}
+                    </span>
+                    <time style={{
+                      fontSize: "11px",
+                      color: "#64748b",
+                      fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+                    }}>
+                      {formattedDate}
+                    </time>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <span style={{
+                      fontSize: "9px",
+                      fontWeight: "700",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      background: tagBg,
+                      color: tagColor,
+                      border: `1px solid ${tagBorder}`,
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      fontFamily: "Inter, system-ui, -apple-system, sans-serif",
+                    }}>
+                      {ev.actor_role}
+                    </span>
+                    {ev.note && (
+                      <span style={{
+                        fontSize: "13px",
+                        color: "#94a3b8",
+                        fontFamily: "Inter, system-ui, -apple-system, sans-serif",
+                      }}>
+                        {ev.note}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="text-slate-500 text-sm">
-                  <span className="text-[11px] uppercase bg-slate-200 px-2 py-0.5 rounded mr-2">{ev.actor_role}</span>
-                  {ev.note && <span>{ev.note}</span>}
-                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       {!isTerminal && (
-        <div className="mt-8 flex gap-4 pt-4 border-t border-[#F0F2F7]">
+        <div style={{
+          marginTop: "24px",
+          display: "flex",
+          gap: "12px",
+          paddingTop: "16px",
+          borderTop: "1px solid #334155",
+        }}>
           {nextLabel && (
             <button
               onClick={() => updateStatus(nextVal)}
               disabled={!nextVal}
-              className={`flex-1 h-[48px] font-bold text-[14px] rounded-xl transition ${nextVal ? 'bg-[#17B86B] hover:bg-[#14a35f] text-white' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+              style={{
+                flex: 1,
+                height: "44px",
+                fontFamily: "Inter, system-ui, -apple-system, sans-serif",
+                fontWeight: "700",
+                fontSize: "13px",
+                borderRadius: "8px",
+                cursor: nextVal ? "pointer" : "not-allowed",
+                background: nextVal ? "#10b981" : "rgba(71, 85, 105, 0.2)",
+                border: nextVal ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid rgba(71, 85, 105, 0.3)",
+                color: nextVal ? "#ffffff" : "#475569",
+                transition: "all 0.2s ease",
+              }}
             >
               {nextLabel}
             </button>
           )}
           <button
             onClick={() => updateStatus("cancelled")}
-            className="h-[48px] px-6 bg-white border border-[#EE3B3B] text-[#EE3B3B] hover:bg-[#EE3B3B] hover:text-white font-medium text-[14px] rounded-xl transition"
+            style={{
+              height: "44px",
+              padding: "0 20px",
+              fontFamily: "Inter, system-ui, -apple-system, sans-serif",
+              fontWeight: "600",
+              fontSize: "13px",
+              borderRadius: "8px",
+              background: "transparent",
+              border: "1px solid rgba(239, 68, 68, 0.4)",
+              color: "#ef4444",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
           >
             Cancel Case
           </button>
@@ -143,7 +282,18 @@ export default function CaseTimeline({ caseId, role }) {
       )}
       
       {currentStatus === "completed" && (
-         <div className="mt-6 bg-[#E8FDF2] border border-[#17B86B] text-[#17B86B] p-4 rounded-xl text-center font-bold">
+         <div style={{
+           marginTop: "20px",
+           background: "rgba(16, 185, 129, 0.1)",
+           border: "1px solid rgba(16, 185, 129, 0.3)",
+           color: "#10b981",
+           padding: "12px",
+           borderRadius: "8px",
+           textAlign: "center",
+           fontWeight: "700",
+           fontSize: "14px",
+           fontFamily: "Inter, system-ui, -apple-system, sans-serif",
+         }}>
            Case Closed Successfully
          </div>
       )}

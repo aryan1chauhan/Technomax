@@ -49,6 +49,7 @@ def _candidate_to_response(candidate: dict) -> ScoredHospitalResponse:
         "specialist": 1.0 if detailed_breakdown.get("specialist_present") else 0.0,
         "equipment": float(detailed_breakdown.get("equipment_match", 0.0)),
         "outcome": float(candidate.get("score", 0.0)),
+        "ml_confidence": float(detailed_breakdown.get("ml_confidence", 0.0)),
     }
 
     explanation = candidate.get("explanation")

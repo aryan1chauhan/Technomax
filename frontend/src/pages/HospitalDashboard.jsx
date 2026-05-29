@@ -1,9 +1,10 @@
-import { lazy, Suspense, useState, useEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import api from "../api/axios";
 import RouteFallback from "../components/RouteFallback";
 import useCaseSocket from "../hooks/useCaseSocket";
+import useFCM from "../hooks/useFCM";
 
 const CaseChat = lazy(() => import("../components/CaseChat"));
 const CallPanel = lazy(() => import("../components/CallPanel"));
@@ -18,6 +19,27 @@ export default function HospitalDashboard() {
   const [actionError, setActionError] = useState("");
   const [selectedCase, setSelectedCase] = useState(null);
   const [panelMode, setPanelMode] = useState(null);
+  const [pushBanner, setPushBanner] = useState(null);
+
+  // ── FCM Push Notifications ──
+  // Registers the browser for push on mount; foreground pushes arrive via lastPush
+  const { lastPush, fcmStatus } = useFCM();
+  const lastPushIdRef = useRef(null);
+
+  // Auto-refresh case list when a foreground push notification arrives
+  useEffect(() => {
+    if (!lastPush || lastPush.receivedAt === lastPushIdRef.current) return;
+    lastPushIdRef.current = lastPush.receivedAt;
+
+    // Show a brief banner
+    setPushBanner(lastPush);
+    const timer = setTimeout(() => setPushBanner(null), 6000);
+
+    // Immediately refresh case list so the new case appears
+    fetchCases();
+
+    return () => clearTimeout(timer);
+  }, [lastPush, fetchCases]);
 
   const fetchCases = useCallback(async () => {
     try {
@@ -76,6 +98,7 @@ export default function HospitalDashboard() {
     socketStatus: selectedCaseSocketStatus,
     lastEvent: selectedCaseSocketEvent,
     sendEvent: sendSelectedCaseEvent,
+    socket: selectedCaseSocket,
   } = useCaseSocket(selectedCase?.id, Boolean(selectedCase && panelMode));
 
   const todayCount  = cases.filter(c => {
@@ -180,8 +203,31 @@ export default function HospitalDashboard() {
               </span>
             )}
             <span className="text-[11px] text-[#737A8F] bg-[#F0F2F7] px-3 py-1.5 rounded-full">↻ Live · 10s</span>
+            {fcmStatus === "ready" && (
+              <span className="text-[11px] text-[#17B86B] bg-[#E8FDF2] px-3 py-1.5 rounded-full">🔔 Push ON</span>
+            )}
+            {fcmStatus === "denied" && (
+              <span className="text-[11px] text-[#FFB21A] bg-[#FFF8E0] px-3 py-1.5 rounded-full">🔕 Push Blocked</span>
+            )}
           </div>
         </div>
+
+        {/* ── Push notification toast banner ── */}
+        {pushBanner && (
+          <div className="mx-8 mt-3 flex items-center gap-3 bg-gradient-to-r from-[#1A78F2] to-[#6C4BEF] text-white rounded-xl px-5 py-3 shadow-lg animate-pulse">
+            <span className="text-[20px]">🚨</span>
+            <div className="flex-1">
+              <p className="text-[13px] font-bold">{pushBanner.title}</p>
+              <p className="text-[12px] opacity-90">{pushBanner.body}</p>
+            </div>
+            <button
+              onClick={() => setPushBanner(null)}
+              className="text-white/70 hover:text-white text-[18px] font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         <div className="p-8">
           {/* Stats row */}
@@ -244,11 +290,11 @@ export default function HospitalDashboard() {
                 {panelMode === "call" && (
                   <Suspense fallback={<RouteFallback label="Loading call controls..." />}>
                     <CallPanel
+                      socket={selectedCaseSocket}
                       caseId={selectedCase.id}
-                      caseLabel={`${(selectedCase.custom_condition || selectedCase.condition || "case").replace(/_/g, " ")} · Case #${selectedCase.id}`}
-                      socketEvent={selectedCaseSocketEvent}
-                      sendEvent={sendSelectedCaseEvent}
-                      socketStatus={selectedCaseSocketStatus}
+                      role="hospital"
+                      remoteLabel="Unit 7 — Paramedic"
+                      onClose={() => setPanelMode(null)}
                     />
                   </Suspense>
                 )}

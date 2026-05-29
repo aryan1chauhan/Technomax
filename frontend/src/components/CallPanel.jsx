@@ -1,249 +1,515 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  Phone,
+  PhoneOff,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  Radio,
+  AlertCircle,
+  Loader,
+} from "lucide-react";
 
-const RTC_CONFIGURATION = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+// ─── ICE Servers (STUN only — swap for TURN in production) ─────────────────
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+  ],
 };
 
-export default function CallPanel({ caseId, caseLabel, socketEvent, sendEvent, socketStatus }) {
-  const [callState, setCallState] = useState("idle");
-  const [statusText, setStatusText] = useState("Ready to start a case call.");
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
-  const localStreamRef = useRef(null);
-  const remoteStreamRef = useRef(null);
-  const peerRef = useRef(null);
-  const pendingOfferRef = useRef(null);
-  const pendingIceRef = useRef([]);
-  const timeoutRef = useRef(null);
+// ─── Call States ────────────────────────────────────────────────────────────
+const CALL_STATE = {
+  IDLE: "idle",
+  CALLING: "calling",   // outgoing — waiting for answer
+  RINGING: "ringing",   // incoming — waiting for local accept
+  CONNECTED: "connected",
+  ENDED: "ended",
+  ERROR: "error",
+};
 
-  const clearNoAnswerTimer = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-  };
+/**
+ * CallPanel — WebRTC voice call panel for MediRoute
+ *
+ * Props:
+ *   socket       {WebSocket}  — active case WebSocket (already open)
+ *   caseId       {string}     — current dispatch case ID
+ *   role         {string}     — "paramedic" | "hospital"
+ *   remoteLabel  {string}     — display name of the other party
+ *   onClose      {function}   — called when panel should unmount
+ */
+export default function CallPanel({ socket, caseId, role, remoteLabel = "Remote", onClose }) {
+  const [callState, setCallState] = useState(CALL_STATE.IDLE);
+  const [isMuted, setIsMuted]     = useState(false);
+  const [isSpeaker, setIsSpeaker] = useState(true);
+  const [duration, setDuration]   = useState(0);
+  const [error, setError]         = useState(null);
 
-  const cleanupCall = (nextState = "idle", nextStatus = "Ready to start a case call.") => {
-    clearNoAnswerTimer();
-    pendingOfferRef.current = null;
-    pendingIceRef.current = [];
+  const pcRef           = useRef(null);   // RTCPeerConnection
+  const localStreamRef  = useRef(null);   // local MediaStream
+  const remoteAudioRef  = useRef(null);   // <audio> element for remote audio
+  const timerRef        = useRef(null);
+  const pendingCandidatesRef = useRef([]); // ICE candidates queued before remoteDesc is set
 
-    if (peerRef.current) {
-      peerRef.current.onicecandidate = null;
-      peerRef.current.ontrack = null;
-      peerRef.current.onconnectionstatechange = null;
-      peerRef.current.close();
-      peerRef.current = null;
-    }
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
+  const sendSignal = useCallback((type, payload) => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ type, case_id: caseId, ...payload }));
+  }, [socket, caseId]);
+
+  const cleanup = useCallback(() => {
+    clearInterval(timerRef.current);
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
     }
-
-    if (remoteStreamRef.current) {
-      remoteStreamRef.current.getTracks().forEach((track) => track.stop());
-      remoteStreamRef.current = null;
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
     }
-
-    if (localVideoRef.current) localVideoRef.current.srcObject = null;
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-
-    setCallState(nextState);
-    setStatusText(nextStatus);
-  };
-
-  const startNoAnswerTimer = () => {
-    clearNoAnswerTimer();
-    timeoutRef.current = setTimeout(() => {
-      sendEvent({ type: "call_end" });
-      cleanupCall("no_answer", "No answer after 30 seconds.");
-    }, 30000);
-  };
-
-  const ensureLocalStream = async () => {
-    if (localStreamRef.current) return localStreamRef.current;
-
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-    localStreamRef.current = stream;
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = stream;
-    }
-    return stream;
-  };
-
-  const flushPendingIce = async () => {
-    if (!peerRef.current) return;
-    for (const candidate of pendingIceRef.current) {
-      try {
-        await peerRef.current.addIceCandidate(candidate);
-      } catch {
-        // Ignore stale candidates if the peer is already resetting.
-      }
-    }
-    pendingIceRef.current = [];
-  };
-
-  const createPeerConnection = async () => {
-    const peer = new RTCPeerConnection(RTC_CONFIGURATION);
-    peerRef.current = peer;
-    remoteStreamRef.current = new MediaStream();
-
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = remoteStreamRef.current;
-    }
-
-    peer.onicecandidate = (event) => {
-      if (event.candidate) {
-        sendEvent({ type: "webrtc_ice_candidate", candidate: event.candidate });
-      }
-    };
-
-    peer.ontrack = (event) => {
-      event.streams[0].getTracks().forEach((track) => {
-        remoteStreamRef.current.addTrack(track);
-      });
-    };
-
-    peer.onconnectionstatechange = () => {
-      if (peer.connectionState === "connected") {
-        clearNoAnswerTimer();
-        setCallState("connected");
-        setStatusText("Call connected.");
-      } else if (["disconnected", "failed", "closed"].includes(peer.connectionState)) {
-        cleanupCall("ended", "Call ended.");
-      }
-    };
-
-    const stream = await ensureLocalStream();
-    stream.getTracks().forEach((track) => peer.addTrack(track, stream));
-    return peer;
-  };
-
-  const startCall = async () => {
-    if (!sendEvent) return;
-    try {
-      const peer = await createPeerConnection();
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      sendEvent({ type: "webrtc_offer", offer });
-      setCallState("calling");
-      setStatusText("Calling the other participant...");
-      startNoAnswerTimer();
-    } catch {
-      cleanupCall("error", "Could not access camera and microphone.");
-    }
-  };
-
-  const answerCall = async () => {
-    if (!pendingOfferRef.current || !sendEvent) return;
-    try {
-      const peer = await createPeerConnection();
-      await peer.setRemoteDescription(pendingOfferRef.current);
-      await flushPendingIce();
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      sendEvent({ type: "webrtc_answer", answer });
-      pendingOfferRef.current = null;
-      setCallState("connecting");
-      setStatusText("Joining the call...");
-    } catch {
-      cleanupCall("error", "Could not answer the incoming call.");
-    }
-  };
-
-  const endCall = () => {
-    sendEvent?.({ type: "call_end" });
-    cleanupCall("ended", "Call ended.");
-  };
-
-  useEffect(() => {
-    return () => cleanupCall();
+    pendingCandidatesRef.current = [];
+    setDuration(0);
   }, []);
 
-  useEffect(() => {
-    if (!socketEvent || socketEvent.case_id !== caseId) return;
+  // ── Build RTCPeerConnection ───────────────────────────────────────────────
 
-    if (socketEvent.type === "webrtc_offer" && callState !== "connected") {
-      pendingOfferRef.current = socketEvent.offer;
-      setCallState("incoming");
-      setStatusText("Incoming call. Answer to join.");
-      return;
-    }
+  const buildPeerConnection = useCallback(() => {
+    const pc = new RTCPeerConnection(ICE_SERVERS);
 
-    if (socketEvent.type === "webrtc_answer" && peerRef.current) {
-      clearNoAnswerTimer();
-      peerRef.current.setRemoteDescription(socketEvent.answer).then(async () => {
-        await flushPendingIce();
-        setCallState("connecting");
-        setStatusText("Connecting call...");
-      }).catch(() => {
-        cleanupCall("error", "Could not complete the call handshake.");
-      });
-      return;
-    }
-
-    if (socketEvent.type === "webrtc_ice_candidate") {
-      const candidate = socketEvent.candidate;
-      if (!candidate) return;
-
-      if (peerRef.current?.remoteDescription) {
-        peerRef.current.addIceCandidate(candidate).catch(() => {
-          // Ignore candidates that arrive during teardown.
-        });
-      } else {
-        pendingIceRef.current.push(candidate);
+    // Send ICE candidates to remote peer via WebSocket
+    pc.onicecandidate = ({ candidate }) => {
+      if (candidate) {
+        sendSignal("webrtc_ice_candidate", { candidate: candidate.toJSON() });
       }
-      return;
-    }
+    };
 
-    if (socketEvent.type === "call_end" || socketEvent.type === "call_declined") {
-      cleanupCall("ended", socketEvent.type === "call_declined" ? "The other participant declined the call." : "The other participant ended the call.");
-    }
-  }, [callState, caseId, socketEvent]);
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "connected") {
+        setCallState(CALL_STATE.CONNECTED);
+        timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+      }
+      if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
+        setCallState(CALL_STATE.ENDED);
+        cleanup();
+      }
+    };
 
-  const isIdle = callState === "idle" || callState === "ended" || callState === "no_answer";
+    // Attach incoming remote audio track to the <audio> element
+    pc.ontrack = ({ streams }) => {
+      if (remoteAudioRef.current && streams[0]) {
+        remoteAudioRef.current.srcObject = streams[0];
+      }
+    };
+
+    return pc;
+  }, [sendSignal, cleanup]);
+
+  // ── Get local microphone ─────────────────────────────────────────────────
+
+  const getLocalStream = useCallback(async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    localStreamRef.current = stream;
+    return stream;
+  }, []);
+
+  // ── Initiate outgoing call (Paramedic → Hospital) ────────────────────────
+
+  const startCall = useCallback(async () => {
+    try {
+      setError(null);
+      setCallState(CALL_STATE.CALLING);
+
+      const stream = await getLocalStream();
+      const pc = buildPeerConnection();
+      pcRef.current = pc;
+
+      // Add local audio tracks to peer connection
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      // Create SDP offer and send to remote
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      sendSignal("webrtc_offer", { sdp: pc.localDescription });
+    } catch (err) {
+      setError("Microphone access denied or call failed.");
+      setCallState(CALL_STATE.ERROR);
+      cleanup();
+    }
+  }, [getLocalStream, buildPeerConnection, sendSignal, cleanup]);
+
+  // ── Accept incoming call (Hospital side) ─────────────────────────────────
+
+  const acceptCall = useCallback(async (offerSdp) => {
+    try {
+      setError(null);
+      const stream = await getLocalStream();
+      const pc = buildPeerConnection();
+      pcRef.current = pc;
+
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
+
+      // Flush any ICE candidates that arrived before remoteDescription was set
+      for (const c of pendingCandidatesRef.current) {
+        await pc.addIceCandidate(new RTCIceCandidate(c));
+      }
+      pendingCandidatesRef.current = [];
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      sendSignal("webrtc_answer", { sdp: pc.localDescription });
+      setCallState(CALL_STATE.CONNECTED);
+    } catch (err) {
+      setError("Failed to accept call.");
+      setCallState(CALL_STATE.ERROR);
+      cleanup();
+    }
+  }, [getLocalStream, buildPeerConnection, sendSignal, cleanup]);
+
+  // ── Hang up ───────────────────────────────────────────────────────────────
+
+  const hangUp = useCallback(() => {
+    sendSignal("webrtc_hangup", {});
+    setCallState(CALL_STATE.ENDED);
+    cleanup();
+  }, [sendSignal, cleanup]);
+
+  // ── WebSocket message handler ─────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleMessage = async (event) => {
+      let msg;
+      try { msg = JSON.parse(event.data); } catch { return; }
+      if (msg.case_id && msg.case_id !== caseId) return;
+
+      switch (msg.type) {
+        // Incoming call — show ringing UI, store offer for acceptCall()
+        case "webrtc_offer": {
+          if (role === "paramedic") return; // paramedic is always caller
+          setCallState(CALL_STATE.RINGING);
+          // Store offer SDP on accept button click
+          pcRef._pendingOffer = msg.sdp;
+          break;
+        }
+
+        // Remote answered our offer
+        case "webrtc_answer": {
+          if (!pcRef.current) return;
+          await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+          // Flush pending ICE candidates
+          for (const c of pendingCandidatesRef.current) {
+            await pcRef.current.addIceCandidate(new RTCIceCandidate(c));
+          }
+          pendingCandidatesRef.current = [];
+          break;
+        }
+
+        // Remote ICE candidate
+        case "webrtc_ice_candidate": {
+          if (!pcRef.current || !pcRef.current.remoteDescription) {
+            // Queue if remote description isn't set yet
+            pendingCandidatesRef.current.push(msg.candidate);
+          } else {
+            await pcRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate));
+          }
+          break;
+        }
+
+        // Remote hung up
+        case "webrtc_hangup": {
+          setCallState(CALL_STATE.ENDED);
+          cleanup();
+          break;
+        }
+
+        default: break;
+      }
+    };
+
+    socket.addEventListener("message", handleMessage);
+    return () => socket.removeEventListener("message", handleMessage);
+  }, [socket, caseId, role, cleanup]);
+
+  // ── Mute / Speaker toggles ────────────────────────────────────────────────
+
+  const toggleMute = () => {
+    if (!localStreamRef.current) return;
+    localStreamRef.current.getAudioTracks().forEach((t) => { t.enabled = isMuted; });
+    setIsMuted((m) => !m);
+  };
+
+  const toggleSpeaker = () => {
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.muted = isSpeaker;
+    }
+    setIsSpeaker((s) => !s);
+  };
+
+  // ── Cleanup on unmount ────────────────────────────────────────────────────
+
+  useEffect(() => () => cleanup(), [cleanup]);
+
+  // ── Duration formatter ────────────────────────────────────────────────────
+
+  const formatDuration = (s) => {
+    const m = Math.floor(s / 60).toString().padStart(2, "0");
+    const sec = (s % 60).toString().padStart(2, "0");
+    return `${m}:${sec}`;
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // UI
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E2E6F0] shadow-sm p-5">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div>
-          <p className="text-[15px] font-bold text-[#1A1E2E]">Case Call</p>
-          <p className="text-[12px] text-[#737A8F]">{caseLabel || `Case #${caseId}`}</p>
-        </div>
-        <span className="text-[11px] uppercase tracking-wide text-[#1A78F2] bg-[#EBF3FF] border border-[#BDD6FF] rounded-full px-3 py-1">
-          {socketStatus}
-        </span>
-      </div>
+    <div style={styles.overlay}>
+      {/* Hidden audio element — plays remote peer's voice */}
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: "none" }} />
 
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div className="rounded-2xl overflow-hidden border border-[#E2E6F0] bg-[#09111F] aspect-video">
-          <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
+      <div style={styles.panel}>
+        {/* Header */}
+        <div style={styles.header}>
+          <div style={styles.radioIcon}>
+            <Radio size={14} color="#ef4444" />
+          </div>
+          <span style={styles.headerLabel}>MEDIROUTE SECURE CHANNEL</span>
         </div>
-        <div className="rounded-2xl overflow-hidden border border-[#E2E6F0] bg-[#09111F] aspect-video">
-          <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+
+        {/* Remote party info */}
+        <div style={styles.callerSection}>
+          <div style={styles.avatar}>
+            {remoteLabel.charAt(0).toUpperCase()}
+          </div>
+          <div style={styles.callerName}>{remoteLabel}</div>
+          <div style={styles.callStatus}>
+            {callState === CALL_STATE.IDLE      && <span style={styles.statusText}>Ready to call</span>}
+            {callState === CALL_STATE.CALLING   && <span style={styles.statusPulse}>Calling…</span>}
+            {callState === CALL_STATE.RINGING   && <span style={styles.statusPulse}>Incoming call…</span>}
+            {callState === CALL_STATE.CONNECTED && (
+              <span style={styles.statusConnected}>
+                <span style={styles.greenDot} /> {formatDuration(duration)}
+              </span>
+            )}
+            {callState === CALL_STATE.ENDED     && <span style={styles.statusText}>Call ended</span>}
+            {callState === CALL_STATE.ERROR     && (
+              <span style={styles.statusError}>
+                <AlertCircle size={12} style={{ marginRight: 4 }} /> {error}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
 
-      <p className="text-[13px] text-[#4A5068] mb-4">{statusText}</p>
+        {/* Controls */}
+        <div style={styles.controls}>
+          {/* Mute */}
+          {callState === CALL_STATE.CONNECTED && (
+            <button
+              style={{ ...styles.controlBtn, ...(isMuted ? styles.controlBtnActive : {}) }}
+              onClick={toggleMute}
+              title={isMuted ? "Unmute" : "Mute"}
+            >
+              {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
+            </button>
+          )}
 
-      <div className="flex gap-3">
-        {isIdle && (
-          <button onClick={startCall} className="rounded-xl bg-[#1A78F2] px-4 py-2 text-[13px] font-semibold text-white">
-            Start Call
-          </button>
-        )}
-        {callState === "incoming" && (
-          <button onClick={answerCall} className="rounded-xl bg-[#17B86B] px-4 py-2 text-[13px] font-semibold text-white">
-            Answer Call
-          </button>
-        )}
-        {["calling", "connecting", "connected", "incoming"].includes(callState) && (
-          <button onClick={endCall} className="rounded-xl border border-[#EE3B3B] px-4 py-2 text-[13px] font-semibold text-[#EE3B3B]">
-            End Call
+          {/* Speaker */}
+          {callState === CALL_STATE.CONNECTED && (
+            <button
+              style={{ ...styles.controlBtn, ...(!isSpeaker ? styles.controlBtnActive : {}) }}
+              onClick={toggleSpeaker}
+              title={isSpeaker ? "Mute speaker" : "Unmute speaker"}
+            >
+              {isSpeaker ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            </button>
+          )}
+
+          {/* Main action button */}
+          {(callState === CALL_STATE.IDLE || callState === CALL_STATE.ENDED || callState === CALL_STATE.ERROR) && role === "paramedic" && (
+            <button style={styles.callBtn} onClick={startCall}>
+              <Phone size={22} />
+            </button>
+          )}
+
+          {callState === CALL_STATE.CALLING && (
+            <button style={{ ...styles.callBtn, ...styles.hangupBtn }} onClick={hangUp}>
+              <Loader size={18} style={styles.spin} />
+            </button>
+          )}
+
+          {callState === CALL_STATE.RINGING && (
+            <>
+              <button style={styles.callBtn} onClick={() => acceptCall(pcRef._pendingOffer)}>
+                <Phone size={22} />
+              </button>
+              <button style={{ ...styles.callBtn, ...styles.hangupBtn }} onClick={hangUp}>
+                <PhoneOff size={22} />
+              </button>
+            </>
+          )}
+
+          {callState === CALL_STATE.CONNECTED && (
+            <button style={{ ...styles.callBtn, ...styles.hangupBtn }} onClick={hangUp}>
+              <PhoneOff size={22} />
+            </button>
+          )}
+        </div>
+
+        {/* Close */}
+        {[CALL_STATE.IDLE, CALL_STATE.ENDED, CALL_STATE.ERROR].includes(callState) && (
+          <button style={styles.closeBtn} onClick={() => { cleanup(); onClose?.(); }}>
+            Dismiss
           </button>
         )}
       </div>
     </div>
   );
 }
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
+const styles = {
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.6)",
+    backdropFilter: "blur(4px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9999,
+  },
+  panel: {
+    background: "#0f172a",
+    border: "1px solid #1e293b",
+    borderRadius: "16px",
+    padding: "28px 32px",
+    width: "320px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "20px",
+    boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+  },
+  radioIcon: {
+    background: "rgba(239,68,68,0.15)",
+    borderRadius: "50%",
+    padding: "4px",
+    display: "flex",
+  },
+  headerLabel: {
+    fontSize: "10px",
+    letterSpacing: "0.12em",
+    color: "#64748b",
+    fontFamily: "monospace",
+    fontWeight: 600,
+  },
+  callerSection: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "10px",
+  },
+  avatar: {
+    width: "68px",
+    height: "68px",
+    borderRadius: "50%",
+    background: "linear-gradient(135deg, #1d4ed8, #0ea5e9)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "26px",
+    fontWeight: 700,
+    color: "#fff",
+    boxShadow: "0 0 0 4px rgba(14,165,233,0.15)",
+  },
+  callerName: {
+    fontSize: "18px",
+    fontWeight: 600,
+    color: "#f1f5f9",
+    letterSpacing: "-0.01em",
+  },
+  callStatus: {
+    fontSize: "13px",
+    color: "#94a3b8",
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
+  },
+  statusText:      { color: "#64748b" },
+  statusPulse:     { color: "#f59e0b", animation: "pulse 1.5s infinite" },
+  statusConnected: { color: "#22c55e", display: "flex", alignItems: "center", gap: "6px", fontVariantNumeric: "tabular-nums" },
+  statusError:     { color: "#ef4444", display: "flex", alignItems: "center" },
+  greenDot: {
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
+    background: "#22c55e",
+    boxShadow: "0 0 6px #22c55e",
+    display: "inline-block",
+  },
+  controls: {
+    display: "flex",
+    gap: "14px",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  controlBtn: {
+    width: "44px",
+    height: "44px",
+    borderRadius: "50%",
+    background: "#1e293b",
+    border: "1px solid #334155",
+    color: "#94a3b8",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    transition: "all 0.15s",
+  },
+  controlBtnActive: {
+    background: "#334155",
+    color: "#f1f5f9",
+    borderColor: "#475569",
+  },
+  callBtn: {
+    width: "56px",
+    height: "56px",
+    borderRadius: "50%",
+    background: "#16a34a",
+    border: "none",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    boxShadow: "0 4px 20px rgba(22,163,74,0.4)",
+    transition: "transform 0.1s, box-shadow 0.1s",
+  },
+  hangupBtn: {
+    background: "#dc2626",
+    boxShadow: "0 4px 20px rgba(220,38,38,0.4)",
+  },
+  spin: {
+    animation: "spin 1s linear infinite",
+  },
+  closeBtn: {
+    background: "transparent",
+    border: "none",
+    color: "#475569",
+    fontSize: "12px",
+    cursor: "pointer",
+    letterSpacing: "0.05em",
+    textTransform: "uppercase",
+    fontFamily: "monospace",
+  },
+};

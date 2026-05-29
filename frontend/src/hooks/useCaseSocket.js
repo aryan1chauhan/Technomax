@@ -11,23 +11,27 @@ function buildWsBase() {
 
 export default function useCaseSocket(caseId, enabled) {
   const wsRef = useRef(null);
+  const [socket, setSocket] = useState(null);
   const [socketStatus, setSocketStatus] = useState("idle");
   const [lastEvent, setLastEvent] = useState(null);
 
   useEffect(() => {
     if (!enabled || !caseId) {
       setSocketStatus("idle");
+      setSocket(null);
       return undefined;
     }
 
     const token = localStorage.getItem("token");
     if (!token) {
       setSocketStatus("unauthorized");
+      setSocket(null);
       return undefined;
     }
 
     const ws = new WebSocket(`${buildWsBase()}/ws/track/${caseId}?token=${token}`);
     wsRef.current = ws;
+    setSocket(ws);
     setSocketStatus("connecting");
 
     ws.onopen = () => setSocketStatus("live");
@@ -44,6 +48,7 @@ export default function useCaseSocket(caseId, enabled) {
     return () => {
       ws.close();
       wsRef.current = null;
+      setSocket(null);
     };
   }, [caseId, enabled]);
 
@@ -55,5 +60,5 @@ export default function useCaseSocket(caseId, enabled) {
     return false;
   }, []);
 
-  return { socketStatus, lastEvent, sendEvent };
+  return { socketStatus, lastEvent, sendEvent, socket };
 }

@@ -280,6 +280,7 @@ export default function Dispatch() {
     socketStatus: activeCaseSocketStatus,
     lastEvent: activeCaseSocketEvent,
     sendEvent: sendActiveCaseEvent,
+    socket: activeCaseSocket,
   } = useCaseSocket(activeCase?.id, Boolean(activeCase && commsPanel));
 
   const applyVoiceAnalysis = useCallback(({ result, parsedVoice, extractedVitals, isRealResult }) => {
@@ -466,11 +467,11 @@ export default function Dispatch() {
             {commsPanel === "call" && (
               <Suspense fallback={<RouteFallback label="Loading call controls..." />}>
                 <CallPanel
+                  socket={activeCaseSocket}
                   caseId={activeCase.id}
-                  caseLabel={formatCaseLabel(activeCase)}
-                  socketEvent={activeCaseSocketEvent}
-                  sendEvent={sendActiveCaseEvent}
-                  socketStatus={activeCaseSocketStatus}
+                  role="paramedic"
+                  remoteLabel="City General ER"
+                  onClose={() => setCommsPanel(null)}
                 />
               </Suspense>
             )}

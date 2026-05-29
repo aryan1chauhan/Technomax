@@ -368,8 +368,8 @@ class TestScoreHospital:
 class TestRankHospitals:
     AMBUL = dict(ambulance_lat=DEHRADUN[0], ambulance_lon=DEHRADUN[1])
 
-    def _rank(self, hospitals, *, required_equipment=None, condition="heart_attack"):
-        return scorer.rank_hospitals(
+    async def _rank(self, hospitals, *, required_equipment=None, condition="heart_attack"):
+        return await scorer.rank_hospitals(
             hospitals,
             **self.AMBUL,
             required_equipment=required_equipment or ["ventilator"],
@@ -378,73 +378,84 @@ class TestRankHospitals:
 
     # -- Ordering ----------------------------------------------------------
 
-    def test_closer_hospital_ranks_first(self):
+    @pytest.mark.asyncio
+    async def test_closer_hospital_ranks_first(self):
         near = make_hospital(lat=30.32, lon=78.04, id=1, name="Near")   # ~1 km
         far  = make_hospital(lat=28.00, lon=75.00, id=2, name="Far")    # ~400 km
-        ranked = self._rank([far, near])
+        ranked = await self._rank([far, near])
         assert ranked[0]["name"] == "Near"
 
-    def test_better_equipped_hospital_ranks_higher_at_same_distance(self):
+    @pytest.mark.asyncio
+    async def test_better_equipped_hospital_ranks_higher_at_same_distance(self):
         full = make_hospital(lat=30.32, lon=78.04, id=1, name="Full",
                              equipment=["ventilator", "ct_scan", "defibrillator"])
         partial = make_hospital(lat=30.32, lon=78.04, id=2, name="Partial",
                                 equipment=[])
-        ranked = self._rank([partial, full], required_equipment=["ventilator", "ct_scan"])
+        ranked = await self._rank([partial, full], required_equipment=["ventilator", "ct_scan"])
         assert ranked[0]["name"] == "Full"
 
-    def test_rank_uses_prefilter_equipment_match_score_when_provided(self):
+    @pytest.mark.asyncio
+    async def test_rank_uses_prefilter_equipment_match_score_when_provided(self):
         favored = make_hospital(id=1, name="Favored", equipment=[])
         underweighted = make_hospital(id=2, name="Underweighted", equipment=["ventilator", "ct_scan"])
         favored["equipment_match_score"] = 0.95
         underweighted["equipment_match_score"] = 0.20
-        ranked = self._rank([underweighted, favored], required_equipment=["ventilator", "ct_scan"])
+        ranked = await self._rank([underweighted, favored], required_equipment=["ventilator", "ct_scan"])
         assert ranked[0]["name"] == "Favored"
 
-    def test_sorted_descending_by_score(self):
+    @pytest.mark.asyncio
+    async def test_sorted_descending_by_score(self):
         hospitals = [make_hospital(id=i, lat=30.3 + i*0.1, lon=78.0) for i in range(5)]
-        ranked = self._rank(hospitals)
+        ranked = await self._rank(hospitals)
         scores = [h["score"] for h in ranked]
         assert scores == sorted(scores, reverse=True)
 
     # -- Enrichment --------------------------------------------------------
 
-    def test_all_required_keys_present_in_output(self):
+    @pytest.mark.asyncio
+    async def test_all_required_keys_present_in_output(self):
         hospitals = [make_hospital()]
-        ranked = self._rank(hospitals)
+        ranked = await self._rank(hospitals)
         h = ranked[0]
         for key in ("score", "ml_used", "score_breakdown", "explanation", "pros", "cons"):
             assert key in h, f"Missing key: {key}"
 
-    def test_original_hospital_fields_preserved(self):
+    @pytest.mark.asyncio
+    async def test_original_hospital_fields_preserved(self):
         h = make_hospital(id=42, name="MyHospital", beds=99)
-        ranked = self._rank([h])
+        ranked = await self._rank([h])
         assert ranked[0]["id"] == 42
         assert ranked[0]["name"] == "MyHospital"
         assert ranked[0]["available_beds"] == 99
 
     # -- Edge cases --------------------------------------------------------
 
-    def test_empty_list_returns_empty(self):
-        assert self._rank([]) == []
+    @pytest.mark.asyncio
+    async def test_empty_list_returns_empty(self):
+        assert await self._rank([]) == []
 
-    def test_single_hospital_returned(self):
-        ranked = self._rank([make_hospital()])
+    @pytest.mark.asyncio
+    async def test_single_hospital_returned(self):
+        ranked = await self._rank([make_hospital()])
         assert len(ranked) == 1
 
-    def test_all_hospitals_scored(self):
+    @pytest.mark.asyncio
+    async def test_all_hospitals_scored(self):
         hospitals = [make_hospital(id=i) for i in range(10)]
-        ranked = self._rank(hospitals)
+        ranked = await self._rank(hospitals)
         assert len(ranked) == 10
 
-    def test_missing_optional_keys_use_defaults(self):
+    @pytest.mark.asyncio
+    async def test_missing_optional_keys_use_defaults(self):
         # hospital dict with only the minimum required keys
         minimal = {"id": 1, "name": "Minimal", "latitude": 30.32, "longitude": 78.04}
-        ranked = self._rank([minimal])
+        ranked = await self._rank([minimal])
         assert 0.0 <= ranked[0]["score"] <= 1.0
 
-    def test_all_identical_hospitals_all_returned(self):
+    @pytest.mark.asyncio
+    async def test_all_identical_hospitals_all_returned(self):
         hospitals = [make_hospital(id=i) for i in range(5)]
-        ranked = self._rank(hospitals)
+        ranked = await self._rank(hospitals)
         assert len(ranked) == 5
 
 
@@ -553,8 +564,16 @@ class TestMlPath:
             condition="stroke",
         )
         assert r["ml_used"] is True
-        assert r["score"] == pytest.approx(0.87)
+        # Raw ML probability preserved in ml_score and breakdown
+        assert r["ml_score"] == pytest.approx(0.87, rel=1e-2)
         assert r["score_breakdown"]["ml_confidence"] == pytest.approx(0.87, rel=1e-3)
+        # score is now blended: interpretable_score * (0.5 + 0.5 * ml_confidence)
+        # It should be higher than raw ML when rule-based score is high,
+        # and always in valid range
+        assert 0.15 <= r["score"] <= 1.0
+        interpretable = r["score_breakdown"]["interpretable_score"]
+        expected_blended = interpretable * (0.5 + 0.5 * 0.87)
+        assert r["score"] == pytest.approx(expected_blended, rel=0.05)
 
     def test_ml_failure_falls_back_to_weighted(self, monkeypatch):
         class BrokenModel:

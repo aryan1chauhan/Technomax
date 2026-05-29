@@ -320,11 +320,11 @@ class TestCasesEndpoint:
 
 
 class TestHealthEndpoint:
-    """Tests for GET /health"""
+    """Tests for GET /ready"""
 
     def test_health_check(self, client):
-        """Health check should return OK with database status."""
-        res = client.get("/health")
+        """Readiness check should return OK with database status."""
+        res = client.get("/ready")
         assert res.status_code == 200
         data = res.json()
         assert data["status"] == "ok"

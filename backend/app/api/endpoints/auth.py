@@ -68,9 +68,13 @@ def admin_create_user(
 @router.post("/login")
 @limiter.limit(LIMIT_AUTH_LOGIN)
 def login(request: Request, user_in: UserLogin, db: Session = Depends(get_db)):
+    # Constant-time dummy hash to prevent timing-based user enumeration
+    DUMMY_HASH = "$2b$12$EjR4/61Y/a6P9r45QWfC3eM99Y31v3d/8qH1c2F4n5G6h7J8k9L0m"
+
     user = db.query(User).filter(User.email == user_in.email).first()
-    
-    if not user or not verify_password(user_in.password, user.password_hash):
+    is_valid = verify_password(user_in.password, user.password_hash if user else DUMMY_HASH)
+
+    if not user or not is_valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials"

@@ -116,4 +116,6 @@ def readiness_check(db: Session = Depends(get_db)):
         db.execute(text("SELECT 1"))
         return {"status": "ok", "database": "connected"}
     except Exception as e:
-        return {"status": "degraded", "database": str(e)}
+        import logging
+        logging.getLogger(__name__).error("Readiness check failed: %s", e)
+        return {"status": "degraded", "database": "unavailable"}

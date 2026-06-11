@@ -294,9 +294,8 @@ def _extract_model(loaded_artifact: Any) -> Any:
     return loaded_artifact
 
 if not _ML_DISABLED and not _MODEL_SHA256:
-    logger.warning(
-        "MODEL_SHA256 env var is missing. Model integrity check skipped. "
-        "For production, please set MODEL_SHA256 to ensure safe model loading."
+    raise RuntimeError(
+        "MODEL_SHA256 must be set. Refusing to load unverified pickle model."
     )
 
 try:

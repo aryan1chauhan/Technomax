@@ -13,6 +13,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Run as non-root user for security
+RUN adduser --disabled-password --no-create-home appuser && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 CMD ["sh", "-c", "python scripts/bootstrap_db.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT"]

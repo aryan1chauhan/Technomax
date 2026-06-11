@@ -31,12 +31,26 @@ class TestDispatchEnrichedResponse:
             assert "score_breakdown" in sh
 
     def test_dispatch_score_breakdown_has_all_factors(self, client, auth_headers):
-        """score_breakdown must contain all four sub-score keys."""
+        """score_breakdown must contain all sub-score keys including ml_confidence.
+
+        Tags: @api @regression
+        goal: Every score_breakdown dict returned by /api/dispatch/ contains
+              the full set of factor keys the dispatch service populates.
+        """
         resp = client.post("/api/dispatch/", json=self.BASE_PAYLOAD, headers=auth_headers)
         data = resp.json()
         if not data.get("no_match"):
             breakdown = data["selected_hospital"]["score_breakdown"]
-            assert set(breakdown.keys()) == {"distance", "beds", "specialist", "equipment", "outcome"}
+            # ml_confidence was added when the ML scorer was introduced.
+            # Forbidden outcome: missing any key means the frontend score display breaks.
+            assert set(breakdown.keys()) == {
+                "distance",
+                "beds",
+                "specialist",
+                "equipment",
+                "outcome",
+                "ml_confidence",
+            }
 
     def test_dispatch_returns_alternatives(self, client, auth_headers):
         """alternatives must be a list (empty or populated)."""

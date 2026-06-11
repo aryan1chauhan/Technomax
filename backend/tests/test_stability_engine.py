@@ -32,13 +32,15 @@ def test_evaluate_stability_output_shape_and_ranges():
 
 
 def test_high_severity_reduces_survival_time():
+    # Use normal vitals so vitals_risk doesn't dominate the comparison
+    normal_vitals = {"oxygen": 98, "pulse": 80, "bp": "120/80"}
     low = evaluate_stability(
-        case_data={"severity_score": 3, "condition_type": "trauma", "vitals": {}},
+        case_data={"severity_score": 3, "condition_type": "trauma", "vitals": normal_vitals},
         ambulance_data={"has_oxygen": True, "has_ventilator": True, "has_defibrillator": True},
         eta_to_best_hospital=15,
     )
     high = evaluate_stability(
-        case_data={"severity_score": 9, "condition_type": "trauma", "vitals": {}},
+        case_data={"severity_score": 9, "condition_type": "trauma", "vitals": normal_vitals},
         ambulance_data={"has_oxygen": True, "has_ventilator": True, "has_defibrillator": True},
         eta_to_best_hospital=15,
     )
@@ -47,13 +49,15 @@ def test_high_severity_reduces_survival_time():
 
 
 def test_missing_equipment_reduces_survival_time():
+    # Use normal vitals so vitals_risk doesn't dominate; equipment diff is measurable
+    normal_vitals = {"oxygen": 98, "pulse": 80, "bp": "120/80"}
     full = evaluate_stability(
-        case_data={"severity_score": 8, "condition_type": "cardiac", "vitals": {}},
+        case_data={"severity_score": 8, "condition_type": "cardiac", "vitals": normal_vitals},
         ambulance_data={"has_oxygen": True, "has_ventilator": True, "has_defibrillator": True},
         eta_to_best_hospital=12,
     )
     missing = evaluate_stability(
-        case_data={"severity_score": 8, "condition_type": "cardiac", "vitals": {}},
+        case_data={"severity_score": 8, "condition_type": "cardiac", "vitals": normal_vitals},
         ambulance_data={"has_oxygen": False, "has_ventilator": True, "has_defibrillator": False},
         eta_to_best_hospital=12,
     )
@@ -98,3 +102,19 @@ def test_pure_functions_are_deterministic():
     s1 = estimate_survival_time(8, "respiratory", 0.65, 0.35)
     s2 = estimate_survival_time(8, "respiratory", 0.65, 0.35)
     assert s1 == s2
+
+
+# @regression — verifies fail-closed behavior after security fix
+def test_vitals_risk_fail_closed_when_missing():
+    """REGRESSION: Missing/empty vitals must return 1.0 (fail closed), not 0.0.
+    This is a patient safety invariant — no vitals data = assume critical."""
+    assert calculate_vitals_risk(None) == 1.0
+    assert calculate_vitals_risk({}) == 1.0
+    assert calculate_vitals_risk({"foo": 1}) == 1.0
+
+
+def test_vitals_risk_normal_values_not_penalized():
+    """Normal vitals with recognized keys should NOT be flagged as critical."""
+    assert calculate_vitals_risk({"oxygen": 98}) == 0.0
+    assert calculate_vitals_risk({"pulse": 80}) == 0.0
+    assert calculate_vitals_risk({"bp": "120/80"}) == 0.0

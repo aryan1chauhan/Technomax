@@ -116,17 +116,15 @@ async def track_case(
             return
 
         case = db.query(Case).filter(Case.id == case_id).first()
-        if case and not _user_can_access_case(current_user, case):
+        if not case:
+            await websocket.close(code=4004, reason="Case not found")
+            return
+        if not _user_can_access_case(current_user, case):
             await websocket.close(code=4003, reason="Not authorized for this case")
             return
 
         await websocket.accept()
         await case_realtime_manager.connect(case_id, websocket)
-
-        if not case:
-            await _send(websocket, {"type": "error", "message": "Case not found"})
-            await websocket.close()
-            return
 
         # ── Initial route fetch + ETA ──
         if case_id not in _route_cache and case.assigned_hospital_id:

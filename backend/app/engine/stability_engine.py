@@ -91,8 +91,9 @@ def _to_float(value: Any) -> float | None:
 
 
 def calculate_vitals_risk(vitals: Mapping[str, Any] | None) -> float:
-    if not vitals:
-        return 0.0
+    # Fail closed: no vitals data = assume critical risk
+    if not vitals or not any(k in vitals for k in ("oxygen", "pulse", "bp")):
+        return 1.0
 
     risk = 0.0
 

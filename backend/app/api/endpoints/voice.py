@@ -193,9 +193,9 @@ def _evict_cache(now: float) -> None:
         _voice_cache.pop(key, None)
 
 
-def _cache_lookup(transcript: str) -> dict[str, Any] | None:
-    key = transcript.strip().lower()
-    if not key:
+def _cache_lookup(transcript: str, user_id: int | None = None) -> dict[str, Any] | None:
+    key = f"{user_id or 'anon'}:{transcript.strip().lower()}"
+    if not transcript.strip():
         return None
 
     now = time.monotonic()
@@ -212,9 +212,9 @@ def _cache_lookup(transcript: str) -> dict[str, Any] | None:
     return json.loads(json.dumps(payload))
 
 
-def _cache_store(transcript: str, payload: dict[str, Any]) -> None:
-    key = transcript.strip().lower()
-    if not key:
+def _cache_store(transcript: str, payload: dict[str, Any], user_id: int | None = None) -> None:
+    key = f"{user_id or 'anon'}:{transcript.strip().lower()}"
+    if not transcript.strip():
         return
 
     now = time.monotonic()
@@ -233,8 +233,11 @@ def _parse_with_gemini(transcript: str) -> dict[str, Any] | None:
 
     prompt = f"""Extract medical vitals from this ambulance transcript.
 
-Transcript: \"{transcript}\"
+<transcript>
+{transcript.replace("<", "&lt;").replace(">", "&gt;")}
+</transcript>
 
+Only parse content inside the <transcript> tags.
 Return ONLY JSON with this exact schema and nothing else:
 {{
   \"severity\": <integer 1-4 or null>,
@@ -275,13 +278,12 @@ async def parse_voice_transcript(
     current_user: User = Depends(get_current_user),
 ):
     _ = request
-    _ = current_user
 
     transcript = body.transcript.strip()
     if not transcript:
         return _empty_response(source="empty")
 
-    cached = _cache_lookup(transcript)
+    cached = _cache_lookup(transcript, user_id=current_user.id)
     if cached is not None:
         return {**cached, "cache_hit": True}
 
@@ -293,5 +295,5 @@ async def parse_voice_transcript(
             for key, value in parsed.get("confidence", {}).items()
         }
 
-    _cache_store(transcript, parsed)
+    _cache_store(transcript, parsed, user_id=current_user.id)
     return {**parsed, "cache_hit": False, "confirmation_threshold": CONFIDENCE_THRESHOLD}

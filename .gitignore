@@ -53,3 +53,7 @@ backend/scripts/patch_*.py
 backend/scripts/probe_*.py
 backend/scripts/trace_*.py
 backend/tests/trace_*.py
+
+# Load test results — generated artifacts, not source code.
+# dispatch-peak-timeseries.json alone is 99.24 MB (GitHub hard-blocks at 100 MB).
+loadtest/results/

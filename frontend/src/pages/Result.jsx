@@ -10,9 +10,13 @@
  */
 
 import { useLocation, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import CaseTimeline from "../components/CaseTimeline";
 import api from "../api/axios";
+import useCaseSocket from "../hooks/useCaseSocket";
+
+const CaseChat = lazy(() => import("../components/CaseChat"));
+const CallPanel = lazy(() => import("../components/CallPanel"));
 
 // ── Constraint failure reason humanizer ─────────────────────────────────────
 const NO_MATCH_REASON_LABELS = {
@@ -257,6 +261,14 @@ export default function Result() {
   const result = state?.result;
 
   const [mounted, setMounted] = useState(false);
+  const [panelMode, setPanelMode] = useState(null);
+
+  const {
+    socketStatus,
+    lastEvent,
+    socket,
+  } = useCaseSocket(result?.case_id, Boolean(result?.case_id && panelMode));
+
   useEffect(() => { setTimeout(() => setMounted(true), 50); }, []);
 
   if (!result) {
@@ -486,8 +498,86 @@ export default function Result() {
                 </span>
               </div>
             </div>
+
+            {result.case_id && (
+              <div className="flex gap-3 mt-4 pt-4 border-t border-[#F0F2F7]">
+                <button
+                  onClick={() => setPanelMode(panelMode === "chat" ? null : "chat")}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-bold border transition cursor-pointer ${
+                    panelMode === "chat"
+                      ? "bg-[#1A78F2] border-[#1A78F2] text-white shadow-sm"
+                      : "bg-white border-[#BDD6FF] text-[#1A78F2] hover:bg-[#F0F6FF]"
+                  }`}
+                >
+                  💬 Chat
+                </button>
+                <button
+                  onClick={() => setPanelMode(panelMode === "call" ? null : "call")}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-bold border transition cursor-pointer ${
+                    panelMode === "call"
+                      ? "bg-[#1A78F2] border-[#1A78F2] text-white shadow-sm"
+                      : "bg-white border-[#BDD6FF] text-[#1A78F2] hover:bg-[#F0F6FF]"
+                  }`}
+                >
+                  📞 Video Call
+                </button>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* ── CASE COMMUNICATIONS PANEL ── */}
+        {result.case_id && panelMode && (
+          <div 
+            className="bg-white rounded-2xl border border-[#E2E6F0] shadow-sm p-5 mb-6 transition-all duration-500"
+            style={{
+              opacity: mounted ? 1 : 0,
+              transform: mounted ? "translateY(0)" : "translateY(12px)",
+            }}
+          >
+            <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+              <div>
+                <p className="text-[15px] font-bold text-[#1A1E2E]">Case Communications</p>
+                <p className="text-[12px] text-[#737A8F]">
+                  Ambulance dispatcher secure channel · Case #{result.case_id}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-[#1A78F2] bg-[#EBF3FF] border border-[#BDD6FF] rounded-full px-3 py-1">
+                  Socket {socketStatus}
+                </span>
+                <button
+                  onClick={() => setPanelMode(null)}
+                  className="rounded-xl border border-[#D0D5E8] px-3.5 py-1.5 text-[12px] font-semibold text-[#4A5068] hover:bg-gray-50 transition cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            {panelMode === "chat" && (
+              <Suspense fallback={<div className="text-center py-4 text-[#737A8F] text-[13px]">Loading case chat...</div>}>
+                <CaseChat
+                  caseId={result.case_id}
+                  caseLabel={`${triage.condition?.replace(/_/g, " ") || "Case"} · Case #${result.case_id}`}
+                  socketEvent={lastEvent}
+                />
+              </Suspense>
+            )}
+
+            {panelMode === "call" && (
+              <Suspense fallback={<div className="text-center py-4 text-[#737A8F] text-[13px]">Loading call controls...</div>}>
+                <CallPanel
+                  socket={socket}
+                  caseId={result.case_id}
+                  role="paramedic"
+                  remoteLabel={`${sh?.name || "Hospital Staff"}`}
+                  onClose={() => setPanelMode(null)}
+                />
+              </Suspense>
+            )}
+          </div>
+        )}
 
         {/* ── Two-hop route (stabilize first only) ── */}
         {isStabilizeFirst && (

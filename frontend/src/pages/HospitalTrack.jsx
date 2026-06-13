@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
 import api from "../api/axios";
 import CaseTimeline from "../components/CaseTimeline";
 import RouteFallback from "../components/RouteFallback";
@@ -18,6 +19,32 @@ export default function HospitalTrack() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isReady, setIsReady] = useState(false);
+  const [hospitalInfo, setHospitalInfo] = useState({ name: "Hospital", id: "", beds: "—" });
+
+  useEffect(() => {
+    // Decode JWT to get hospital info for the sidebar
+    try {
+      const token = localStorage.getItem("token");
+      if (token) {
+        const decoded = jwtDecode(token);
+        const hid = decoded.hospital_id;
+        if (hid) {
+          api.get("/api/hospitals/").then(res => {
+            const h = res.data.find(h => h.id === hid);
+            if (h) setHospitalInfo({
+              name: h.name,
+              id: hid,
+              beds: h.availability?.beds ?? "—",
+            });
+          }).catch((err) => {
+            console.error("Failed to fetch hospital info", err);
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to decode hospital token", err);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchCase = async () => {
@@ -110,10 +137,10 @@ export default function HospitalTrack() {
 
   if (loading) {
     return (
-      <div style={styles.root}>
-        <div style={styles.scanlines} />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: GREEN, fontFamily: MONO, fontSize: 14 }}>
-          [ LOADING CASE DATA... ]
+      <div className="flex items-center justify-center h-screen bg-[#F7F7FC] font-['Inter',sans-serif]">
+        <div className="flex flex-col items-center gap-4">
+          <span className="w-10 h-10 rounded-full border-4 border-t-[#1A78F2] border-r-transparent border-b-transparent border-l-transparent animate-spin" />
+          <p className="text-[14px] font-semibold text-[#737A8F] uppercase tracking-wider">Loading Case Telemetry...</p>
         </div>
       </div>
     );
@@ -121,11 +148,17 @@ export default function HospitalTrack() {
 
   if (error || !caseData) {
     return (
-      <div style={styles.root}>
-        <div style={styles.scanlines} />
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: 16, color: RED, fontFamily: MONO }}>
-          <div style={{ fontSize: 14 }}>⚠ {error || "Case not found"}</div>
-          <button onClick={() => navigate("/hospital/dashboard")} style={styles.btn}>← BACK TO DASHBOARD</button>
+      <div className="flex flex-col items-center justify-center h-screen bg-[#F7F7FC] font-['Inter',sans-serif] p-6 text-center">
+        <div className="bg-white border border-[#F0F2F7] rounded-2xl shadow-sm p-8 max-w-md w-full">
+          <span className="text-[40px]">⚠</span>
+          <h2 className="text-[18px] font-bold text-[#1A1E2E] mt-3">Tracking Error</h2>
+          <p className="text-[14px] text-[#737A8F] mt-2 mb-6">{error || "Case tracking is unavailable."}</p>
+          <button
+            onClick={() => navigate("/hospital/dashboard")}
+            className="w-full bg-[#1A78F2] hover:bg-[#1560c4] text-white text-[13px] font-bold py-3 rounded-xl shadow-sm transition"
+          >
+            ← Return to Dashboard
+          </button>
         </div>
       </div>
     );
@@ -137,104 +170,218 @@ export default function HospitalTrack() {
   const ambPos = ambulancePos ?? (caseData.ambulance_lat && caseData.ambulance_lng ? [caseData.ambulance_lat, caseData.ambulance_lng] : null);
 
   const scorePercent = Math.round((caseData.final_score || 0) * 100);
-  const scoreColor = scorePercent > 70 ? GREEN : scorePercent > 40 ? YELLOW : RED;
-  const scoreBar = "█".repeat(Math.round(scorePercent / 5)) + "░".repeat(20 - Math.round(scorePercent / 5));
+  const scoreColor = (v) => {
+    const pct = Math.round((v || 0) * 100);
+    return pct > 70 ? "#17B86B" : pct > 50 ? "#FFB21A" : "#EE3B3B";
+  };
+  const scoreBg = (v) => {
+    const pct = Math.round((v || 0) * 100);
+    return pct > 70 ? "#E8FDF2" : pct > 50 ? "#FFF8E0" : "#FFEDED";
+  };
+
+  const navItems = ["🏥  Dashboard", "🚑  Active Cases", "📊  Analytics", "⚙️  Settings"];
 
   return (
-    <div style={styles.root}>
-      <div style={styles.scanlines} />
-      <div style={styles.container}>
-        <div style={styles.header}>
-          <div style={{ color: DIM, fontSize: 13 }}>╔══════════════════════════════════════════════════════╗</div>
-          <div style={{ color: arrived ? GREEN : YELLOW, fontSize: 14, fontWeight: "bold" }}>
-            ║&nbsp;&nbsp;🏥 HOSPITAL TRACKING CONSOLE &nbsp;•&nbsp;
-            <span style={{ color: arrived ? GREEN : RED }}>{arrived ? "● ARRIVED" : "● INCOMING"}</span>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;║
+    <div className="flex h-screen bg-[#F7F7FC] font-['Inter',sans-serif] overflow-hidden">
+      
+      {/* ── Sidebar ── */}
+      <aside className="w-[240px] bg-[#0D1830] flex-shrink-0 flex flex-col relative">
+        <div className="absolute left-0 top-0 w-[3px] h-full bg-[#EE3B3B]" />
+        <div className="px-7 pt-7 pb-5">
+          <p className="text-[18px] font-bold text-white">MediRoute</p>
+          <p className="text-[12px] text-[#737A8F]">Hospital Portal</p>
+        </div>
+        <nav className="flex flex-col gap-1 px-3">
+          {navItems.map((item, i) => (
+            <div
+              key={i}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[14px] cursor-pointer transition
+                ${i === 1 ? "bg-[#172954] text-white font-semibold border-l-[3px] border-[#1A78F2]" : "text-[#737A8F] hover:text-white"}`}
+            >
+              {item}
+            </div>
+          ))}
+        </nav>
+        <div className="mt-auto px-7 pb-6 border-t border-[#172954] pt-5">
+          <p className="text-[13px] font-semibold text-white">{localStorage.getItem("email") || "Bhagwati Hospital"}</p>
+          <p className="text-[12px] text-[#737A8F]">{hospitalInfo.name} · ID #{hospitalInfo.id}</p>
+          <div className="flex items-center gap-2 mt-2">
+            <div className="w-2 h-2 rounded-full bg-[#17B86B]" />
+            <p className="text-[12px] text-[#17B86B]">Accepting cases</p>
           </div>
-          <div style={{ color: DIM, fontSize: 13 }}>╚══════════════════════════════════════════════════════╝</div>
+          <button
+            onClick={handleLogout}
+            className="mt-3 text-[12px] text-[#737A8F] hover:text-white transition"
+          >
+            Sign out →
+          </button>
         </div>
+      </aside>
 
-        <div style={styles.infoPanel}>
-          <div style={styles.infoPanelHeader}>┌─── CASE #{caseData.id} ────────────────────────────────┐</div>
-          <div style={styles.infoGrid}>
-            <div style={styles.infoItem}>
-              <span style={styles.infoLabel}>CONDITION</span>
-              <span style={{ ...styles.infoValue, color: RED, fontWeight: "bold" }}>{caseData.condition?.toUpperCase()}</span>
-            </div>
-            <div style={styles.infoItem}>
-              <span style={styles.infoLabel}>ETA</span>
-              <span style={{ ...styles.infoValue, color: arrived ? GREEN : YELLOW, fontSize: 18 }}>{arrived ? "ARRIVED" : `${eta ?? "--"} MIN`}</span>
-            </div>
-            <div style={styles.infoItem}>
-              <span style={styles.infoLabel}>DISTANCE</span>
-              <span style={styles.infoValue}>{caseData.distance_km ?? "--"} KM</span>
-            </div>
-            <div style={styles.infoItem}>
-              <span style={styles.infoLabel}>ML SCORE</span>
-              <span style={{ ...styles.infoValue, color: scoreColor }}>{scorePercent}%</span>
-            </div>
+      {/* ── Main Workspace ── */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        
+        {/* Top Header Bar */}
+        <div className="bg-white border-b border-[#F0F2F7] h-16 flex items-center justify-between px-8 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/hospital/dashboard")}
+              className="text-[#737A8F] hover:text-[#1A1E2E] transition flex items-center gap-1 text-[13.5px] font-medium"
+            >
+              ← Back to Dashboard
+            </button>
+            <span className="text-[#C7CCD9]">|</span>
+            <h1 className="text-[18px] font-bold text-[#1A1E2E]">Ambulance Live Tracking</h1>
           </div>
-          <div style={{ padding: "0 1rem 0.5rem", color: DIM, fontSize: 11 }}>
-            SCORE &gt; <span style={{ color: scoreColor, fontFamily: MONO }}>{scoreBar}</span> {scorePercent}%
+          <div className="flex items-center gap-3">
+            <span className={`flex items-center gap-2 text-[11px] font-extrabold px-3.5 py-1.5 rounded-full uppercase tracking-wider ${
+              arrived ? "bg-[#E8FDF2] text-[#17B86B] border border-[#BFF6DC]" : "bg-[#FFEDED] text-[#EE3B3B] border border-[#FFD5D5]"
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${arrived ? "bg-[#17B86B]" : "bg-[#EE3B3B] animate-pulse"}`} />
+              {arrived ? "Arrived" : "Incoming Ambulance"}
+            </span>
           </div>
-          {caseData.equipment_needed?.length > 0 && (
-            <div style={{ padding: "0 1rem 0.5rem", color: DIM, fontSize: 11 }}>
-              EQUIPMENT &gt; <span style={{ color: GREEN }}>{caseData.equipment_needed.join(" | ").toUpperCase()}</span>
+        </div>
+
+        {/* Scrollable Content Workspace */}
+        <div className="flex-1 overflow-y-auto p-8 bg-[#F7F7FC]">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            {/* Left Column (7/12 width on desktop) */}
+            <div className="lg:col-span-7 flex flex-col gap-6">
+              
+              {/* Case Details Card */}
+              <div className="bg-white rounded-2xl border border-[#F0F2F7] shadow-sm p-6">
+                <div className="flex items-center justify-between border-b border-[#F0F2F7] pb-4 mb-5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[12px] font-mono font-bold text-[#737A8F] bg-[#F0F2F7] px-2.5 py-1 rounded-lg">
+                      CASE #{caseData.id}
+                    </span>
+                    <h2 className="text-[15px] font-extrabold text-[#1A1E2E]">Triage & Route Diagnostics</h2>
+                  </div>
+                  <span className="text-[11px] font-bold text-white bg-[#EE3B3B] px-3 py-1 rounded-full uppercase tracking-wide">
+                    {caseData.condition?.replace(/_/g, " ")}
+                  </span>
+                </div>
+
+                {/* Key Metrics Grid */}
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="bg-[#FAFBFD] border border-[#F0F2F7] rounded-xl p-4 flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-[#737A8F] uppercase tracking-wider">Estimated ETA</span>
+                    <span className={`text-[22px] font-black mt-2 ${arrived ? "text-[#17B86B]" : "text-[#FFB21A]"}`}>
+                      {arrived ? "ARRIVED" : `${eta ?? "—"} MIN`}
+                    </span>
+                  </div>
+                  <div className="bg-[#FAFBFD] border border-[#F0F2F7] rounded-xl p-4 flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-[#737A8F] uppercase tracking-wider">Travel Distance</span>
+                    <span className="text-[22px] font-black text-[#1A1E2E] mt-2">
+                      {caseData.distance_km ?? "—"} <span className="text-[12px] font-bold text-[#737A8F]">KM</span>
+                    </span>
+                  </div>
+                  <div className="bg-[#FAFBFD] border border-[#F0F2F7] rounded-xl p-4 flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-[#737A8F] uppercase tracking-wider">ML Match Score</span>
+                    <span className="text-[22px] font-black mt-2" style={{ color: scoreColor(caseData.final_score) }}>
+                      {scorePercent}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Match score bar */}
+                <div className="mb-4">
+                  <div className="flex justify-between text-[11px] font-semibold text-[#737A8F] mb-1.5">
+                    <span>Dispatch Matching Quality</span>
+                    <span style={{ color: scoreColor(caseData.final_score) }}>{scorePercent}% Confidence</span>
+                  </div>
+                  <div className="w-full bg-[#E2E8F0] h-2.5 rounded-full overflow-hidden">
+                    <div
+                      className="h-full transition-all duration-700 rounded-full"
+                      style={{ width: `${scorePercent}%`, backgroundColor: scoreColor(caseData.final_score) }}
+                    />
+                  </div>
+                </div>
+
+                {/* Required Equipment */}
+                {caseData.equipment_needed?.length > 0 && (
+                  <div className="border-t border-[#F0F2F7] pt-4 mt-5">
+                    <h4 className="text-[10px] font-extrabold text-[#737A8F] uppercase tracking-wider mb-2.5">
+                      Required Patient Care Equipment
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {caseData.equipment_needed.map((eq, i) => (
+                        <span key={i} className="text-[10.5px] font-bold text-[#1A78F2] bg-[#EBF3FF] border border-[#BDD6FF] rounded-full px-3 py-1 uppercase tracking-wide">
+                          🛡️ {eq.replace(/_/g, " ")}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Timeline Container (uses Light Theme variant) */}
+              <div className="flex flex-col">
+                <CaseTimeline caseId={case_id} role="hospital" theme="light" />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={handleMarkReady}
+                  disabled={isReady}
+                  className={`flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-bold text-[13.5px] shadow-sm transition-all duration-200 border ${
+                    isReady
+                      ? "bg-[#E8FDF2] border-[#17B86B] text-[#17B86B] cursor-not-allowed font-extrabold"
+                      : "bg-[#17B86B] border-[#149E5C] text-white hover:bg-[#149E5C] active:scale-[0.98]"
+                  }`}
+                >
+                  {isReady ? "✓ Hospital Marked Ready" : "⚡ Mark Hospital Ready"}
+                </button>
+                <button
+                  onClick={() => { window.location.href = "tel:112"; }}
+                  className="flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-bold text-[13.5px] bg-[#EE3B3B] border border-[#D32F2F] text-white hover:bg-[#D32F2F] shadow-sm transition active:scale-[0.98]"
+                >
+                  📞 Call Ambulance Dispatch
+                </button>
+              </div>
+
             </div>
-          )}
-          <div style={styles.infoPanelFooter}>└────────────────────────────────────────────────────┘</div>
+
+            {/* Right Column (5/12 width on desktop) */}
+            <div className="lg:col-span-5 flex flex-col gap-6">
+              
+              {/* Telemetry Map Container */}
+              <div className="bg-white rounded-2xl border border-[#F0F2F7] shadow-sm overflow-hidden flex flex-col min-h-[450px] lg:h-[calc(100vh-200px)]">
+                <div className="border-b border-[#F0F2F7] px-6 py-4 flex-shrink-0 flex items-center justify-between bg-white z-10">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1A78F2] opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#1A78F2]"></span>
+                    </span>
+                    <h3 className="text-[13.5px] font-extrabold text-[#1A1E2E]">Live Ambulance Telemetry Map</h3>
+                  </div>
+                  <span className="text-[10px] font-bold text-[#737A8F] uppercase tracking-wider bg-[#F7F7FC] px-2.5 py-1 rounded-md">
+                    🛰️ Active Route
+                  </span>
+                </div>
+                <div className="flex-1 relative min-h-[350px]">
+                  <Suspense fallback={<RouteFallback label="Loading hospital tracker map..." />}>
+                    <MapWidget
+                      variant="hospital"
+                      hospitalPosition={hospPos}
+                      ambulancePosition={ambPos}
+                      caseData={caseData}
+                      eta={eta}
+                    />
+                  </Suspense>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
         </div>
 
-        <Suspense fallback={<RouteFallback label="Loading hospital tracker map..." />}>
-          <MapWidget variant="hospital" hospitalPosition={hospPos} ambulancePosition={ambPos} caseData={caseData} eta={eta} />
-        </Suspense>
+      </main>
 
-        <div style={{ marginBottom: "1rem" }}>
-          <CaseTimeline caseId={case_id} role="hospital" />
-        </div>
-
-        <div style={styles.actions}>
-          <button onClick={handleMarkReady} disabled={isReady} style={isReady ? styles.btnDone : styles.btnGreen}>
-            {isReady ? "[ ✓ MARKED READY ]" : "[ MARK HOSPITAL READY ]"}
-          </button>
-          <button onClick={() => { window.location.href = "tel:112"; }} style={styles.btnRed}>
-            [ 📞 CALL AMBULANCE — 112 ]
-          </button>
-          <button onClick={() => navigate("/hospital/dashboard")} style={styles.btn}>
-            [ ← DASHBOARD ]
-          </button>
-          <button onClick={handleLogout} style={styles.btnLogout}>
-            [ LOGOUT ]
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
-
-const GREEN = "#00ff41";
-const DIM = "#00aa2a";
-const RED = "#ff4444";
-const YELLOW = "#ffff00";
-const BG = "#0a0a0a";
-const MONO = "'Courier New', monospace";
-
-const styles = {
-  root: { minHeight: "100vh", background: BG, fontFamily: MONO, padding: "1rem", position: "relative" },
-  scanlines: { position: "fixed", inset: 0, background: "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,65,0.015) 2px,rgba(0,255,65,0.015) 4px)", pointerEvents: "none", zIndex: 1 },
-  container: { maxWidth: 900, margin: "0 auto", zIndex: 2, position: "relative" },
-  header: { marginBottom: "1rem" },
-  infoPanel: { marginBottom: "1rem" },
-  infoPanelHeader: { color: DIM, fontSize: 12, marginBottom: 8 },
-  infoPanelFooter: { color: DIM, fontSize: 12, marginTop: 4 },
-  infoGrid: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, padding: "0.5rem 1rem" },
-  infoItem: { display: "flex", flexDirection: "column", gap: 3 },
-  infoLabel: { color: DIM, fontSize: 10, letterSpacing: 1 },
-  infoValue: { color: GREEN, fontSize: 14, fontWeight: "bold" },
-  actions: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
-  btn: { background: "transparent", border: `1px solid ${DIM}`, color: DIM, fontFamily: MONO, fontSize: 12, padding: "10px", cursor: "pointer", letterSpacing: 1 },
-  btnGreen: { background: "#001a00", border: `1px solid ${GREEN}`, color: GREEN, fontFamily: MONO, fontSize: 12, padding: "10px", cursor: "pointer", letterSpacing: 1, fontWeight: "bold" },
-  btnDone: { background: "#001a00", border: `1px solid ${DIM}`, color: DIM, fontFamily: MONO, fontSize: 12, padding: "10px", cursor: "not-allowed", letterSpacing: 1 },
-  btnRed: { background: "#1a0000", border: `1px solid ${RED}`, color: RED, fontFamily: MONO, fontSize: 12, padding: "10px", cursor: "pointer", letterSpacing: 1, fontWeight: "bold" },
-  btnLogout: { background: "transparent", border: "1px solid #333", color: "#333", fontFamily: MONO, fontSize: 11, padding: "10px", cursor: "pointer", letterSpacing: 1 },
-};

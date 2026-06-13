@@ -30,16 +30,11 @@ class TestCaseTimelineEndpoint:
         assert data[1]["status"] == "en_route"
         assert data[2]["status"] == "on_scene"
 
-    def test_timeline_unauthorized_user_blocked(self, client, auth_headers, hospital_headers, dispatch_case):
+    def test_timeline_any_hospital_can_view(self, client, auth_headers, hospital_headers, dispatch_case):
+        """Universal Hospital Dashboard: any hospital account can view any case timeline."""
         case_id = dispatch_case
-        # Assuming hospital_headers is from a different hospital or if it happens to be the same, test will be tricky.
-        # But we can try admin_headers to compare, or test that random ambulance user fails.
-        # Since the fixture registers a new hospital and auth_headers registers an ambulance, 
-        # unless by random chance the case was assigned to that new hospital, we can expect 403.
-        # In a generic hospital pool, a newly registered hospital has no availability seeded for it.
-        # So the case will be assigned to a seeded hospital, not the newly registered one in the fixture.
         res = client.get(f"/api/cases/{case_id}/timeline", headers=hospital_headers)
-        assert res.status_code == 403
+        assert res.status_code == 200
 
 class TestCaseStatusUpdateEndpoint:
     def test_valid_linear_transition_succeeds(self, client, auth_headers, dispatch_case):
@@ -130,10 +125,11 @@ class TestCaseStatusUpdateEndpoint:
         res = client.put(f"/api/cases/{case_id}/status", json={"status": "en_route"}, headers=auth_b)
         assert res.status_code == 403
 
-    def test_wrong_hospital_cannot_update_status(self, client, auth_headers, hospital_headers, dispatch_case):
+    def test_any_hospital_can_update_status(self, client, auth_headers, hospital_headers, dispatch_case):
+        """Universal Hospital Dashboard: any hospital account can update any case status."""
         case_id = dispatch_case
         res = client.put(f"/api/cases/{case_id}/status", json={"status": "en_route"}, headers=hospital_headers)
-        assert res.status_code == 403
+        assert res.status_code == 200
 
     def test_admin_can_update_any_case_status(self, client, auth_headers, admin_headers, dispatch_case):
         case_id = dispatch_case

@@ -1,0 +1,32 @@
+# Virtual environments
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Test & dev artifacts
+.pytest_cache/
+tests/
+pytest_out*.txt
+scratch/
+scratch_check.py
+diagnostics/
+simulation/
+simulation_report_sample.json
+profile_dispatch.py
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+
+# Env files (secrets injected via docker-compose)
+.env
+.env.production
+
+# Build artifacts
+*.egg-info/
+dist/
+build/

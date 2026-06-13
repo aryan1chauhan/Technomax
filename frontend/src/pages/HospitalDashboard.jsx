@@ -27,19 +27,8 @@ export default function HospitalDashboard() {
   const lastPushIdRef = useRef(null);
 
   // Auto-refresh case list when a foreground push notification arrives
-  useEffect(() => {
-    if (!lastPush || lastPush.receivedAt === lastPushIdRef.current) return;
-    lastPushIdRef.current = lastPush.receivedAt;
-
-    // Show a brief banner
-    setPushBanner(lastPush);
-    const timer = setTimeout(() => setPushBanner(null), 6000);
-
-    // Immediately refresh case list so the new case appears
-    fetchCases();
-
-    return () => clearTimeout(timer);
-  }, [lastPush, fetchCases]);
+  // NOTE: This effect must be placed AFTER fetchCases is defined via useCallback
+  // to avoid referencing an undefined function during the initial render.
 
   const fetchCases = useCallback(async () => {
     try {
@@ -57,6 +46,20 @@ export default function HospitalDashboard() {
       }
     } finally { setLoading(false); }
   }, [navigate]);
+
+  useEffect(() => {
+    if (!lastPush || lastPush.receivedAt === lastPushIdRef.current) return;
+    lastPushIdRef.current = lastPush.receivedAt;
+
+    // Show a brief banner
+    setPushBanner(lastPush);
+    const timer = setTimeout(() => setPushBanner(null), 6000);
+
+    // Immediately refresh case list so the new case appears
+    fetchCases();
+
+    return () => clearTimeout(timer);
+  }, [lastPush, fetchCases]);
 
   useEffect(() => {
     fetchCases();
@@ -337,9 +340,16 @@ export default function HospitalDashboard() {
                         <div key={c.id} className="bg-white rounded-xl border border-[#F0F2F7] overflow-hidden shadow-sm">
                           <div className="h-1 bg-[#EE3B3B]" />
                           <div className="flex items-center justify-between px-6 py-3 border-b border-[#F0F2F7] bg-gray-50">
-                            <span className="flex items-center gap-2 bg-[#FFEDED] text-[#EE3B3B] text-[10px] font-bold px-2.5 py-1 rounded-full">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#EE3B3B] animate-pulse" /> {fmtStatus(c.status)}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="flex items-center gap-2 bg-[#FFEDED] text-[#EE3B3B] text-[10px] font-bold px-2.5 py-1 rounded-full">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#EE3B3B] animate-pulse" /> {fmtStatus(c.status)}
+                              </span>
+                              {c.assigned_hospital_name && (
+                                <span className="text-[10px] font-semibold text-[#1A78F2] bg-[#EBF3FF] border border-[#BDD6FF] rounded-full px-2.5 py-1">
+                                  🏥 {c.assigned_hospital_name}
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-4">
                               <span className="font-mono text-[13px] font-semibold text-[#737A8F]">Case #{c.id}</span>
                               <span className="text-[12px] text-[#C7CCD9]">{timeAgo(c.created_at)}</span>
@@ -436,9 +446,16 @@ export default function HospitalDashboard() {
                     <div className="h-1 bg-[#EE3B3B]" />
                     {/* Header row */}
                     <div className="flex items-center justify-between px-6 py-3 border-b border-[#F0F2F7] bg-gray-50">
-                      <span className="flex items-center gap-2 bg-[#FFEDED] text-[#EE3B3B] text-[10px] font-bold px-2.5 py-1 rounded-full">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#1A78F2]" /> {fmtStatus(c.status)}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-2 bg-[#FFEDED] text-[#EE3B3B] text-[10px] font-bold px-2.5 py-1 rounded-full">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#1A78F2]" /> {fmtStatus(c.status)}
+                        </span>
+                        {c.assigned_hospital_name && (
+                          <span className="text-[10px] font-semibold text-[#1A78F2] bg-[#EBF3FF] border border-[#BDD6FF] rounded-full px-2.5 py-1">
+                            🏥 {c.assigned_hospital_name}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-4">
                         <span className="font-mono text-[13px] font-semibold text-[#737A8F]">Case #{c.id}</span>
                         <span className="text-[12px] text-[#C7CCD9]">{timeAgo(c.created_at)}</span>

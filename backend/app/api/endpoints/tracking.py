@@ -67,7 +67,8 @@ def _user_can_access_case(user: User, case: Case) -> bool:
     if user.role == "ambulance":
         return case.user_id == user.id
     if user.role == "hospital":
-        return case.assigned_hospital_id == user.hospital_id
+        # For universal hospital dashboard: allow any hospital to view tracking streams
+        return True
     return False
 
 
@@ -75,7 +76,8 @@ def _user_is_case_participant(user: User, case: Case) -> bool:
     if user.role == "ambulance":
         return case.user_id == user.id
     if user.role == "hospital":
-        return case.assigned_hospital_id == user.hospital_id
+        # For universal hospital dashboard: allow any hospital
+        return True
     return False
 
 

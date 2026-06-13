@@ -31,7 +31,6 @@ firebase-service-account.json
 *-service-account.json
 
 # Local debug / output artifacts
-backend/audit/
 backend\out.txt
 backend\run_output.txt
 backend\test_api_out.txt
@@ -40,8 +39,6 @@ backend\query.sql
 backend\status.txt
 backend\error.log
 git_status_output.txt
-pytest_out.txt
-pytest_out2.txt
 
 # Graphify
 graphify-out/

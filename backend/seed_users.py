@@ -5,31 +5,50 @@ from app.core.security import hash_password
 def seed_users():
     db = SessionLocal()
     try:
+        civil_id = None
+        himalayan_id = None
+        first_hosp = db.query(Hospital).first()
+        first_hosp_id = first_hosp.id if first_hosp else None
+
+        civil_hosp = db.query(Hospital).filter(Hospital.name.like("%Civil Hospital%")).first()
+        civil_id = civil_hosp.id if civil_hosp else first_hosp_id
+
+        himalayan_hosp = db.query(Hospital).filter(Hospital.name.like("%Himalayan%")).first()
+        himalayan_id = himalayan_hosp.id if himalayan_hosp else first_hosp_id
+
         users = [
             {
-                "email": "admin@example.com",
-                "password": "password123",
+                "email": "admin@test.com",
+                "password": "test123",
                 "role": "admin",
                 "hospital_id": None
             },
             {
-                "email": "ambulance@example.com",
-                "password": "password123",
+                "email": "amb1@test.com",
+                "password": "test123",
                 "role": "ambulance",
                 "hospital_id": None
             },
             {
-                "email": "hospital@example.com",
-                "password": "password123",
+                "email": "hospital@test.com",
+                "password": "test123",
                 "role": "hospital",
-                "hospital_id": db.query(Hospital.id).first()[0] if db.query(Hospital).first() else None
+                "hospital_id": civil_id
+            },
+            {
+                "email": "bhagwati@test.com",
+                "password": "test123",
+                "role": "hospital",
+                "hospital_id": himalayan_id
             }
         ]
 
         for u_data in users:
             existing = db.query(User).filter(User.email == u_data["email"]).first()
             if existing:
-                print(f"User {u_data['email']} already exists. Skipping.")
+                existing.password_hash = hash_password(u_data["password"])
+                existing.hospital_id = u_data["hospital_id"]
+                print(f"Updated user: {u_data['email']}")
                 continue
             
             new_user = User(

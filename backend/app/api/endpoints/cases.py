@@ -20,8 +20,9 @@ def _require_assigned_hospital(case: Case | None, current_user: User) -> Case:
         raise HTTPException(status_code=404, detail="Case not found")
     if current_user.role != "hospital":
         raise HTTPException(status_code=403, detail="Not a hospital account")
-    if case.assigned_hospital_id != current_user.hospital_id:
-        raise HTTPException(status_code=403, detail="Not authorized for this case")
+    # For universal hospital dashboard: allow any hospital account
+    # if case.assigned_hospital_id != current_user.hospital_id:
+    #     raise HTTPException(status_code=403, detail="Not authorized for this case")
     return case
 
 
@@ -30,7 +31,7 @@ def _require_case_participant(case: Case | None, current_user: User) -> Case:
         raise HTTPException(status_code=404, detail="Case not found")
     if current_user.role == "ambulance" and case.user_id == current_user.id:
         return case
-    if current_user.role == "hospital" and case.assigned_hospital_id == current_user.hospital_id:
+    if current_user.role == "hospital":
         return case
     raise HTTPException(status_code=403, detail="Not authorized for this case")
 
@@ -45,6 +46,7 @@ def _serialize_case_message(message: CaseMessage, sender: User) -> CaseMessageOu
         body=message.body,
         sent_at=message.sent_at,
     )
+
 
 @router.get("/", response_model=list[CaseOut])
 @limiter.limit(LIMIT_CASES)
@@ -61,6 +63,7 @@ def get_cases(
         
     return cases
 
+
 @router.get("/hospital")
 @limiter.limit(LIMIT_CASES)
 def get_hospital_cases(
@@ -75,13 +78,40 @@ def get_hospital_cases(
     # Only show cases from last 24 hours
     since = datetime.now(timezone.utc) - timedelta(hours=24)
     
+    # Universal Hospital Dashboard: return all cases from the last 24 hours
     cases = db.query(Case)\
-        .filter(Case.assigned_hospital_id == current_user.hospital_id)\
         .filter(Case.created_at >= since)\
         .order_by(Case.created_at.desc())\
         .all()
     
-    return cases
+    results = []
+    for c in cases:
+        hosp_name = "None"
+        if c.assigned_hospital_id:
+            hosp = db.query(Hospital).filter(Hospital.id == c.assigned_hospital_id).first()
+            if hosp:
+                hosp_name = hosp.name
+        results.append({
+            "id": c.id,
+            "user_id": c.user_id,
+            "condition": c.condition,
+            "custom_condition": c.custom_condition,
+            "equipment_needed": c.equipment_needed or [],
+            "ambulance_lat": c.ambulance_lat,
+            "ambulance_lng": c.ambulance_lng,
+            "assigned_hospital_id": c.assigned_hospital_id,
+            "assigned_hospital_name": hosp_name,
+            "final_score": c.final_score,
+            "distance_km": c.distance_km,
+            "eta_minutes": c.eta_minutes,
+            "severity_score": getattr(c, "severity_score", None),
+            "notes": c.notes,
+            "status": c.status,
+            "created_at": c.created_at,
+        })
+    
+    return results
+
 
 @router.get("/admin/stats")
 @limiter.limit(LIMIT_CASES)

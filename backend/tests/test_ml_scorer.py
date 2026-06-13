@@ -564,15 +564,18 @@ class TestMlPath:
             condition="stroke",
         )
         assert r["ml_used"] is True
-        # Raw ML probability preserved in ml_score and breakdown
+        # Raw ML probability preserved in ml_score
         assert r["ml_score"] == pytest.approx(0.87, rel=1e-2)
-        assert r["score_breakdown"]["ml_confidence"] == pytest.approx(0.87, rel=1e-3)
-        # score is now blended: interpretable_score * (0.5 + 0.5 * ml_confidence)
+        # Calibrated confidence: raw 0.87 is 6.96× pool baseline (0.125),
+        # tanh rescale saturates → clamped to 1.0
+        calibrated = r["score_breakdown"]["ml_confidence"]
+        assert calibrated == pytest.approx(1.0, abs=0.01)
+        # score is now blended: interpretable_score + (calibrated - 0.5) * 0.24
         # It should be higher than raw ML when rule-based score is high,
         # and always in valid range
         assert 0.15 <= r["score"] <= 1.0
         interpretable = r["score_breakdown"]["interpretable_score"]
-        expected_blended = interpretable * (0.5 + 0.5 * 0.87)
+        expected_blended = min(1.0, max(0.15, interpretable + (calibrated - 0.5) * 0.24))
         assert r["score"] == pytest.approx(expected_blended, rel=0.05)
 
     def test_ml_failure_falls_back_to_weighted(self, monkeypatch):

@@ -54,17 +54,36 @@ def test_hospital_can_accept_dispatched_case_assigned_to_them(client, auth_heade
     assert case.status == "accepted"
 
 
-def test_hospital_cannot_accept_case_assigned_to_different_hospital(client, auth_headers, db_session, dispatch_case):
-    """HOSP-ACCEPT-002 @api @security @regression hospital IDOR accept is blocked."""
+def test_hospital_can_accept_case_assigned_to_different_hospital(client, auth_headers, db_session, dispatch_case):
+    """HOSP-ACCEPT-002 @api @security @regression hospital accept for different hospital is allowed (universal dashboard)."""
     case = _case(db_session, dispatch_case)
+    original_hospital_id = case.assigned_hospital_id
+    
     other_hospital = _seed_hospital(db_session)
+    from app.db.models import Availability
+    other_avail = Availability(hospital_id=other_hospital.id, beds=5, icu=2, accepting=True)
+    db_session.add(other_avail)
+    db_session.commit()
+    
     hospital_user = _seed_user(db_session, role="hospital", hospital_id=other_hospital.id)
 
     res = client.post(f"/api/cases/{case.id}/accept", headers=_headers(hospital_user))
 
     db_session.refresh(case)
-    assert res.status_code == 403
-    assert case.status == "dispatched"
+    db_session.refresh(other_avail)
+    
+    assert res.status_code == 200
+    assert case.status == "accepted"
+    assert case.assigned_hospital_id == other_hospital.id
+    # Check that bed count is decremented for the accepting hospital (5 -> 4)
+    assert other_avail.beds == 4
+    
+    # Check that original hospital's bed was restored (+1)
+    original_avail = db_session.query(Availability).filter(Availability.hospital_id == original_hospital_id).first()
+    if original_avail:
+        # Since the session setup sets it to GREATEST(beds, 5), and dispatch decremented it by 1, it was 4.
+        # After restoring, it should go back to 5.
+        assert original_avail.beds == 5
 
 
 def test_hospital_can_decline_with_reason(client, auth_headers, db_session, dispatch_case):
@@ -182,3 +201,42 @@ def test_dispatch_notification_service_creates_in_app_and_push_rows(db_session):
     rows = db_session.query(NotificationDelivery).filter(NotificationDelivery.case_id == case.id).all()
     assert {row.channel for row in rows} >= {"in_app", "push"}
     assert any(row.payload["type"] == "case_dispatched" for row in rows)
+
+
+def test_universal_hospital_dashboard_permissions(client, db_session, dispatch_case):
+    """HOSPITAL-UNIVERSAL-DASHBOARD-001 @api @security @integration
+    Verify that any hospital user can fetch, view, and accept cases originally assigned to a different hospital (Universal Dashboard mode).
+    """
+    case = _case(db_session, dispatch_case)
+    original_hospital_id = case.assigned_hospital_id
+
+    # Create the other hospital availability
+    other_hospital = _seed_hospital(db_session)
+    from app.db.models import Availability
+    other_avail = Availability(hospital_id=other_hospital.id, beds=10, icu=3, accepting=True)
+    db_session.add(other_avail)
+    db_session.commit()
+
+    hospital_user = _seed_user(db_session, role="hospital", hospital_id=other_hospital.id)
+
+    # 1. Verify get_hospital_cases returns the case even though it is assigned to another hospital
+    get_res = client.get("/api/cases/hospital", headers=_headers(hospital_user))
+    assert get_res.status_code == 200
+    cases_list = get_res.json()
+    assert any(c["id"] == case.id for c in cases_list)
+
+    # 2. Verify we can accept the case
+    accept_res = client.post(f"/api/cases/{case.id}/accept", headers=_headers(hospital_user))
+    assert accept_res.status_code == 200
+
+    db_session.refresh(case)
+    db_session.refresh(other_avail)
+
+    assert case.status == "accepted"
+    assert case.assigned_hospital_id == other_hospital.id
+    assert other_avail.beds == 9
+
+    # Verify original hospital's bed was restored (+1)
+    original_avail = db_session.query(Availability).filter(Availability.hospital_id == original_hospital_id).first()
+    if original_avail:
+        assert original_avail.beds == 5

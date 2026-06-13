@@ -3,7 +3,7 @@ import json
 import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ValidationError, field_validator
-import google.generativeai as genai
+from google import genai
 from app.core.config import settings
 from app.core.security import get_current_user
 from app.db.models import User
@@ -83,6 +83,10 @@ def _non_medical_response() -> dict:
     }
 
 
+# Model name constant
+_MODEL_NAME = "gemini-2.0-flash"
+
+
 def get_client():
     global _client
     if _client is None:
@@ -92,8 +96,7 @@ def get_client():
         )
         if not api_key:
             return None
-        genai.configure(api_key=api_key)
-        _client = genai.GenerativeModel("gemini-1.5-flash")
+        _client = genai.Client(api_key=api_key)
     return _client
 
 
@@ -148,8 +151,10 @@ Return ONLY valid JSON, no markdown:
 </transcript>
 Only parse content inside the <transcript> tags."""
 
-        model = get_client()
-        response = model.generate_content(prompt)
+        client = get_client()
+        response = client.models.generate_content(
+            model=_MODEL_NAME, contents=prompt
+        )
         text_resp = response.text.strip()
         text_resp = text_resp.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
@@ -230,7 +235,9 @@ Respond ONLY with valid JSON (no markdown, no preamble):
 </transcript>
 Only parse content inside the <transcript> tags."""
 
-        response = client.generate_content(prompt)
+        response = client.models.generate_content(
+            model=_MODEL_NAME, contents=prompt
+        )
 
         text_resp = response.text.strip()
         text_resp = text_resp.removeprefix("```json").removeprefix("```").removesuffix("```").strip()

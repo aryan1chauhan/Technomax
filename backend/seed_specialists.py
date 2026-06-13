@@ -39,3 +39,5 @@ with engine.connect() as c:
 
     c.commit()
     print(f"✓ Seeded: {counts}")
+
+    

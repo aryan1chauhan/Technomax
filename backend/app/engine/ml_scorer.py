@@ -334,10 +334,19 @@ CONDITION_SEVERITY_MAP: dict[str, int] = {
     "minor_injury": 1,
     "fever": 1,
     "fracture": 1,
+    "allergic_reaction": 2,
+    "abdominal_pain": 1,
+    "soft_tissue_injury": 1,
+    "chest_pain": 2,
     "stroke": 2,
     "heart_attack": 2,
     "respiratory_distress": 2,
     "severe_bleeding": 2,
+    "anaphylaxis": 3,
+    "seizure": 2,
+    "burn": 2,
+    "burns": 2,
+    "trauma": 3,
     "cardiac_arrest": 3,
     "multi_trauma": 3,
     "head_injury": 3,
@@ -531,16 +540,21 @@ def _survival_score(
     Realistic survival curve with graceful degradation.
 
     Base:
-        S_survival = max(0.2, exp(-max(0, eta - survival_time) / tau(condition)))
+        S_survival = max(0.25, exp(-max(0, eta - survival_time) / tau(condition)))
 
     Recovery:
-        If stabilization is possible, enforce a recovery floor of 0.3.
+        If stabilization is possible, enforce a recovery floor of 0.35.
+
+    Floor rationale: For the *best available* hospital in a critical case,
+    the survival component should reflect that this is the optimal choice
+    given constraints, not crush the overall score.  Previous floor of 0.2
+    with w_survival=0.22 cost ~0.15 points on every critical dispatch.
     """
     deficit = max(0.0, _as_float(eta_minutes, 0.0) - _as_float(survival_time_minutes, 0.0))
     group = _condition_group(condition)
     tau = max(0.1, _as_float(_SURVIVAL_TAU_BY_CONDITION.get(group, 3.0), 3.0))
-    base_survival = max(0.2, math.exp(-(deficit / tau)))
-    recovery = 0.3 if stabilization_possible else 0.0
+    base_survival = max(0.25, math.exp(-(deficit / tau)))
+    recovery = 0.35 if stabilization_possible else 0.0
     return _clamp(max(base_survival, recovery), 0.0, 1.0)
 
 
@@ -560,7 +574,7 @@ def _treatment_priority_score(
     
     # Severity-aware dampening: stable cases shouldn't be forced to far hubs
     is_critical = severity_score is not None and severity_score >= 7.0
-    base_mismatch = 0.3 if is_critical else 0.90
+    base_mismatch = 0.3 if is_critical else 0.55
     
     specialist_bonus = 0.05 if specialist_count > 0 else 0.0
 
@@ -937,6 +951,27 @@ def _predict_ml_score(feature_vector: list[float], feature_names: list[str]) -> 
     return _predict_ml_scores_batch([feature_vector], feature_names)[0]
 
 
+def _calibrate_ml_confidence(raw_probability: float) -> float:
+    """Calibrate RandomForest selection probability to display confidence.
+
+    The ML model predicts P(was_selected) in a multi-candidate pool.
+    With ~8 candidates per training case, the baseline is ~12.5%.
+    A raw 0.19 means the model rates this hospital 1.5\u00d7 above random
+    \u2014 a meaningful positive signal that is misleading as \"19%\".
+
+    Rescaling (tanh-based, centered on pool baseline):
+      raw \u2248 0.125 (1\u00d7 baseline)  \u2192 confidence \u2248 50%
+      raw \u2248 0.25  (2\u00d7 baseline)  \u2192 confidence \u2248 88%
+      raw \u2248 0.40  (3\u00d7 baseline)  \u2192 confidence \u2248 97%
+    """
+    BASELINE = 0.125  # ~1/8 candidates in typical training pool
+    ratio = raw_probability / max(BASELINE, 0.001)
+    return _clamp(
+        0.5 + 0.5 * math.tanh(2.0 * (ratio - 1.0)),
+        0.15, 1.0,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public scoring API
 # ---------------------------------------------------------------------------
@@ -1145,22 +1180,27 @@ def score_hospital(
     if ml_score_override is not None:
         ml_score = ml_score_override
         ml_used = True
-        # Blend ML confidence with the rule-based interpretable_score so the
-        # overall score is a function of the component scores the user sees.
+        # Calibrate the raw selection probability into a display confidence.
+        # Then use calibrated confidence for an asymmetric boost/penalty.
+        # This prevents structurally low binary classification probabilities
+        # (pool baseline ~12.5%) from always dragging down rule-based scores.
+        calibrated_conf = _calibrate_ml_confidence(ml_score)
+        ml_adjustment = (calibrated_conf - 0.5) * 0.24  # range: -0.084 to +0.12
         blended_score = _clamp(
-            interpretable_score * (0.5 + 0.5 * ml_score),
+            interpretable_score + ml_adjustment,
             0.15, 1.0,
         )
-        score_breakdown["ml_confidence"] = round(ml_score, 4)
+        score_breakdown["ml_confidence"] = round(calibrated_conf, 4)
+        score_breakdown["ml_confidence_raw"] = round(ml_score, 4)
         score_breakdown["blended_score"] = round(blended_score, 4)
         score_breakdown["interpretable_score"] = round(interpretable_score, 4)
 
-        ml_conf_pct = round(ml_score * 100)
+        ml_conf_pct = round(calibrated_conf * 100)
         pros = []
         cons = []
-        if ml_conf_pct >= 60:
+        if ml_conf_pct >= 55:
             pros.append(f"ML confidence high ({ml_conf_pct}%)")
-        elif ml_conf_pct >= 30:
+        elif ml_conf_pct >= 25:
             pros.append(f"ML confidence moderate ({ml_conf_pct}%)")
         else:
             cons.append(f"ML confidence low ({ml_conf_pct}%)")
@@ -1171,7 +1211,7 @@ def score_hospital(
             "score": blended_score,
             "ml_used": True,
             "score_breakdown": score_breakdown,
-            "explanation": f"Blended scoring: rule-based {interpretable_score:.0%} × ML confidence {ml_score:.0%}.",
+            "explanation": f"Blended scoring: rule-based {interpretable_score:.0%} + ML confidence {calibrated_conf:.0%}.",
             "pros": pros,
             "cons": cons,
         }
@@ -1181,7 +1221,9 @@ def score_hospital(
             ml_score = _predict_ml_score(feature_vector, model_features)
             ml_score = _clamp(ml_score, 0.15, 1.0)
             ml_used = True
-            score_breakdown["ml_confidence"] = round(ml_score, 4)
+            calibrated_conf = _calibrate_ml_confidence(ml_score)
+            score_breakdown["ml_confidence"] = round(calibrated_conf, 4)
+            score_breakdown["ml_confidence_raw"] = round(ml_score, 4)
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError, IndexError) as exc:
             if not _ML_FALLBACK_WARNING_EMITTED:
                 logger.warning("ML/XGBoost prediction failed (%s) — using rule-based fallback.", exc)
@@ -1226,11 +1268,13 @@ def score_hospital(
             scenario_context=scenario_context,
         )
 
-    # Scenario calibration keeps ML ranking explainable while honoring scenario-specific priorities.
+    # Scenario calibration: record pre-penalty ML score for diagnostics.
+    # Previous approach blended ml_score with interpretable_score here,
+    # creating a double-blend (once here, once in the final blending step)
+    # that diluted ML signal to near-zero.  Now we only record the pre-penalty
+    # value and let the final blending step handle the mixing.
     if scenario_context:
-        pre_calibration = ml_score
-        ml_score = (0.65 * ml_score) + (0.35 * interpretable_score)
-        score_breakdown["pre_calibration_ml_score"] = round(pre_calibration, 4)
+        score_breakdown["pre_calibration_ml_score"] = round(ml_score, 4)
         score_breakdown["scenario_calibration_applied"] = True
 
     uncertainty_penalty = _uncertainty_risk_penalty_multiplier(
@@ -1260,17 +1304,19 @@ def score_hospital(
     ml_score = _clamp(ml_score, 0.15, 1.0)
 
     # ── Blend ML confidence with rule-based interpretable_score ────────
-    # The interpretable_score is a weighted sum of the same components
-    # shown in the UI (distance, capacity, specialist, equipment).
-    # ML confidence acts as a quality modifier:
-    #   - ml_conf = 1.0  →  blended = interpretable_score × 1.0
-    #   - ml_conf = 0.5  →  blended = interpretable_score × 0.75
-    #   - ml_conf = 0.19 →  blended = interpretable_score × 0.595
-    # When ML is not used (fallback), ml_score IS the interpretable score
-    # already, so blending still works correctly.
+    # ML acts as an asymmetric adjustment using calibrated confidence.
+    # Calibration rescales the raw selection probability (baseline ~12.5%)
+    # into a meaningful confidence signal:
+    #   - calibrated ≈ 0.88 (raw 0.25, 2× baseline) → boost +0.091
+    #   - calibrated ≈ 0.50 (raw 0.125, 1× baseline) → neutral 0.000
+    #   - calibrated ≈ 0.15 (raw 0.05, below baseline) → penalty -0.084
+    # The asymmetric range (+0.12 / -0.084) prevents structurally low
+    # binary classification probabilities from always dragging scores down.
     if ml_used:
+        calibrated_conf = _calibrate_ml_confidence(ml_score)
+        ml_adjustment = (calibrated_conf - 0.5) * 0.24  # range: -0.084 to +0.12
         blended_score = _clamp(
-            interpretable_score * (0.5 + 0.5 * ml_score),
+            interpretable_score + ml_adjustment,
             0.15, 1.0,
         )
     else:
@@ -1322,10 +1368,10 @@ def score_hospital(
         pros.append("Relevant specialist on duty")
 
     if ml_used:
-        ml_conf_pct = round(ml_score * 100)
-        if ml_conf_pct >= 60:
+        ml_conf_pct = round(_calibrate_ml_confidence(ml_score) * 100)
+        if ml_conf_pct >= 55:
             pros.append(f"ML confidence high ({ml_conf_pct}%)")
-        elif ml_conf_pct >= 30:
+        elif ml_conf_pct >= 25:
             pros.append(f"ML confidence moderate ({ml_conf_pct}%)")
         else:
             cons.append(f"ML confidence low ({ml_conf_pct}%)")
@@ -1466,5 +1512,5 @@ async def rank_hospitals(
         )
         scored.append({**hospital, **final_res})
 
-    scored.sort(key=lambda row: float(row.get("ml_score", row.get("score", 0.0))), reverse=True)
+    scored.sort(key=lambda row: float(row.get("score", 0.0)), reverse=True)
     return scored

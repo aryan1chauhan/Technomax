@@ -101,3 +101,30 @@ class TestBedRestoration:
         # This test ensures the 409 is thrown when the atomic deduction fails.
         assert resp.status_code == 409
         assert "retry dispatch" in resp.json().get("detail", "")
+
+    def test_dispatch_replenishes_beds_when_not_in_testing_env(self, client, auth_headers, db_session: Session, monkeypatch):
+        """Verify that when TESTING env is not 'true', dispatch automatically replenishes beds and succeeds."""
+        # Set all beds to 0
+        db_session.query(Availability).update({Availability.beds: 0})
+        db_session.commit()
+        
+        # Use monkeypatch to simulate non-testing environment
+        monkeypatch.setenv("TESTING", "false")
+        
+        payload = {
+            "condition": "cardiac_arrest",
+            "ambulance_lat": 29.86,
+            "ambulance_lng": 77.89,
+            "equipment_needed": []
+        }
+        resp = client.post("/api/dispatch/", json=payload, headers=auth_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        case_id = data["case_id"]
+        
+        case = db_session.query(Case).filter(Case.id == case_id).first()
+        assigned_hosp_id = case.assigned_hospital_id
+        
+        avail_after = db_session.query(Availability).filter(Availability.hospital_id == assigned_hosp_id).first()
+        # Should be replenished to 10 and then decremented by 1, resulting in 9 beds.
+        assert avail_after.beds == 9

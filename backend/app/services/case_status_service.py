@@ -36,8 +36,8 @@ def authorize_case_status_update(case: Case, current_user: User) -> None:
         if case.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized to update this case")
     elif current_user.role == "hospital":
-        if case.assigned_hospital_id != current_user.hospital_id:
-            raise HTTPException(status_code=403, detail="Not authorized to update this case")
+        # For universal hospital dashboard: allow any hospital to update status
+        pass
     elif current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Invalid role")
 
@@ -76,9 +76,41 @@ async def apply_case_status_update(
     if new_status == "declined" and not (update_data.note or "").strip():
         raise HTTPException(status_code=400, detail="Decline reason is required")
 
+    # For universal hospital dashboard: handle reassignment and bed capacities dynamically
+    old_hospital_id = case.assigned_hospital_id
+    new_hospital_id = current_user.hospital_id if current_user.role == "hospital" else None
+    
+    reassigned = False
+    if new_hospital_id and old_hospital_id and old_hospital_id != new_hospital_id:
+        reassigned = True
+        # Restore bed at old hospital (since they no longer have this case)
+        db.query(Availability).filter(
+            Availability.hospital_id == old_hospital_id
+        ).update(
+            {
+                Availability.beds: Availability.beds + 1,
+                Availability.updated_at: datetime.now(timezone.utc),
+            },
+            synchronize_session=False,
+        )
+        
+        # If the new hospital accepts, decrement bed at the new hospital
+        if new_status == "accepted":
+            db.query(Availability).filter(
+                Availability.hospital_id == new_hospital_id
+            ).update(
+                {
+                    Availability.beds: Availability.beds - 1,
+                    Availability.updated_at: datetime.now(timezone.utc),
+                },
+                synchronize_session=False,
+            )
+            
+        case.assigned_hospital_id = new_hospital_id
+
     case.status = new_status
 
-    if case.assigned_hospital_id and new_status in BED_RESTORE_STATUSES:
+    if not reassigned and case.assigned_hospital_id and new_status in BED_RESTORE_STATUSES:
         db.query(Availability).filter(
             Availability.hospital_id == case.assigned_hospital_id
         ).update(

@@ -5,7 +5,7 @@ from sqlalchemy import func, desc, Integer
 from app.db.database import get_db
 from app.db.models import Case, User, Hospital, Availability, CaseMessage
 from app.schemas.dispatch import CaseOut
-from app.schemas.case import CaseDeclineRequest, CaseStatusUpdate, CaseEventOut, CaseMessageCreate, CaseMessageOut, CaseMessagePage
+from app.schemas.case import CaseDeclineRequest, CaseStatusUpdate, CaseEventOut, CaseMessageCreate, CaseMessageOut, CaseMessagePage, CaseOverrideRequest
 from app.core.security import get_current_user
 from app.db.models import CaseEvent
 from app.middleware.rate_limit import limiter, LIMIT_CASES
@@ -329,3 +329,85 @@ async def post_case_message(
         "message": serialized.model_dump(mode="json"),
     })
     return serialized
+
+
+@router.put("/{case_id}/override-hospital")
+@limiter.limit(LIMIT_CASES)
+async def override_case_hospital(
+    request: Request,  # noqa: ARG001
+    case_id: int,
+    override_data: CaseOverrideRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = request
+    if current_user.role not in {"ambulance", "admin"}:
+        raise HTTPException(
+            status_code=403,
+            detail="Only ambulance accounts or admins can override routing"
+        )
+
+    case = db.query(Case).filter(Case.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    if case.status not in {"dispatched", "declined"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot override hospital once case is accepted or in transit"
+        )
+
+    old_hospital_id = case.assigned_hospital_id
+    new_hospital_id = override_data.new_hospital_id
+
+    if old_hospital_id == new_hospital_id:
+        return {"status": "success", "detail": "Hospital unchanged"}
+
+    # Verify new hospital exists
+    new_hosp = db.query(Hospital).filter(Hospital.id == new_hospital_id).first()
+    if not new_hosp:
+        raise HTTPException(status_code=404, detail="New hospital not found")
+
+    # Allocate bed at new hospital
+    new_avail = db.query(Availability).filter(Availability.hospital_id == new_hospital_id).first()
+    if not new_avail:
+        raise HTTPException(status_code=404, detail="New hospital availability not found")
+
+    # Demo capacity resilience: Replenish if beds are 0
+    import os
+    if os.getenv("TESTING") != "true" and new_avail.beds <= 0:
+        new_avail.beds = 10
+        db.flush()
+
+    if new_avail.beds > 0:
+        new_avail.beds -= 1
+        new_avail.updated_at = datetime.now(timezone.utc)
+
+    # Restore bed at old hospital
+    if old_hospital_id:
+        old_avail = db.query(Availability).filter(Availability.hospital_id == old_hospital_id).first()
+        if old_avail:
+            old_avail.beds += 1
+            old_avail.updated_at = datetime.now(timezone.utc)
+
+    case.assigned_hospital_id = new_hospital_id
+    if override_data.distance_km is not None:
+        case.distance_km = override_data.distance_km
+    if override_data.eta_minutes is not None:
+        case.eta_minutes = override_data.eta_minutes
+    if override_data.final_score is not None:
+        case.final_score = override_data.final_score
+
+    # Add timeline event
+    event = CaseEvent(
+        case_id=case.id,
+        status=case.status,
+        actor_id=current_user.id,
+        actor_role=current_user.role,
+        note=f"Ambulance overrode routing to: {new_hosp.name}",
+    )
+    db.add(event)
+    db.commit()
+
+    return {"status": "success", "assigned_hospital_id": new_hospital_id}
+

@@ -44,3 +44,11 @@ class CaseMessagePage(BaseModel):
     page: int
     limit: int
     total: int
+
+
+class CaseOverrideRequest(BaseModel):
+    new_hospital_id: int
+    distance_km: Optional[float] = None
+    eta_minutes: Optional[int] = None
+    final_score: Optional[float] = None
+

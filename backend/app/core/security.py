@@ -12,7 +12,18 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    DUMMY_HASH = "$2b$12$HRfVSBxYYtxJUp.bgshTR.oUAfOC7L1s2AmLOU8AENLXNVvDF2aCu"
+    try:
+        if not hashed_password:
+            pwd_context.verify(plain_password, DUMMY_HASH)
+            return False
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        try:
+            pwd_context.verify(plain_password, DUMMY_HASH)
+        except Exception:
+            pass
+        return False
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
@@ -45,7 +56,8 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    user = db.query(User).filter(User.email == email).first()
+    email_lower = email.strip().lower() if email else ""
+    user = db.query(User).filter(User.email == email_lower).first()
     if user is None:
         raise credentials_exception
     return user

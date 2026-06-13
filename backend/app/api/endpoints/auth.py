@@ -9,7 +9,8 @@ from app.middleware.rate_limit import limiter, LIMIT_AUTH_LOGIN, LIMIT_AUTH_REGI
 router = APIRouter(prefix="/api/auth")
 
 def _create_user(user_in: UserCreate, db: Session):
-    user = db.query(User).filter(User.email == user_in.email).first()
+    email_lower = user_in.email.strip().lower()
+    user = db.query(User).filter(User.email == email_lower).first()
     if user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -19,7 +20,7 @@ def _create_user(user_in: UserCreate, db: Session):
     hashed_password = hash_password(user_in.password)
 
     new_user = User(
-        email=user_in.email,
+        email=email_lower,
         password_hash=hashed_password,
         role=user_in.role,
         hospital_id=user_in.hospital_id
@@ -69,9 +70,10 @@ def admin_create_user(
 @limiter.limit(LIMIT_AUTH_LOGIN)
 def login(request: Request, user_in: UserLogin, db: Session = Depends(get_db)):
     # Constant-time dummy hash to prevent timing-based user enumeration
-    DUMMY_HASH = "$2b$12$EjR4/61Y/a6P9r45QWfC3eM99Y31v3d/8qH1c2F4n5G6h7J8k9L0m"
+    DUMMY_HASH = "$2b$12$HRfVSBxYYtxJUp.bgshTR.oUAfOC7L1s2AmLOU8AENLXNVvDF2aCu"
 
-    user = db.query(User).filter(User.email == user_in.email).first()
+    email_lower = user_in.email.strip().lower()
+    user = db.query(User).filter(User.email == email_lower).first()
     is_valid = verify_password(user_in.password, user.password_hash if user else DUMMY_HASH)
 
     if not user or not is_valid:
